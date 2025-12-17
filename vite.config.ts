@@ -5,7 +5,7 @@ import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig({
   // 🔑 REQUIRED for GitHub Pages
-  base: "/Student-CRM/",
+  base: "/trace-classroom-crm/",
 
   plugins: [
     react(),
