@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Switch, Route } from "wouter";
+import { Switch, Route, Router } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -16,29 +16,40 @@ import DashboardPage from "@/pages/dashboard";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
+// Get base path from Vite's BASE_URL
+const getBasePath = () => {
+  const base = import.meta.env.BASE_URL || "/";
+  // Ensure base path has leading slash and no trailing slash (except for root)
+  if (base === "/") return "/";
+  return base.endsWith("/") ? base.slice(0, -1) : base;
+};
+
 function AuthenticatedApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const basePath = getBasePath();
 
   return (
     <ClassroomProvider>
-      <div className="flex h-screen bg-background overflow-hidden">
-        <AppSidebar
-          mobileOpen={mobileMenuOpen}
-          onMobileClose={() => setMobileMenuOpen(false)}
-        />
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <AppHeader onMobileMenuClick={() => setMobileMenuOpen(true)} />
-          <div className="flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth">
-            <Switch>
-              <Route path="/" component={PipelinePage} />
-              <Route path="/timeline" component={TimelinePage} />
-              <Route path="/dashboard" component={DashboardPage} />
-              <Route path="/settings" component={SettingsPage} />
-              <Route component={NotFound} />
-            </Switch>
-          </div>
-        </main>
-      </div>
+      <Router base={basePath}>
+        <div className="flex h-screen bg-background overflow-hidden">
+          <AppSidebar
+            mobileOpen={mobileMenuOpen}
+            onMobileClose={() => setMobileMenuOpen(false)}
+          />
+          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <AppHeader onMobileMenuClick={() => setMobileMenuOpen(true)} />
+            <div className="flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth">
+              <Switch>
+                <Route path="/" component={PipelinePage} />
+                <Route path="/timeline" component={TimelinePage} />
+                <Route path="/dashboard" component={DashboardPage} />
+                <Route path="/settings" component={SettingsPage} />
+                <Route component={NotFound} />
+              </Switch>
+            </div>
+          </main>
+        </div>
+      </Router>
     </ClassroomProvider>
   );
 }
