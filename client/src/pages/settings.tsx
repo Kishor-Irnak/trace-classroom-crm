@@ -8,6 +8,8 @@ import {
   RefreshCw,
   Download,
   Smartphone,
+  Moon,
+  Sun,
 } from "lucide-react";
 import {
   Card,
@@ -20,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,15 +45,43 @@ import { useAuth } from "@/lib/auth-context";
 import { useClassroom } from "@/lib/classroom-context";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
+import { useTheme } from "@/lib/theme-context";
+
+function SettingsSkeleton() {
+  return (
+    <div className="max-w-3xl mx-auto p-6 space-y-8">
+      <div>
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-4 w-64 mt-2" />
+      </div>
+      {[1, 2, 3, 4].map((i) => (
+        <Card key={i}>
+          <CardHeader>
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-4 w-48 mt-1" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-20 w-full" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
-  const { lastSyncedAt, isSyncing, syncClassroom } = useClassroom();
+  const { lastSyncedAt, isSyncing, syncClassroom, isLoading } = useClassroom();
   const { isInstallable, isInstalled, promptInstall } = useInstallPrompt();
+  const { theme, setTheme } = useTheme();
   const [backgroundSync, setBackgroundSync] = useState(true);
   const [timezone, setTimezone] = useState("auto");
   const [isDeleting, setIsDeleting] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
+
+  if (isLoading) {
+    return <SettingsSkeleton />;
+  }
 
   const handleDeleteAccount = async () => {
     setIsDeleting(true);
@@ -168,6 +199,45 @@ export default function SettingsPage() {
               onCheckedChange={setBackgroundSync}
               data-testid="switch-background-sync"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Theme</CardTitle>
+          <CardDescription>Choose your preferred color theme</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="theme" className="text-sm font-medium">
+                Appearance
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Select light or dark mode
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={theme === "light" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTheme("light")}
+                className="flex items-center gap-2"
+              >
+                <Sun className="h-4 w-4" />
+                Light
+              </Button>
+              <Button
+                variant={theme === "dark" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setTheme("dark")}
+                className="flex items-center gap-2"
+              >
+                <Moon className="h-4 w-4" />
+                Dark
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

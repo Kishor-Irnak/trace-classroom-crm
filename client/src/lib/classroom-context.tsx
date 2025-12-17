@@ -3,6 +3,7 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   type ReactNode,
 } from "react";
 import type {
@@ -613,14 +614,16 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [notes, setNotes] = useState<Map<string, Note[]>>(new Map());
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasAutoSynced, setHasAutoSynced] = useState(false);
 
   const syncClassroom = useCallback(async () => {
     if (!user) {
       setError("Please sign in with Google to sync your Classroom data");
+      setIsLoading(false);
       return;
     }
 
@@ -637,14 +640,17 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         setError(
           "Access token expired. Please sign out and sign in again to refresh your token."
         );
+        setIsLoading(false);
         return;
       } catch (err) {
         setError("Unable to authenticate. Please sign in again.");
+        setIsLoading(false);
         return;
       }
     }
 
     setIsSyncing(true);
+    setIsLoading(true);
     setError(null);
 
     try {
@@ -737,6 +743,28 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, [user, accessToken]);
+
+  // Auto-sync on first login if no data exists
+  useEffect(() => {
+    if (!user) {
+      setHasAutoSynced(false);
+      setIsLoading(false);
+      return;
+    }
+
+    if (!accessToken) {
+      setIsLoading(false);
+      return;
+    }
+
+    // Auto-sync only once when user first logs in and has no data
+    if (!hasAutoSynced && courses.length === 0 && assignments.length === 0 && !isSyncing) {
+      setHasAutoSynced(true);
+      // Call syncClassroom directly without including it in dependencies
+      syncClassroom();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, accessToken, hasAutoSynced, courses.length, assignments.length, isSyncing]);
 
   const updateAssignmentStatus = useCallback(
     (assignmentId: string, userStatus: string) => {
