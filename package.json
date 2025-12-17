@@ -9,7 +9,7 @@
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "client:dev": "vite",
     "client:build": "vite build",
-    "predeploy": "npm run client:build",
+    "predeploy": "npm run client:build && tsx script/copy-404.ts",
     "deploy": "gh-pages -d dist",
     "check": "tsc",
     "db:push": "drizzle-kit push"
