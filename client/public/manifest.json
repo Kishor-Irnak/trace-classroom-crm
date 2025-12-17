@@ -2,7 +2,7 @@
   "name": "Trace Classroom CRM",
   "short_name": "Trace CRM",
   "description": "A student CRM for managing Google Classroom assignments",
-  "start_url": "/trace-classroom-crm/",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#09090b",
@@ -28,16 +28,15 @@
       "name": "Pipeline",
       "short_name": "Pipeline",
       "description": "View assignments in pipeline view",
-      "url": "/trace-classroom-crm/",
+      "url": "/",
       "icons": [{ "src": "/favicon.png", "sizes": "192x192" }]
     },
     {
       "name": "Timeline",
       "short_name": "Timeline",
       "description": "View assignments timeline",
-      "url": "/trace-classroom-crm/timeline",
+      "url": "/timeline",
       "icons": [{ "src": "/favicon.png", "sizes": "192x192" }]
     }
   ]
 }
-

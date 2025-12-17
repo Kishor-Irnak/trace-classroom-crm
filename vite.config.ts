@@ -3,9 +3,25 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
+// Determine base path based on environment
+// For custom domain: use "/"
+// For GitHub Pages subpath: use "/trace-classroom-crm/"
+// Can be overridden with VITE_BASE_URL env variable
+const getBasePath = () => {
+  if (process.env.VITE_BASE_URL) {
+    return process.env.VITE_BASE_URL;
+  }
+  // Use root for custom domain, or subpath for GitHub Pages
+  // Set VITE_USE_CUSTOM_DOMAIN=true to use custom domain
+  if (process.env.VITE_USE_CUSTOM_DOMAIN === "true") {
+    return "/";
+  }
+  return process.env.NODE_ENV === "production" ? "/trace-classroom-crm/" : "/";
+};
+
 export default defineConfig({
-  // 🔑 REQUIRED for GitHub Pages
-  base: process.env.NODE_ENV === "production" ? "/trace-classroom-crm/" : "/",
+  // 🔑 Base path - configurable for custom domain or GitHub Pages
+  base: getBasePath(),
 
   plugins: [
     react(),
