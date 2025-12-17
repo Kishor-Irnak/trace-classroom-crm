@@ -1,6 +1,21 @@
 import { useState } from "react";
-import { AlertTriangle, Check, ExternalLink, LogOut, Trash2, RefreshCw } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertTriangle,
+  Check,
+  ExternalLink,
+  LogOut,
+  Trash2,
+  RefreshCw,
+  Download,
+  Smartphone,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -26,13 +41,16 @@ import {
 import { useAuth } from "@/lib/auth-context";
 import { useClassroom } from "@/lib/classroom-context";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useInstallPrompt } from "@/hooks/use-install-prompt";
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
   const { lastSyncedAt, isSyncing, syncClassroom } = useClassroom();
+  const { isInstallable, isInstalled, promptInstall } = useInstallPrompt();
   const [backgroundSync, setBackgroundSync] = useState(true);
   const [timezone, setTimezone] = useState("auto");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
 
   const handleDeleteAccount = async () => {
     setIsDeleting(true);
@@ -40,15 +58,29 @@ export default function SettingsPage() {
     setIsDeleting(false);
   };
 
-  const initials = user?.displayName
-    ?.split(" ")
-    .map(n => n[0])
-    .join("")
-    .toUpperCase() || user?.email?.[0].toUpperCase() || "U";
+  const initials =
+    user?.displayName
+      ?.split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase() ||
+    user?.email?.[0].toUpperCase() ||
+    "U";
 
   const formatLastSync = () => {
     if (!lastSyncedAt) return "Never";
     return lastSyncedAt.toLocaleString();
+  };
+
+  const handleInstall = async () => {
+    setIsInstalling(true);
+    try {
+      await promptInstall();
+    } catch (error) {
+      console.error("Install failed:", error);
+    } finally {
+      setIsInstalling(false);
+    }
   };
 
   return (
@@ -63,24 +95,31 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Connected Account</CardTitle>
-          <CardDescription>Your Google account linked to this app</CardDescription>
+          <CardDescription>
+            Your Google account linked to this app
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
             <Avatar className="h-12 w-12">
-              <AvatarImage src={user?.photoURL || undefined} alt={user?.displayName || "User"} />
+              <AvatarImage
+                src={user?.photoURL || undefined}
+                alt={user?.displayName || "User"}
+              />
               <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
               <p className="font-medium truncate">{user?.displayName}</p>
-              <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
+              <p className="text-sm text-muted-foreground truncate">
+                {user?.email}
+              </p>
             </div>
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Check className="h-3.5 w-3.5" />
               Connected
             </div>
           </div>
-          
+
           <Separator />
 
           <div className="flex items-center justify-between">
@@ -97,7 +136,9 @@ export default function SettingsPage() {
               disabled={isSyncing}
               data-testid="button-sync-settings"
             >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`h-4 w-4 mr-2 ${isSyncing ? "animate-spin" : ""}`}
+              />
               {isSyncing ? "Syncing..." : "Sync Now"}
             </Button>
           </div>
@@ -107,7 +148,9 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Sync Settings</CardTitle>
-          <CardDescription>Configure how your data syncs with Google Classroom</CardDescription>
+          <CardDescription>
+            Configure how your data syncs with Google Classroom
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
@@ -129,6 +172,92 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Install App
+          </CardTitle>
+          <CardDescription>
+            Install this app on your device for quick access - works on phones
+            and desktops
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isInstalled ? (
+            <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+              <Check className="h-5 w-5 text-emerald-600" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
+                  App Installed
+                </p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                  This app is installed on your device. You can access it from
+                  your home screen.
+                </p>
+              </div>
+            </div>
+          ) : isInstallable ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                <Smartphone className="h-5 w-5 text-primary" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Install Available</p>
+                  <p className="text-xs text-muted-foreground">
+                    Click the button below to install this app on your device
+                    for a better experience.
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={handleInstall}
+                disabled={isInstalling}
+                className="w-full"
+                size="lg"
+                data-testid="button-install-app"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {isInstalling ? "Installing..." : "Install App"}
+              </Button>
+              <p className="text-xs text-center text-muted-foreground">
+                After installation, you can access the app from your home screen
+                or app drawer
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
+                <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Install Not Available</p>
+                  <p className="text-xs text-muted-foreground">
+                    {typeof window !== "undefined" &&
+                    window.matchMedia("(display-mode: standalone)").matches
+                      ? "This app is already installed."
+                      : "Installation prompt will appear when the app meets PWA requirements. Make sure you're using Chrome, Edge, or Safari on a supported device."}
+                  </p>
+                </div>
+              </div>
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className="text-xs font-medium mb-2">Manual Installation:</p>
+                <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                  <li>
+                    <strong>Chrome/Edge:</strong> Click the install icon in the
+                    address bar
+                  </li>
+                  <li>
+                    <strong>iOS Safari:</strong> Tap Share → Add to Home Screen
+                  </li>
+                  <li>
+                    <strong>Android Chrome:</strong> Tap Menu → Install App
+                  </li>
+                </ul>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Preferences</CardTitle>
@@ -145,7 +274,10 @@ export default function SettingsPage() {
               </p>
             </div>
             <Select value={timezone} onValueChange={setTimezone}>
-              <SelectTrigger className="w-[180px]" data-testid="select-timezone">
+              <SelectTrigger
+                className="w-[180px]"
+                data-testid="select-timezone"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -153,7 +285,9 @@ export default function SettingsPage() {
                 <SelectItem value="America/New_York">Eastern Time</SelectItem>
                 <SelectItem value="America/Chicago">Central Time</SelectItem>
                 <SelectItem value="America/Denver">Mountain Time</SelectItem>
-                <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
+                <SelectItem value="America/Los_Angeles">
+                  Pacific Time
+                </SelectItem>
                 <SelectItem value="Europe/London">London</SelectItem>
                 <SelectItem value="Europe/Paris">Paris</SelectItem>
                 <SelectItem value="Asia/Tokyo">Tokyo</SelectItem>
@@ -216,9 +350,9 @@ export default function SettingsPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete your
-                    account and remove all your data including notes, settings, and
-                    cached assignments.
+                    This action cannot be undone. This will permanently delete
+                    your account and remove all your data including notes,
+                    settings, and cached assignments.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

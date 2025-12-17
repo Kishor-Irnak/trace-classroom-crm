@@ -629,7 +629,7 @@ export default function TimelinePage() {
 
   return (
     <>
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col min-h-full">
         <div className="flex flex-wrap items-center gap-3 sticky top-0 bg-background py-3 z-10 border-b px-6">
           <div className="flex items-center gap-2">
             <Button

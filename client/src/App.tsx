@@ -42,7 +42,7 @@ function AuthenticatedApp() {
     <ClassroomProvider>
       <div className="h-screen flex flex-col">
         <AppHeader />
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-y-auto">
           <Switch>
             <Route path="/" component={PipelinePage} />
             <Route path="/timeline" component={TimelinePage} />
