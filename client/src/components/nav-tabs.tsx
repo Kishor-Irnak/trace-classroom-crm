@@ -19,20 +19,20 @@ export function NavTabs() {
         const Icon = tab.icon;
         
         return (
-          <Link key={tab.path} href={tab.path}>
-            <a
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors",
-                "hover-elevate",
-                isActive 
-                  ? "bg-secondary text-foreground" 
-                  : "text-muted-foreground"
-              )}
-              data-testid={`nav-${tab.label.toLowerCase()}`}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{tab.label}</span>
-            </a>
+          <Link 
+            key={tab.path} 
+            href={tab.path}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-colors",
+              "hover-elevate",
+              isActive 
+                ? "bg-secondary text-foreground" 
+                : "text-muted-foreground"
+            )}
+            data-testid={`nav-${tab.label.toLowerCase()}`}
+          >
+            <Icon className="h-4 w-4" />
+            <span className="hidden sm:inline">{tab.label}</span>
           </Link>
         );
       })}

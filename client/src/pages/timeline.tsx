@@ -494,11 +494,8 @@ export default function TimelinePage() {
       }
       
       while (days.length % 7 !== 0) {
-        const d = new Date(
-          year,
-          month + 1,
-          days.length - (firstDay.getDay() + lastDay.getDate()) + 1
-        );
+        const dayIndex = days.length - (firstDay.getDay() + lastDay.getDate()) + 1;
+        const d: Date = new Date(year, month + 1, dayIndex);
         days.push({ date: d, isCurrentMonth: false });
       }
       return days;
