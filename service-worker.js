@@ -1,8 +1,26 @@
+// Service Worker for Trace Classroom CRM
+// Works with both custom domain and GitHub Pages subpath
+
 const CACHE_NAME = "trace-classroom-crm-v1";
+
+// Get base path from current location
+const getBasePath = () => {
+  // For custom domain, base path is "/"
+  // For GitHub Pages subpath, it's "/trace-classroom-crm/"
+  const pathname = self.location.pathname;
+  if (pathname.startsWith("/trace-classroom-crm/")) {
+    return "/trace-classroom-crm/";
+  }
+  return "/";
+};
+
+const BASE_PATH = getBasePath();
+
 const urlsToCache = [
-  "/trace-classroom-crm/",
-  "/trace-classroom-crm/index.html",
-  "/trace-classroom-crm/favicon.png",
+  BASE_PATH,
+  `${BASE_PATH}index.html`,
+  `${BASE_PATH}favicon.png`,
+  `${BASE_PATH}manifest.json`,
 ];
 
 // Install event - cache resources
@@ -11,7 +29,7 @@ self.addEventListener("install", (event) => {
     caches
       .open(CACHE_NAME)
       .then((cache) => {
-        console.log("Service Worker: Caching files");
+        console.log("Service Worker: Caching files", urlsToCache);
         return cache.addAll(urlsToCache);
       })
       .catch((error) => {
@@ -78,7 +96,7 @@ self.addEventListener("fetch", (event) => {
           .catch(() => {
             // Return offline page if available
             if (event.request.destination === "document") {
-              return caches.match("/trace-classroom-crm/index.html");
+              return caches.match(`${BASE_PATH}index.html`);
             }
           })
       );
