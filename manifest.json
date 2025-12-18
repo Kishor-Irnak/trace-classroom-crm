@@ -1,7 +1,7 @@
 {
-  "name": "Trace Classroom CRM",
-  "short_name": "Trace CRM",
-  "description": "A student CRM for managing Google Classroom assignments",
+  "name": "Trace",
+  "short_name": "Trace",
+  "description": "Manage Google Classroom assignments",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
