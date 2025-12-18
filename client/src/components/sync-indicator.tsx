@@ -39,7 +39,12 @@ export function SyncIndicator() {
       <Button
         variant="ghost"
         size="icon"
-        onClick={syncClassroom}
+        onClick={(e) => {
+          e.preventDefault();
+          syncClassroom().catch((err) => {
+            console.error("Sync failed:", err);
+          });
+        }}
         disabled={isSyncing}
         data-testid="button-sync"
       >

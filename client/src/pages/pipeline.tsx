@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -22,16 +22,28 @@ import { AssignmentDetail } from "@/components/assignment-detail";
 import { useClassroom } from "@/lib/classroom-context";
 import type { Assignment, AssignmentStatus } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { Lightbulb, Loader2 } from "lucide-react"; // Added Icons
 
-function PipelineColumn({ 
-  id, 
-  title, 
+// --- Loading Data & Components ---
+
+const LOADING_TIPS = [
+  "Drag and drop assignments between columns to update their status.",
+  "Trace automatically syncs changes with your Google Classroom.",
+  "Click on any assignment card to view details and add private notes.",
+  "Use the Timeline view to visualize deadlines chronologically.",
+  "Keep your 'In Progress' column manageable for better focus.",
+  "Assignments marked as 'Done' in Classroom appear in the Completed column.",
+];
+
+function PipelineColumn({
+  id,
+  title,
   assignments,
   onCardClick,
   notes,
-}: { 
-  id: AssignmentStatus; 
-  title: string; 
+}: {
+  id: AssignmentStatus;
+  title: string;
   assignments: Assignment[];
   onCardClick: (assignment: Assignment) => void;
   notes: Map<string, unknown[]>;
@@ -39,7 +51,7 @@ function PipelineColumn({
   const { isOver, setNodeRef } = useDroppable({ id });
 
   return (
-    <div 
+    <div
       ref={setNodeRef}
       className={cn(
         "flex flex-col min-w-[280px] w-[280px] h-full",
@@ -52,9 +64,12 @@ function PipelineColumn({
           {assignments.length}
         </Badge>
       </div>
-      
+
       <div className="flex-1 p-3 space-y-3 overflow-y-auto">
-        <SortableContext items={assignments.map(a => a.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext
+          items={assignments.map((a) => a.id)}
+          strategy={verticalListSortingStrategy}
+        >
           {assignments.length > 0 ? (
             assignments.map((assignment) => (
               <AssignmentCard
@@ -75,9 +90,10 @@ function PipelineColumn({
   );
 }
 
+// Background Skeleton Structure
 function PipelineSkeleton() {
   return (
-    <div className="flex gap-4 h-full overflow-x-auto p-6">
+    <div className="flex gap-4 h-full overflow-x-auto p-6 opacity-40 pointer-events-none select-none filter grayscale">
       {[1, 2, 3, 4, 5].map((i) => (
         <div key={i} className="flex flex-col min-w-[280px] w-[280px]">
           <div className="flex items-center justify-between p-3 border-b">
@@ -95,9 +111,95 @@ function PipelineSkeleton() {
   );
 }
 
+// New Enhanced Loading Screen
+function EnhancedLoadingScreen() {
+  const [progress, setProgress] = useState(10);
+  const [tipIndex, setTipIndex] = useState(0);
+
+  useEffect(() => {
+    // Increment progress bar to simulate loading
+    const timer = setInterval(() => {
+      setProgress((oldProgress) => {
+        if (oldProgress === 100) return 100;
+        const diff = Math.random() * 10;
+        return Math.min(oldProgress + diff, 90); // Stall at 90% until real data loads
+      });
+    }, 500);
+
+    // Rotate tips every 2.5 seconds
+    const tipTimer = setInterval(() => {
+      setTipIndex((prev) => (prev + 1) % LOADING_TIPS.length);
+    }, 2500);
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(tipTimer);
+    };
+  }, []);
+
+  return (
+    <div className="relative h-full w-full bg-background overflow-hidden">
+      {/* Background Structure (Blurred) */}
+      <PipelineSkeleton />
+
+      {/* Foreground Overlay */}
+      <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-[2px]">
+        <div className="w-full max-w-md p-6 space-y-6">
+          {/* Logo / Header */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="h-10 w-10 bg-zinc-950 rounded flex items-center justify-center text-white">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+            <h2 className="text-lg font-semibold tracking-tight">
+              Syncing Workspace
+            </h2>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="h-1 w-full bg-zinc-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-zinc-950 transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-zinc-400 font-mono uppercase tracking-wider">
+              <span>Retrieving Assignments</span>
+              <span>{Math.round(progress)}%</span>
+            </div>
+          </div>
+
+          {/* Tips Section */}
+          <div className="flex gap-3 items-start bg-white border border-zinc-200 p-4 rounded-md shadow-sm max-w-sm mx-auto animate-in fade-in slide-in-from-bottom-2 duration-700">
+            <Lightbulb className="h-4 w-4 text-zinc-900 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-zinc-900 uppercase tracking-wide">
+                Did you know?
+              </span>
+              <p className="text-xs text-zinc-500 leading-relaxed min-h-[40px]">
+                {LOADING_TIPS[tipIndex]}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Main Page Component ---
+
 export default function PipelinePage() {
-  const { getPipelineColumns, updateAssignmentStatus, isLoading, notes, assignments, syncClassroom } = useClassroom();
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const {
+    getPipelineColumns,
+    updateAssignmentStatus,
+    isLoading,
+    notes,
+    assignments,
+    syncClassroom,
+  } = useClassroom();
+  const [selectedAssignment, setSelectedAssignment] =
+    useState<Assignment | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -110,7 +212,9 @@ export default function PipelinePage() {
   );
 
   const columns = getPipelineColumns();
-  const activeAssignment = activeId ? assignments.find(a => a.id === activeId) : null;
+  const activeAssignment = activeId
+    ? assignments.find((a) => a.id === activeId)
+    : null;
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -125,8 +229,12 @@ export default function PipelinePage() {
     const assignmentId = active.id as string;
     const targetColumnId = over.id as AssignmentStatus;
 
-    if (["backlog", "in_progress", "submitted", "graded", "overdue"].includes(targetColumnId)) {
-      const assignment = assignments.find(a => a.id === assignmentId);
+    if (
+      ["backlog", "in_progress", "submitted", "graded", "overdue"].includes(
+        targetColumnId
+      )
+    ) {
+      const assignment = assignments.find((a) => a.id === assignmentId);
       if (assignment && assignment.systemStatus !== targetColumnId) {
         if (targetColumnId === "in_progress") {
           updateAssignmentStatus(assignmentId, "in_progress");
@@ -138,7 +246,7 @@ export default function PipelinePage() {
   };
 
   if (isLoading) {
-    return <PipelineSkeleton />;
+    return <EnhancedLoadingScreen />;
   }
 
   if (assignments.length === 0) {
@@ -147,11 +255,17 @@ export default function PipelinePage() {
         <div className="text-center space-y-2">
           <h2 className="text-lg font-medium">No assignments yet</h2>
           <p className="text-sm text-muted-foreground max-w-md">
-            Sync your Google Classroom to see your assignments organized in a Kanban-style board.
+            Sync your Google Classroom to see your assignments organized in a
+            Kanban-style board.
           </p>
         </div>
         <button
-          onClick={syncClassroom}
+          onClick={(e) => {
+            e.preventDefault();
+            syncClassroom().catch((err) => {
+              console.error("Sync failed:", err);
+            });
+          }}
           className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover-elevate"
           data-testid="button-sync-empty"
         >

@@ -666,6 +666,9 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         );
         setCourses([]);
         setAssignments([]);
+        setLastSyncedAt(new Date());
+        setIsSyncing(false);
+        setIsLoading(false);
         return;
       }
 

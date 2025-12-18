@@ -1,5 +1,14 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Calendar, Filter, X, CalendarDays, MousePointer, ArrowDown } from "lucide-react";
+import {
+  Calendar,
+  Filter,
+  X,
+  CalendarDays,
+  MousePointer,
+  ArrowDown,
+  Lightbulb,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +23,19 @@ import { AssignmentDetail } from "@/components/assignment-detail";
 import { useClassroom } from "@/lib/classroom-context";
 import type { Assignment } from "@shared/schema";
 import { cn } from "@/lib/utils";
+
+// --- Loading Configuration ---
+
+const LOADING_TIPS = [
+  "Hold 'Right Click' and drag to navigate the timeline quickly.",
+  "Switch to Calendar view to see the full monthly schedule.",
+  "Use the filters at the top to focus on specific courses.",
+  "The 'Today' button in Calendar view jumps you to the current date.",
+  "Timeline bars are color-coded based on assignment status.",
+  "Hover over an assignment card to see more details.",
+];
+
+// --- Skeleton & Loading Components ---
 
 function TimelineSkeleton() {
   return (
@@ -35,6 +57,85 @@ function TimelineSkeleton() {
     </div>
   );
 }
+
+function EnhancedLoadingScreen() {
+  const [progress, setProgress] = useState(10);
+  const [tipIndex, setTipIndex] = useState(0);
+
+  useEffect(() => {
+    // Increment progress bar
+    const timer = setInterval(() => {
+      setProgress((oldProgress) => {
+        if (oldProgress === 100) return 100;
+        const diff = Math.random() * 10;
+        return Math.min(oldProgress + diff, 90);
+      });
+    }, 500);
+
+    // Rotate tips
+    const tipTimer = setInterval(() => {
+      setTipIndex((prev) => (prev + 1) % LOADING_TIPS.length);
+    }, 2500);
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(tipTimer);
+    };
+  }, []);
+
+  return (
+    <div className="relative h-full w-full bg-background overflow-hidden">
+      {/* Background Structure (Blurred Skeleton) */}
+      <div className="h-full w-full p-6 opacity-40 pointer-events-none select-none filter grayscale">
+        <TimelineSkeleton />
+      </div>
+
+      {/* Foreground Overlay */}
+      <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-[2px]">
+        <div className="w-full max-w-md p-6 space-y-6">
+          {/* Logo / Header */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="h-10 w-10 bg-zinc-950 rounded flex items-center justify-center text-white">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+            <h2 className="text-lg font-semibold tracking-tight">
+              Building Timeline
+            </h2>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="h-1 w-full bg-zinc-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-zinc-950 transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-zinc-400 font-mono uppercase tracking-wider">
+              <span>Mapping Schedule</span>
+              <span>{Math.round(progress)}%</span>
+            </div>
+          </div>
+
+          {/* Tips Section */}
+          <div className="flex gap-3 items-start bg-white border border-zinc-200 p-4 rounded-md shadow-sm max-w-sm mx-auto animate-in fade-in slide-in-from-bottom-2 duration-700">
+            <Lightbulb className="h-4 w-4 text-zinc-900 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-zinc-900 uppercase tracking-wide">
+                Navigation Tip
+              </span>
+              <p className="text-xs text-zinc-500 leading-relaxed min-h-[40px]">
+                {LOADING_TIPS[tipIndex]}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Configuration ---
 
 // Status configuration for visual styling
 const STATUS_CONFIG: Record<
@@ -107,12 +208,28 @@ const getMonthsArray = (start: Date, end: Date) => {
 const getMonthKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
+// Utility to check if a date is today
+const isToday = (date: Date) => {
+  const today = new Date();
+  return (
+    date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
+  );
+};
+
+// --- Main Page Component ---
+
 export default function TimelinePage() {
-  const { getTimelineGroups, courses, isLoading, assignments, syncClassroom } = useClassroom();
+  const { getTimelineGroups, courses, isLoading, assignments, syncClassroom } =
+    useClassroom();
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
-  const [currentView, setCurrentView] = useState<"timeline" | "calendar">("timeline");
+  const [selectedAssignment, setSelectedAssignment] =
+    useState<Assignment | null>(null);
+  const [currentView, setCurrentView] = useState<"timeline" | "calendar">(
+    "timeline"
+  );
 
   const filteredAssignments = useMemo(() => {
     let filtered = [...assignments];
@@ -132,8 +249,9 @@ export default function TimelinePage() {
 
   const hasFilters = selectedCourse || selectedStatus;
 
+  // UPDATED: Now returns EnhancedLoadingScreen
   if (isLoading) {
-    return <TimelineSkeleton />;
+    return <EnhancedLoadingScreen />;
   }
 
   if (assignments.length === 0) {
@@ -143,11 +261,17 @@ export default function TimelinePage() {
           <Calendar className="h-12 w-12 mx-auto text-muted-foreground" />
           <h2 className="text-lg font-medium">No assignments yet</h2>
           <p className="text-sm text-muted-foreground max-w-md">
-            Sync your Google Classroom to see your assignments organized by date.
+            Sync your Google Classroom to see your assignments organized by
+            date.
           </p>
         </div>
         <button
-          onClick={syncClassroom}
+          onClick={(e) => {
+            e.preventDefault();
+            syncClassroom().catch((err) => {
+              console.error("Sync failed:", err);
+            });
+          }}
           className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover-elevate"
           data-testid="button-sync-empty-timeline"
         >
@@ -162,7 +286,7 @@ export default function TimelinePage() {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, left: 0 });
-    const dayWidth = 60;
+    const dayWidth = 60; // Keep fixed width for alignment
 
     const { earliestDate, latestDate, initialScrollPosition } = useMemo(() => {
       const today = new Date();
@@ -174,10 +298,14 @@ export default function TimelinePage() {
         const datesWithDueDates = filteredAssignments
           .filter((a) => a.dueDate)
           .map((a) => new Date(a.dueDate!));
-        
+
         if (datesWithDueDates.length > 0) {
-          minDate = new Date(Math.min(...datesWithDueDates.map((d) => d.getTime())));
-          maxDate = new Date(Math.max(...datesWithDueDates.map((d) => d.getTime())));
+          minDate = new Date(
+            Math.min(...datesWithDueDates.map((d) => d.getTime()))
+          );
+          maxDate = new Date(
+            Math.max(...datesWithDueDates.map((d) => d.getTime()))
+          );
         }
       }
 
@@ -189,8 +317,10 @@ export default function TimelinePage() {
       const daysFromStartToToday = Math.ceil(
         (today.getTime() - bufferedMinDate.getTime()) / (1000 * 3600 * 24)
       );
+
+      // Calculate scroll to center 'Today'
       const initialScroll =
-        daysFromStartToToday * dayWidth - window.innerWidth / 2;
+        daysFromStartToToday * dayWidth + dayWidth / 2 - window.innerWidth / 2;
 
       return {
         earliestDate: bufferedMinDate,
@@ -252,12 +382,12 @@ export default function TimelinePage() {
 
     const getTaskStyle = (dueDate: string | null) => {
       if (!dueDate) return { left: "0px", width: "0px" };
-      
+
       const due = new Date(dueDate);
       due.setHours(0, 0, 0, 0);
       const startDiff =
         (due.getTime() - earliestDate.getTime()) / (1000 * 3600 * 24);
-      
+
       return {
         left: `${startDiff * dayWidth}px`,
         width: `${dayWidth}px`,
@@ -276,55 +406,88 @@ export default function TimelinePage() {
           onContextMenu={(e) => e.preventDefault()}
         >
           <div
-            className="min-w-max pb-20"
+            className="min-w-max pb-20 relative"
             style={{ width: `${dates.length * dayWidth}px` }}
           >
-            <div className="flex sticky top-0 bg-background/95 backdrop-blur-sm z-20 border-b shadow-sm">
-              {dates.map((date, i) => (
-                <div
-                  key={i}
-                  className="flex-shrink-0 flex flex-col items-center justify-end pb-2 h-14 border-r"
-                  style={{ width: dayWidth }}
-                >
-                  <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider mb-1">
-                    {date.toLocaleDateString("en-US", { weekday: "narrow" })}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full",
-                      new Date().toDateString() === date.toDateString()
-                        ? "bg-primary text-primary-foreground shadow-md"
-                        : "text-foreground"
-                    )}
-                  >
-                    {date.getDate()}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="relative pt-6 h-full">
-              <div className="absolute inset-0 flex pointer-events-none h-full">
-                {dates.map((date, i) => (
+            {/* 1. STICKY HEADER WITH DATE CIRCLE */}
+            <div className="flex sticky top-0 bg-background/95 backdrop-blur-sm z-40 border-b shadow-sm h-16">
+              {dates.map((date, i) => {
+                const isCurrentDay = isToday(date);
+                return (
                   <div
                     key={i}
-                    className="flex-shrink-0 h-full border-r border-border/50"
+                    className="flex-shrink-0 flex flex-col items-center justify-end pb-3 relative"
                     style={{ width: dayWidth }}
-                  ></div>
-                ))}
+                  >
+                    {/* Day Name (Mon, Tue) */}
+                    <span
+                      className={cn(
+                        "text-[10px] uppercase font-bold tracking-wider mb-1",
+                        isCurrentDay ? "text-blue-600" : "text-muted-foreground"
+                      )}
+                    >
+                      {date.toLocaleDateString("en-US", { weekday: "narrow" })}
+                    </span>
+
+                    {/* Date Number Circle */}
+                    <span
+                      className={cn(
+                        "text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full transition-all",
+                        isCurrentDay
+                          ? "bg-blue-600 text-white shadow-md z-10 scale-110"
+                          : "text-foreground"
+                      )}
+                    >
+                      {date.getDate()}
+                    </span>
+
+                    {/* Right Border for header cells */}
+                    <div className="absolute right-0 top-2 bottom-2 w-[1px] bg-border/50"></div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 2. MAIN CONTENT AREA (GRID + TASKS) */}
+            <div className="relative pt-6 min-h-[500px]">
+              {/* Vertical Grid Lines & TODAY LINE */}
+              <div className="absolute inset-0 flex pointer-events-none h-full z-0">
+                {dates.map((date, i) => {
+                  const isCurrentDay = isToday(date);
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        "flex-shrink-0 h-full border-r border-border/40 relative",
+                        isCurrentDay ? "bg-blue-50/10" : ""
+                      )}
+                      style={{ width: dayWidth }}
+                    >
+                      {/* --- THE TODAY LINE --- */}
+                      {isCurrentDay && (
+                        <div className="absolute top-0 bottom-0 left-1/2 w-[2px] bg-blue-600 -translate-x-1/2 z-20 shadow-[0_0_10px_rgba(37,99,235,0.2)]"></div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <div className="space-y-3 px-0 relative z-10">
+
+              {/* Assignments Layer */}
+              <div className="space-y-3 px-0 relative z-10 mt-2">
                 {filteredAssignments
                   .filter((a) => a.dueDate)
                   .map((assignment) => {
                     const style = getTaskStyle(assignment.dueDate);
-                    const statusConfig = STATUS_CONFIG[assignment.systemStatus] || STATUS_CONFIG.backlog;
-                    
+                    const statusConfig =
+                      STATUS_CONFIG[assignment.systemStatus] ||
+                      STATUS_CONFIG.backlog;
+
                     return (
                       <div key={assignment.id} className="relative h-14 group">
                         <div
                           onClick={() => setSelectedAssignment(assignment)}
                           className={cn(
-                            "absolute top-0 h-12 rounded-lg border shadow-sm transition-all cursor-pointer flex flex-col justify-center px-3 overflow-hidden group hover:scale-[1.01] z-10",
+                            "absolute top-0 h-12 rounded-lg border shadow-sm transition-all cursor-pointer flex flex-col justify-center px-3 overflow-hidden group hover:scale-[1.01] z-10 hover:z-30 hover:shadow-md",
                             statusConfig.timelineStyle
                           )}
                           style={{
@@ -374,15 +537,19 @@ export default function TimelinePage() {
     const { startMonth, endMonth } = useMemo(() => {
       let minDate = new Date();
       let maxDate = new Date();
-      
+
       if (filteredAssignments.length > 0) {
         const datesWithDueDates = filteredAssignments
           .filter((a) => a.dueDate)
           .map((a) => new Date(a.dueDate!));
-        
+
         if (datesWithDueDates.length > 0) {
-          minDate = new Date(Math.min(...datesWithDueDates.map((d) => d.getTime())));
-          maxDate = new Date(Math.max(...datesWithDueDates.map((d) => d.getTime())));
+          minDate = new Date(
+            Math.min(...datesWithDueDates.map((d) => d.getTime()))
+          );
+          maxDate = new Date(
+            Math.max(...datesWithDueDates.map((d) => d.getTime()))
+          );
         }
       }
 
@@ -481,20 +648,21 @@ export default function TimelinePage() {
       const firstDay = new Date(year, month, 1);
       const lastDay = new Date(year, month + 1, 0);
       const days = [];
-      
+
       for (let i = 0; i < firstDay.getDay(); i++) {
         days.push({
           date: new Date(year, month, -firstDay.getDay() + 1 + i),
           isCurrentMonth: false,
         });
       }
-      
+
       for (let i = 1; i <= lastDay.getDate(); i++) {
         days.push({ date: new Date(year, month, i), isCurrentMonth: true });
       }
-      
+
       while (days.length % 7 !== 0) {
-        const dayIndex = days.length - (firstDay.getDay() + lastDay.getDate()) + 1;
+        const dayIndex =
+          days.length - (firstDay.getDay() + lastDay.getDate()) + 1;
         const d: Date = new Date(year, month + 1, dayIndex);
         days.push({ date: d, isCurrentMonth: false });
       }
@@ -586,7 +754,9 @@ export default function TimelinePage() {
                           </span>
                           <div className="flex-1 flex flex-col gap-1.5">
                             {dayTasks.map((task) => {
-                              const statusConfig = STATUS_CONFIG[task.systemStatus] || STATUS_CONFIG.backlog;
+                              const statusConfig =
+                                STATUS_CONFIG[task.systemStatus] ||
+                                STATUS_CONFIG.backlog;
                               return (
                                 <div
                                   key={task.id}
@@ -656,7 +826,10 @@ export default function TimelinePage() {
             value={selectedCourse || "all"}
             onValueChange={(v) => setSelectedCourse(v === "all" ? null : v)}
           >
-            <SelectTrigger className="w-[180px]" data-testid="select-course-filter">
+            <SelectTrigger
+              className="w-[180px]"
+              data-testid="select-course-filter"
+            >
               <SelectValue placeholder="All Courses" />
             </SelectTrigger>
             <SelectContent>
@@ -673,7 +846,10 @@ export default function TimelinePage() {
             value={selectedStatus || "all"}
             onValueChange={(v) => setSelectedStatus(v === "all" ? null : v)}
           >
-            <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
+            <SelectTrigger
+              className="w-[140px]"
+              data-testid="select-status-filter"
+            >
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>

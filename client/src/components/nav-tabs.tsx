@@ -3,9 +3,9 @@ import { LayoutGrid, Calendar, BarChart3, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
+  { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/", label: "Pipeline", icon: LayoutGrid },
   { path: "/timeline", label: "Timeline", icon: Calendar },
-  { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/settings", label: "Settings", icon: Settings },
 ];
 
