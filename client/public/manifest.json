@@ -10,15 +10,8 @@
   "icons": [
     {
       "src": "/favicon.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/favicon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "sizes": "any",
+      "type": "image/png"
     }
   ],
   "categories": ["education", "productivity"],
@@ -29,14 +22,14 @@
       "short_name": "Pipeline",
       "description": "View assignments in pipeline view",
       "url": "/",
-      "icons": [{ "src": "/favicon.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/favicon.png", "sizes": "any" }]
     },
     {
       "name": "Timeline",
       "short_name": "Timeline",
       "description": "View assignments timeline",
       "url": "/timeline",
-      "icons": [{ "src": "/favicon.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/favicon.png", "sizes": "any" }]
     }
   ]
 }
