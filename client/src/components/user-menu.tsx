@@ -31,7 +31,11 @@ export function UserMenu() {
           data-testid="button-user-menu"
         >
           <Avatar className="h-8 w-8">
-            <AvatarImage src={user.photoURL || undefined} alt={user.displayName || "User"} />
+            <AvatarImage 
+              src={user.photoURL || undefined} 
+              alt={user.displayName || "User"} 
+              referrerPolicy="no-referrer"
+            />
             <AvatarFallback className="text-xs">{initials}</AvatarFallback>
           </Avatar>
         </button>

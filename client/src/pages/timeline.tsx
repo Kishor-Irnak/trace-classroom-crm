@@ -221,7 +221,7 @@ const isToday = (date: Date) => {
 // --- Main Page Component ---
 
 export default function TimelinePage() {
-  const { getTimelineGroups, courses, isLoading, assignments, syncClassroom } =
+  const { getTimelineGroups, courses, isLoading, isSyncing, assignments, syncClassroom } =
     useClassroom();
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
@@ -250,7 +250,7 @@ export default function TimelinePage() {
   const hasFilters = selectedCourse || selectedStatus;
 
   // UPDATED: Now returns EnhancedLoadingScreen
-  if (isLoading) {
+  if (isLoading || isSyncing) {
     return <EnhancedLoadingScreen />;
   }
 
@@ -799,7 +799,7 @@ export default function TimelinePage() {
 
   return (
     <>
-      <div className="flex flex-col min-h-full">
+      <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 sticky top-0 bg-background py-3 z-10 border-b px-6">
           <div className="flex items-center gap-2">
             <Button

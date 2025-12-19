@@ -22,6 +22,7 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
     "/": "Pipeline",
     "/timeline": "Timeline",
     "/dashboard": "Dashboard",
+    "/notes": "Notes",
     "/settings": "Settings",
   };
   const currentViewName = viewNames[location] || "Pipeline";

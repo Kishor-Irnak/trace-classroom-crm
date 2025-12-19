@@ -194,6 +194,7 @@ export default function PipelinePage() {
     getPipelineColumns,
     updateAssignmentStatus,
     isLoading,
+    isSyncing,
     notes,
     assignments,
     syncClassroom,
@@ -245,7 +246,7 @@ export default function PipelinePage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isSyncing) {
     return <EnhancedLoadingScreen />;
   }
 

@@ -13,6 +13,7 @@ import LoginPage from "@/pages/login";
 import PipelinePage from "@/pages/pipeline";
 import TimelinePage from "@/pages/timeline";
 import DashboardPage from "@/pages/dashboard";
+import NotesPage from "@/pages/notes";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
@@ -43,6 +44,7 @@ function AuthenticatedApp() {
                 <Route path="/" component={PipelinePage} />
                 <Route path="/timeline" component={TimelinePage} />
                 <Route path="/dashboard" component={DashboardPage} />
+                <Route path="/notes" component={NotesPage} />
                 <Route path="/settings" component={SettingsPage} />
                 <Route component={NotFound} />
               </Switch>

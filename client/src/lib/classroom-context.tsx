@@ -10,11 +10,13 @@ import type {
   Course,
   Assignment,
   Note,
+  NoteMaterial,
   DashboardMetrics,
   PipelineColumn,
   TimelineGroup,
 } from "@shared/schema";
 import { useAuth } from "./auth-context";
+import { useToast } from "@/hooks/use-toast";
 
 // Google Classroom API types
 interface GoogleCourse {
@@ -69,6 +71,45 @@ interface GoogleSubmissionsResponse {
   nextPageToken?: string;
 }
 
+interface GoogleCourseMaterial {
+  id: string;
+  title: string;
+  description?: string;
+  materials?: any[];
+  alternateLink?: string;
+  updateTime?: string;
+}
+
+interface GoogleCourseMaterialResponse {
+  courseWorkMaterial?: GoogleCourseMaterial[];
+  nextPageToken?: string;
+}
+
+interface GoogleTeacherSubmission {
+  userId: string;
+  state: string;
+  late?: boolean;
+}
+
+interface GoogleTeacherSubmissionsResponse {
+  studentSubmissions?: GoogleTeacherSubmission[];
+  nextPageToken?: string;
+}
+
+interface GoogleUserProfile {
+  id: string;
+  name?: {
+    fullName?: string;
+  };
+  photoUrl?: string;
+  emailAddress?: string;
+}
+
+interface GoogleRosterResponse {
+  students?: { profile: GoogleUserProfile; userId: string }[];
+  nextPageToken?: string;
+}
+
 interface ClassroomContextType {
   courses: Course[];
   assignments: Assignment[];
@@ -77,7 +118,8 @@ interface ClassroomContextType {
   isSyncing: boolean;
   lastSyncedAt: Date | null;
   error: string | null;
-  syncClassroom: () => Promise<void>;
+  materials: NoteMaterial[];
+  syncClassroom: (isAutoSync?: boolean) => Promise<void>;
   updateAssignmentStatus: (assignmentId: string, userStatus: string) => void;
   addNote: (
     assignmentId: string,
@@ -105,7 +147,7 @@ function generateId() {
 }
 
 // Helper function to fetch all pages from Google Classroom API
-async function fetchAllPages<T>(
+export async function fetchAllPages<T>(
   accessToken: string,
   baseUrl: string,
   extractItems: (response: any) => T[],
@@ -306,6 +348,43 @@ async function fetchCoursework(
   }
 
   return assignments;
+}
+
+// Fetch course materials (notes/PDFs) for a course
+async function fetchCourseMaterials(
+  accessToken: string,
+  courseId: string,
+  courseName: string,
+  userId: string
+): Promise<NoteMaterial[]> {
+  const baseUrl = `https://classroom.googleapis.com/v1/courses/${courseId}/courseWorkMaterials?courseWorkMaterialStates=PUBLISHED`;
+
+  try {
+    const googleMaterials = await fetchAllPages<GoogleCourseMaterial>(
+      accessToken,
+      baseUrl,
+      (data: GoogleCourseMaterialResponse) => data.courseWorkMaterial || [],
+      (data: GoogleCourseMaterialResponse) => data.nextPageToken
+    );
+
+    const now = new Date().toISOString();
+    return googleMaterials.map((gm) => ({
+      id: `mat-${gm.id}`,
+      uniqueId: `${courseId}-${gm.id}`,
+      userId,
+      courseId: `course-${courseId}`,
+      courseName,
+      title: gm.title,
+      description: gm.description || null,
+      alternateLink: gm.alternateLink || null,
+      materials: gm.materials || null,
+      createdAt: gm.updateTime || now,
+      lastSyncedAt: now,
+    }));
+  } catch (err) {
+    console.warn(`Failed to fetch materials for course ${courseId}:`, err);
+    return [];
+  }
 }
 
 function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
@@ -611,16 +690,36 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
 
 export function ClassroomProvider({ children }: { children: ReactNode }) {
   const { user, accessToken } = useAuth();
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [notes, setNotes] = useState<Map<string, Note[]>>(new Map());
-  const [isLoading, setIsLoading] = useState(true);
+  const [courses, setCourses] = useState<Course[]>(() => {
+    const saved = sessionStorage.getItem("classroom_courses");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [assignments, setAssignments] = useState<Assignment[]>(() => {
+    const saved = sessionStorage.getItem("classroom_assignments");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [materials, setMaterials] = useState<NoteMaterial[]>(() => {
+    const saved = sessionStorage.getItem("classroom_materials");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [notes, setNotes] = useState<Map<string, Note[]>>(() => {
+    const saved = sessionStorage.getItem("classroom_notes");
+    return saved ? new Map(JSON.parse(saved)) : new Map();
+  });
+  const [isLoading, setIsLoading] = useState(() => {
+    // If we have cached data, start with loading false
+    return !sessionStorage.getItem("classroom_courses");
+  });
   const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(() => {
+    const saved = sessionStorage.getItem("classroom_lastSyncedAt");
+    return saved ? new Date(saved) : null;
+  });
   const [error, setError] = useState<string | null>(null);
   const [hasAutoSynced, setHasAutoSynced] = useState(false);
+  const { toast } = useToast();
 
-  const syncClassroom = useCallback(async () => {
+  const syncClassroom = useCallback(async (isAutoSync = false) => {
     if (!user) {
       setError("Please sign in with Google to sync your Classroom data");
       setIsLoading(false);
@@ -650,7 +749,10 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
     }
 
     setIsSyncing(true);
-    setIsLoading(true);
+    // Only show full-screen loader if we have no data yet
+    if (assignments.length === 0) {
+      setIsLoading(true);
+    }
     setError(null);
 
     try {
@@ -672,24 +774,34 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Fetch assignments for each course
+      // Fetch assignments and materials for each course
       const allAssignments: Assignment[] = [];
+      const allMaterials: NoteMaterial[] = [];
       for (const course of fetchedCourses) {
         try {
-          console.log(`Fetching assignments for course: ${course.name}`);
-          const courseAssignments = await fetchCoursework(
-            token,
-            course.classroomId,
-            course.name,
-            user.uid
-          );
+          console.log(`Fetching data for course: ${course.name}`);
+          const [courseAssignments, courseMaterials] = await Promise.all([
+            fetchCoursework(
+              token,
+              course.classroomId,
+              course.name,
+              user.uid
+            ),
+            fetchCourseMaterials(
+              token,
+              course.classroomId,
+              course.name,
+              user.uid
+            )
+          ]);
           console.log(
-            `Found ${courseAssignments.length} assignments for ${course.name}`
+            `Found ${courseAssignments.length} assignments and ${courseMaterials.length} materials for ${course.name}`
           );
           allAssignments.push(...courseAssignments);
+          allMaterials.push(...courseMaterials);
         } catch (err) {
           console.warn(
-            `Failed to fetch assignments for course ${course.name}:`,
+            `Failed to fetch data for course ${course.name}:`,
             err
           );
           // Continue with other courses even if one fails
@@ -697,11 +809,19 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       }
 
       console.log(
-        `Sync complete: ${fetchedCourses.length} courses, ${allAssignments.length} assignments`
+        `Sync complete: ${fetchedCourses.length} courses, ${allAssignments.length} assignments, ${allMaterials.length} materials`
       );
       setCourses(fetchedCourses);
       setAssignments(allAssignments);
+      setMaterials(allMaterials);
       setLastSyncedAt(new Date());
+
+      if (!isAutoSync) {
+        toast({
+          title: "Sync Complete",
+          description: `Successfully synced ${fetchedCourses.length} courses, ${allAssignments.length} assignments, and ${allMaterials.length} materials.`,
+        });
+      }
     } catch (err: any) {
       console.error("Sync error details:", err);
       let errorMessage = "Failed to sync";
@@ -741,6 +861,14 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
 
       setError(errorMessage);
       console.error("Sync error:", err);
+
+      if (!isAutoSync) {
+        toast({
+          variant: "destructive",
+          title: "Sync Failed",
+          description: errorMessage,
+        });
+      }
     } finally {
       setIsSyncing(false);
       setIsLoading(false);
@@ -759,15 +887,39 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       return;
     }
-
-    // Auto-sync only once when user first logs in and has no data
-    if (!hasAutoSynced && courses.length === 0 && assignments.length === 0 && !isSyncing) {
+    
+    if (!hasAutoSynced && !isSyncing) {
       setHasAutoSynced(true);
       // Call syncClassroom directly without including it in dependencies
-      syncClassroom();
+      syncClassroom(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, accessToken, hasAutoSynced, courses.length, assignments.length, isSyncing]);
+
+  // Persistence Effects
+  useEffect(() => {
+    sessionStorage.setItem("classroom_courses", JSON.stringify(courses));
+  }, [courses]);
+
+  useEffect(() => {
+    sessionStorage.setItem("classroom_materials", JSON.stringify(materials));
+  }, [materials]);
+
+  useEffect(() => {
+    sessionStorage.setItem("classroom_notes", JSON.stringify(Array.from(notes.entries())));
+  }, [notes]);
+
+  useEffect(() => {
+    sessionStorage.setItem("classroom_assignments", JSON.stringify(assignments));
+  }, [assignments]);
+
+  useEffect(() => {
+    if (lastSyncedAt) {
+      sessionStorage.setItem("classroom_lastSyncedAt", lastSyncedAt.toISOString());
+    } else {
+      sessionStorage.removeItem("classroom_lastSyncedAt");
+    }
+  }, [lastSyncedAt]);
 
   const updateAssignmentStatus = useCallback(
     (assignmentId: string, userStatus: string) => {
@@ -1035,6 +1187,7 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         getTimelineGroups,
         getAssignmentById,
         getNotesForAssignment,
+        materials,
       }}
     >
       {children}

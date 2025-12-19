@@ -6,7 +6,22 @@ import {
   Settings,
   X,
   LogOut,
+  FileText,
+  Moon,
+  Sun,
 } from "lucide-react";
+import { useTheme } from "@/lib/theme-context";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/lib/auth-context";
@@ -16,6 +31,7 @@ const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/", label: "Pipeline", icon: LayoutGrid },
   { path: "/timeline", label: "Timeline", icon: Calendar },
+  { path: "/notes", label: "Notes", icon: FileText },
 ];
 
 interface AppSidebarProps {
@@ -27,6 +43,7 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
   const [location] = useLocation();
   const isMobile = useIsMobile();
   const { user, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const initials =
     user?.displayName
@@ -57,6 +74,7 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
             <AvatarImage
               src={user?.photoURL || undefined}
               alt={user?.displayName || "User"}
+              referrerPolicy="no-referrer"
             />
             <AvatarFallback className="text-xs">{initials}</AvatarFallback>
           </Avatar>
@@ -104,6 +122,18 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
 
       {/* Bottom Actions */}
       <div className="p-4 border-t space-y-1 shrink-0">
+        <button
+          onClick={toggleTheme}
+          className="w-full flex items-center px-3 py-2 text-sm font-medium text-muted-foreground rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          {theme === "dark" ? (
+             <Sun className="w-4 h-4 mr-3" />
+          ) : (
+             <Moon className="w-4 h-4 mr-3" />
+          )}
+          {theme === "dark" ? "Light Mode" : "Dark Mode"}
+        </button>
+
         <Link
           href="/settings"
           onClick={onMobileClose}
@@ -117,13 +147,31 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
           <Settings className="w-4 h-4 mr-3" />
           Settings
         </Link>
-        <button
-          onClick={signOut}
-          className="w-full flex items-center px-3 py-2 text-sm font-medium text-destructive rounded-md hover:bg-destructive/10 transition-colors"
-        >
-          <LogOut className="w-4 h-4 mr-3" />
-          Sign Out
-        </button>
+        
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              className="w-full flex items-center px-3 py-2 text-sm font-medium text-destructive rounded-md hover:bg-destructive/10 transition-colors"
+            >
+              <LogOut className="w-4 h-4 mr-3" />
+              Sign Out
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will sign you out of your account. You will need to sign in again to access your data.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={signOut} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Sign Out
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

@@ -103,3 +103,19 @@ export interface TimelineGroup {
   dateLabel: string;
   assignments: Assignment[];
 }
+
+export const noteMaterialSchema = z.object({
+  id: z.string(),
+  uniqueId: z.string(),
+  userId: z.string(),
+  courseId: z.string(),
+  courseName: z.string(),
+  title: z.string(),
+  description: z.string().nullable(),
+  alternateLink: z.string().nullable(),
+  materials: z.array(z.any()).nullable(),
+  createdAt: z.string(),
+  lastSyncedAt: z.string(),
+});
+
+export type NoteMaterial = z.infer<typeof noteMaterialSchema>;

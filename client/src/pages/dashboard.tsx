@@ -5,14 +5,16 @@ import {
   CheckCircle,
   Clock,
   TrendingUp,
-  Lightbulb, // Added
-  Loader2, // Added
+  Lightbulb,
+  Loader2,
+  Trophy,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AssignmentCardCompact } from "@/components/assignment-card";
 import { AssignmentDetail } from "@/components/assignment-detail";
-import { useClassroom } from "@/lib/classroom-context";
+import { useClassroom, fetchAllPages } from "@/lib/classroom-context";
+import { useAuth } from "@/lib/auth-context";
 import type { Assignment } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
@@ -117,6 +119,176 @@ function WeeklyWorkload({
             </div>
           ))}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// --- Class Activity Component ---
+function ClassActivityCard({ courses }: { courses: import("@shared/schema").Course[] }) {
+  const { user, accessToken } = useAuth();
+  const [rankData, setRankData] = useState<{rank: number; total: number; percentile: number} | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function calculateActivity() {
+      if (!user || !accessToken || courses.length === 0) {
+        if (courses.length === 0) setError("No courses found");
+        return;
+      }
+
+      const courseId = courses[0].classroomId;
+      const cacheKey = `activity_rank_v2_${courseId}_${user.uid}`;
+
+      // Check cache first (1 hour expiry)
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Date.now() - parsed.timestamp < 1000 * 60 * 60) {
+                setRankData(parsed.data);
+                return;
+            }
+        }
+      } catch (e) {
+          // ignore cache error
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // 1. Fetch Roster
+        const rosterUrl = `https://classroom.googleapis.com/v1/courses/${courseId}/students`;
+        const students = await fetchAllPages<{ userId: string }>(
+            accessToken,
+            rosterUrl,
+            (data: any) => data.students || [],
+            (data: any) => data.nextPageToken
+        );
+
+        // 2. Fetch Assignments
+        const assignmentsUrl = `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork?courseWorkStates=PUBLISHED`;
+        const assignments = await fetchAllPages<any>(
+          accessToken,
+          assignmentsUrl,
+          (data: any) => data.courseWork || [],
+          (data: any) => data.nextPageToken
+        );
+        
+        const counts = new Map<string, number>();
+        students.forEach(s => counts.set(s.userId, 0));
+
+        // 3. Fetch Submissions
+        // Note: For students, this usually only returns their own submissions due to Google privacy.
+        // If so, total=1, rank=1. We handle this gracefully.
+        for (const assignment of assignments) {
+            try {
+                 const submissionsUrl = `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/${assignment.id}/studentSubmissions`;
+                 const submissions = await fetchAllPages<any>(
+                    accessToken,
+                    submissionsUrl,
+                    (data: any) => data.studentSubmissions || [],
+                    (data: any) => data.nextPageToken
+                 );
+
+                 submissions.forEach((sub: any) => {
+                     if (sub.state === "TURNED_IN" || sub.state === "RETURNED") {
+                         const current = counts.get(sub.userId) || 0;
+                         counts.set(sub.userId, current + 1);
+                     }
+                 });
+            } catch (err) {
+                // Ignore specific errors
+            }
+        }
+
+        const myCount = counts.get(user.uid) || 0;
+        let rank = 1;
+        let total = 0;
+
+        counts.forEach((count) => {
+            total++;
+            if (count > myCount) {
+                rank++;
+            }
+        });
+
+        // Calculate percentile: 100% - (rank-1)/total * 100
+        // Rank 1 of 10 -> Top 10% ? No, Top 100% or "Top 10%".
+        // Better: (total - rank + 1) / total * 100
+        // Rank 1 of 5: (5-1+1)/5 = 100th percentile.
+        // Rank 5 of 5: (5-5+1)/5 = 20th percentile.
+        const percentile = Math.round(((total - rank + 1) / total) * 100);
+
+        const result = { rank, total, percentile };
+        setRankData(result);
+        
+        // Save to cache
+        localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: result }));
+
+      } catch (err) {
+        setError("Not enough activity yet"); 
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    calculateActivity();
+  }, [courses, user, accessToken]);
+
+  if (error) {
+      return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Class Rank</CardTitle>
+                <Trophy className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="flex flex-col gap-1">
+                     <span className="text-3xl font-semibold font-mono tracking-tight text-muted-foreground">-</span>
+                     <p className="text-xs text-muted-foreground">Data unavailable</p>
+                </div>
+            </CardContent>
+        </Card>
+      );
+  }
+
+  return (
+    <Card data-testid="card-class-rank">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+             Class Ranking
+        </CardTitle>
+        <Trophy className="h-5 w-5 text-amber-500" />
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+             <div className="space-y-2">
+                 <Skeleton className="h-8 w-16" />
+                 <Skeleton className="h-3 w-24" />
+             </div>
+        ) : rankData ? (
+            <div>
+                <div className="text-3xl font-semibold font-mono tracking-tight flex items-baseline gap-2">
+                    #{rankData.rank}
+                    <span className="text-base text-muted-foreground font-normal">/ {rankData.total}</span>
+                </div>
+                <div className="mt-1 flex flex-col gap-0.5">
+                    <p className="text-xs font-medium bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
+                        Top {rankData.percentile}% of class
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                        Based on {rankData.total === 1 ? 'your ' : ''}submissions
+                    </p>
+                </div>
+            </div>
+        ) : (
+             <div className="flex flex-col gap-1">
+                 <span className="text-sm text-muted-foreground">Calculating...</span>
+             </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -227,7 +399,7 @@ function EnhancedLoadingScreen() {
 // --- Main Page Component ---
 
 export default function DashboardPage() {
-  const { getDashboardMetrics, isLoading, assignments, syncClassroom } =
+  const { getDashboardMetrics, isLoading, isSyncing, assignments, syncClassroom, courses } =
     useClassroom();
   const [selectedAssignment, setSelectedAssignment] =
     useState<Assignment | null>(null);
@@ -235,7 +407,7 @@ export default function DashboardPage() {
   const metrics = getDashboardMetrics();
 
   // Updated to use the new Enhanced Loader
-  if (isLoading) {
+  if (isLoading || isSyncing) {
     return <EnhancedLoadingScreen />;
   }
 
@@ -292,6 +464,7 @@ export default function DashboardPage() {
             value={metrics.totalActive}
             icon={CheckCircle}
           />
+          <ClassActivityCard courses={courses} />
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">

@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   AlertTriangle,
   Check,
   ExternalLink,
   LogOut,
-  Trash2,
   RefreshCw,
   Download,
   Smartphone,
   Moon,
   Sun,
+  Loader2,
+  Lightbulb,
 } from "lucide-react";
 import {
   Card,
@@ -67,6 +68,81 @@ function SettingsSkeleton() {
       ))}
     </div>
   );
+
+}
+
+const LOADING_TIPS = [
+  "Customizing your profile makes the experience more personal.",
+  "Enable background sync to keep your assignments always up to date.",
+  "Dark mode is easier on the eyes during late-night study sessions.",
+  "Installing the app gives you valid offline access to your data.",
+];
+
+function EnhancedLoadingScreen() {
+  const [progress, setProgress] = useState(10);
+  const [tipIndex, setTipIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setProgress((oldProgress) => {
+        if (oldProgress === 100) return 100;
+        const diff = Math.random() * 10;
+        return Math.min(oldProgress + diff, 90);
+      });
+    }, 500);
+
+    const tipTimer = setInterval(() => {
+      setTipIndex((prev) => (prev + 1) % LOADING_TIPS.length);
+    }, 2500);
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(tipTimer);
+    };
+  }, []);
+
+  return (
+    <div className="relative min-h-[calc(100vh-4rem)] w-full bg-background">
+      <div className="opacity-40 pointer-events-none select-none filter grayscale">
+        <SettingsSkeleton />
+      </div>
+      <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/60 backdrop-blur-[2px]">
+        <div className="w-full max-w-md p-6 space-y-6">
+          <div className="flex flex-col items-center gap-2">
+            <div className="h-10 w-10 bg-zinc-950 rounded flex items-center justify-center text-white">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+            <h2 className="text-lg font-semibold tracking-tight">
+              Syncing Settings
+            </h2>
+          </div>
+          <div className="space-y-2">
+            <div className="h-1 w-full bg-zinc-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-zinc-950 transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-zinc-400 font-mono uppercase tracking-wider">
+              <span>Updating Preferences</span>
+              <span>{Math.round(progress)}%</span>
+            </div>
+          </div>
+          <div className="flex gap-3 items-start bg-white border border-zinc-200 p-4 rounded-md shadow-sm max-w-sm mx-auto animate-in fade-in slide-in-from-bottom-2 duration-700">
+            <Lightbulb className="h-4 w-4 text-zinc-900 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-zinc-900 uppercase tracking-wide">
+                Quick Tip
+              </span>
+              <p className="text-xs text-zinc-500 leading-relaxed min-h-[40px]">
+                {LOADING_TIPS[tipIndex]}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function SettingsPage() {
@@ -76,18 +152,11 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const [backgroundSync, setBackgroundSync] = useState(true);
   const [timezone, setTimezone] = useState("auto");
-  const [isDeleting, setIsDeleting] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
 
-  if (isLoading) {
-    return <SettingsSkeleton />;
+  if (isLoading || isSyncing) {
+    return <EnhancedLoadingScreen />;
   }
-
-  const handleDeleteAccount = async () => {
-    setIsDeleting(true);
-    await signOut();
-    setIsDeleting(false);
-  };
 
   const initials =
     user?.displayName
@@ -136,6 +205,7 @@ export default function SettingsPage() {
               <AvatarImage
                 src={user?.photoURL || undefined}
                 alt={user?.displayName || "User"}
+                referrerPolicy="no-referrer"
               />
               <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
@@ -372,14 +442,14 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-destructive/50">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-base text-destructive flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            Danger Zone
+          <CardTitle className="text-base flex items-center gap-2">
+            <LogOut className="h-4 w-4" />
+            Account Actions
           </CardTitle>
           <CardDescription>
-            Irreversible actions that affect your account
+            Manage your session
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -390,55 +460,28 @@ export default function SettingsPage() {
                 Sign out of your account on this device
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={signOut}
-              data-testid="button-signout"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </Button>
-          </div>
-
-          <Separator />
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium">Delete Account</p>
-              <p className="text-xs text-muted-foreground">
-                Permanently delete your account and all data
-              </p>
-            </div>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
-                  data-testid="button-delete-account"
+                  data-testid="button-signout"
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Account
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete
-                    your account and remove all your data including notes,
-                    settings, and cached assignments.
+                    This will sign you out of your account. You will need to sign in again to access your data.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDeleteAccount}
-                    disabled={isDeleting}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    data-testid="button-confirm-delete"
-                  >
-                    {isDeleting ? "Deleting..." : "Delete Account"}
+                  <AlertDialogAction onClick={signOut} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Sign Out
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>

@@ -26,3 +26,6 @@ googleProvider.addScope(
 googleProvider.addScope(
   "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly"
 );
+googleProvider.addScope(
+  "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly"
+);
