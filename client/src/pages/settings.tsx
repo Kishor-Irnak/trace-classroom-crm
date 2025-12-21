@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import {
   AlertTriangle,
   Check,
@@ -247,6 +248,30 @@ export default function SettingsPage() {
               />
               {isSyncing ? "Syncing..." : "Sync Now"}
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Notifications</CardTitle>
+          <CardDescription>
+            Manage email alerts and reminders
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Academic Alerts</p>
+              <p className="text-xs text-muted-foreground">
+                Get notified about due assignments and missed deadlines
+              </p>
+            </div>
+            <Link href="/settings/notifications">
+                <Button variant="secondary" size="sm">
+                    Configure
+                </Button>
+            </Link>
           </div>
         </CardContent>
       </Card>

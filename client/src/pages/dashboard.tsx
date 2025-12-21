@@ -10,6 +10,8 @@ import {
   Trophy,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AssignmentCardCompact } from "@/components/assignment-card";
 import { AssignmentDetail } from "@/components/assignment-detail";
@@ -441,6 +443,24 @@ export default function DashboardPage() {
   return (
     <>
       <div className="max-w-5xl mx-auto p-6 space-y-6">
+        {metrics.upcoming7Days > 0 && (
+            <div className="flex items-center justify-between p-3 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-blue-100 dark:bg-blue-900/40 rounded-md text-blue-700 dark:text-blue-300">
+                        <AlertCircle className="h-4 w-4" />
+                    </div>
+                    <p className="text-sm text-blue-900 dark:text-blue-100 font-medium">
+                        ⚠️ {metrics.upcoming7Days} assignment{metrics.upcoming7Days !== 1 ? 's' : ''} due this week
+                    </p>
+                </div>
+                <Link href="/settings/notifications">
+                    <Button variant="ghost" size="sm" className="text-blue-700 dark:text-blue-300 hover:text-blue-800 hover:bg-blue-100/50 h-8">
+                        Enable email reminders
+                    </Button>
+                </Link>
+            </div>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <MetricCard
             title="Due in 3 Days"

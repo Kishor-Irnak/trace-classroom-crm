@@ -8,6 +8,7 @@ import {
   ArrowDown,
   Lightbulb,
   Loader2,
+  Mail, // Added Mail icon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { AssignmentDetail } from "@/components/assignment-detail";
 import { useClassroom } from "@/lib/classroom-context";
+import { useAuth } from "@/lib/auth-context";
 import type { Assignment } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
@@ -223,6 +225,7 @@ const isToday = (date: Date) => {
 export default function TimelinePage() {
   const { getTimelineGroups, courses, isLoading, isSyncing, assignments, syncClassroom } =
     useClassroom();
+  const { user } = useAuth();
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedAssignment, setSelectedAssignment] =
@@ -230,9 +233,43 @@ export default function TimelinePage() {
   const [currentView, setCurrentView] = useState<"timeline" | "calendar">(
     "timeline"
   );
+  
+  const [emailEvents, setEmailEvents] = useState<Assignment[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    try {
+        const key = `trace_email_events_${user.uid}`;
+        const events = JSON.parse(localStorage.getItem(key) || '[]');
+        // Map to Assignment shape
+        const mapped = events.map((e: any) => ({
+            id: e.id,
+            uniqueId: e.id,
+            userId: user.uid,
+            courseId: 'system',
+            courseName: 'System', 
+            classroomId: 'system',
+            title: e.title,
+            description: e.body,
+            dueDate: e.timestamp,
+            dueTime: null,
+            maxPoints: null,
+            systemStatus: 'submitted', // Visual hack: 'submitted' = purple
+            userStatus: null,
+            submissionId: null,
+            submittedAt: null,
+            gradedAt: null,
+            grade: null,
+            alternateLink: null,
+            createdAt: e.timestamp,
+            lastSyncedAt: e.timestamp
+        }));
+        setEmailEvents(mapped);
+    } catch (e) {}
+  }, [user]);
 
   const filteredAssignments = useMemo(() => {
-    let filtered = [...assignments];
+    let filtered = [...assignments, ...emailEvents];
     if (selectedCourse) {
       filtered = filtered.filter((a) => a.courseId === selectedCourse);
     }
@@ -240,7 +277,7 @@ export default function TimelinePage() {
       filtered = filtered.filter((a) => a.systemStatus === selectedStatus);
     }
     return filtered;
-  }, [assignments, selectedCourse, selectedStatus]);
+  }, [assignments, emailEvents, selectedCourse, selectedStatus]);
 
   const clearFilters = () => {
     setSelectedCourse(null);
@@ -496,8 +533,9 @@ export default function TimelinePage() {
                             minWidth: "140px",
                           }}
                         >
-                          <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <span className="truncate text-xs font-bold leading-none">
+                            <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <span className="truncate text-xs font-bold leading-none flex items-center gap-1">
+                              {assignment.courseId === 'system' && <Mail className="h-3 w-3 inline-block" />}
                               {assignment.title}
                             </span>
                           </div>

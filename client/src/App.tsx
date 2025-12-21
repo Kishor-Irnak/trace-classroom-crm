@@ -15,6 +15,7 @@ import TimelinePage from "@/pages/timeline";
 import DashboardPage from "@/pages/dashboard";
 import NotesPage from "@/pages/notes";
 import SettingsPage from "@/pages/settings";
+import NotificationsPage from "@/pages/notifications";
 import NotFound from "@/pages/not-found";
 
 // Get base path from Vite's BASE_URL
@@ -46,6 +47,7 @@ function AuthenticatedApp() {
                 <Route path="/dashboard" component={DashboardPage} />
                 <Route path="/notes" component={NotesPage} />
                 <Route path="/settings" component={SettingsPage} />
+                <Route path="/settings/notifications" component={NotificationsPage} />
                 <Route component={NotFound} />
               </Switch>
             </div>
