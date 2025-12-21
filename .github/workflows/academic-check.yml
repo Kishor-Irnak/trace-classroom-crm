@@ -10,7 +10,7 @@ on:
 jobs:
   check-alerts:
     runs-on: ubuntu-latest
-    environment: Preview
+
 
     steps:
       - uses: actions/checkout@v3
