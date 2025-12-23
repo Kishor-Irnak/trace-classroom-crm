@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { Link } from "wouter";
 import {
   Calendar,
   Filter,
@@ -24,6 +25,13 @@ import { AssignmentDetail } from "@/components/assignment-detail";
 import { useClassroom } from "@/lib/classroom-context";
 import { useAuth } from "@/lib/auth-context";
 import type { Assignment } from "@shared/schema";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { FcGoogle } from "react-icons/fc";
 import { cn } from "@/lib/utils";
 
 // --- Loading Configuration ---
@@ -287,9 +295,7 @@ export default function TimelinePage() {
   const hasFilters = selectedCourse || selectedStatus;
 
   // UPDATED: Now returns EnhancedLoadingScreen
-  if (isLoading || isSyncing) {
-    return <EnhancedLoadingScreen />;
-  }
+
 
   if (assignments.length === 0) {
     return (
@@ -460,7 +466,7 @@ export default function TimelinePage() {
                     <span
                       className={cn(
                         "text-[10px] uppercase font-bold tracking-wider mb-1",
-                        isCurrentDay ? "text-blue-600" : "text-muted-foreground"
+                        isCurrentDay ? "text-foreground" : "text-muted-foreground"
                       )}
                     >
                       {date.toLocaleDateString("en-US", { weekday: "narrow" })}
@@ -471,7 +477,7 @@ export default function TimelinePage() {
                       className={cn(
                         "text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full transition-all",
                         isCurrentDay
-                          ? "bg-blue-600 text-white shadow-md z-10 scale-110"
+                          ? "bg-foreground text-background shadow-md z-10 scale-110"
                           : "text-foreground"
                       )}
                     >
@@ -496,13 +502,13 @@ export default function TimelinePage() {
                       key={i}
                       className={cn(
                         "flex-shrink-0 h-full border-r border-border/40 relative",
-                        isCurrentDay ? "bg-blue-50/10" : ""
+                        isCurrentDay ? "bg-accent/50" : ""
                       )}
                       style={{ width: dayWidth }}
                     >
                       {/* --- THE TODAY LINE --- */}
                       {isCurrentDay && (
-                        <div className="absolute top-0 bottom-0 left-1/2 w-[2px] bg-blue-600 -translate-x-1/2 z-20 shadow-[0_0_10px_rgba(37,99,235,0.2)]"></div>
+                        <div className="absolute top-0 bottom-0 left-1/2 w-[2px] bg-foreground -translate-x-1/2 z-20 shadow-[0_0_10px_rgba(255,255,255,0.2)]"></div>
                       )}
                     </div>
                   );
@@ -838,7 +844,7 @@ export default function TimelinePage() {
   return (
     <>
       <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 sticky top-0 bg-background py-3 z-10 border-b px-6">
+        <div className="flex flex-wrap items-center gap-3 sticky top-0 bg-background py-3 z-10 border-b px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <Button
               variant={currentView === "timeline" ? "default" : "ghost"}
@@ -865,7 +871,7 @@ export default function TimelinePage() {
             onValueChange={(v) => setSelectedCourse(v === "all" ? null : v)}
           >
             <SelectTrigger
-              className="w-[180px]"
+              className="w-[140px] sm:w-[180px]"
               data-testid="select-course-filter"
             >
               <SelectValue placeholder="All Courses" />
@@ -885,7 +891,7 @@ export default function TimelinePage() {
             onValueChange={(v) => setSelectedStatus(v === "all" ? null : v)}
           >
             <SelectTrigger
-              className="w-[140px]"
+              className="w-[120px] sm:w-[140px]"
               data-testid="select-status-filter"
             >
               <SelectValue placeholder="All Status" />
@@ -912,6 +918,27 @@ export default function TimelinePage() {
               Clear filters
             </Button>
           )}
+          
+          <div className="ml-auto">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link href="/settings/integrations">
+                        <Button variant="outline" size="sm" className="gap-2 border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900 transition-all font-medium whitespace-nowrap">
+                            <FcGoogle className="h-4 w-4" />
+                            Sync with Google Calendar
+                        </Button>
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="left" className="max-w-xs">
+                    <p className="font-medium">Google Calendar Sync</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Automatically sync your assignments and exam deadlines to your Google Calendar.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+          </div>
         </div>
 
         <div className="flex-1 overflow-hidden">

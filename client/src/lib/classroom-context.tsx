@@ -17,6 +17,138 @@ import type {
 } from "@shared/schema";
 import { useAuth } from "./auth-context";
 import { useToast } from "@/hooks/use-toast";
+import { db } from "./firebase";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+
+// Helper to send email via Gmail API
+async function sendGmailNotification(toEmail: string, subject: string, body: string, accessToken: string) {
+  const emailLines = [
+    `To: ${toEmail}`,
+    "Subject: " + subject,
+    "Content-Type: text/html; charset=utf-8",
+    "MIME-Version: 1.0",
+    "",
+    body
+  ];
+  const email = emailLines.join("\r\n");
+
+  // Base64url encoding
+  const encodedEmail = btoa(email).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      raw: encodedEmail
+    })
+  });
+}
+
+// Helper to sync to Google Calendar Client-Side
+async function syncToGoogleCalendar(
+  assignments: Assignment[], 
+  accessToken: string, 
+  userId: string,
+  toast: any
+) {
+  // 1. Check if sync is enabled
+  const settingsRef = doc(db, "users", userId, "settings", "calendar");
+  const settingsSnap = await getDoc(settingsRef);
+  
+  if (!settingsSnap.exists() || !settingsSnap.data().enabled) {
+    console.log("Calendar sync disabled or not configured.");
+    return;
+  }
+
+  const settings = settingsSnap.data();
+  if (!settings.syncAssignments) return;
+
+  console.log("Starting client-side calendar sync...");
+
+  let permissionErrorShown = false;
+
+  // 2. Iterate and Sync
+  for (const assignment of assignments) {
+    if (!assignment.dueDate) continue;
+
+    // Construct Event Data
+    const dueDate = new Date(assignment.dueDate);
+    const dateStr = dueDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    // Default to All Day Event for deadlines
+    const eventResource: any = {
+      summary: `📚 ${assignment.title}`,
+      description: `Course: ${assignment.courseName}\n${assignment.description || ""}\n\nSynced via Student Sphere`,
+      start: { date: dateStr },
+      end: { date: dateStr }, // GCal single day all-day event: start=end is fine? No, usually end is next day for inclusive.
+    };
+    
+    // Adjust end date to be next day for all-day event correctness?
+    // Actually GCal API: end date is exclusive. So +1 day.
+    const nextDay = new Date(dueDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    eventResource.end.date = nextDay.toISOString().split('T')[0];
+
+    // 3. Check for existing mapping
+    const mapRef = doc(db, "users", userId, "calendarEvents", assignment.id);
+    const mapSnap = await getDoc(mapRef);
+
+    const url = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+    
+    try {
+      let res;
+      if (mapSnap.exists()) {
+        const { calendarEventId } = mapSnap.data();
+        // PATCH
+        res = await fetch(`${url}/${calendarEventId}`, {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(eventResource),
+        });
+      } else {
+        // INSERT
+        res = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(eventResource),
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          await setDoc(mapRef, {
+             calendarEventId: data.id,
+             assignmentId: assignment.id,
+             updatedAt: serverTimestamp()
+          });
+        }
+      }
+
+      if (!res.ok) {
+        if (res.status === 403 && !permissionErrorShown) {
+           permissionErrorShown = true;
+           console.error("Calendar Sync 403: Permission Denied");
+           toast({
+             variant: "destructive",
+             title: "Calendar Permission Needed",
+             description: "We can't update your Google Calendar because we don't have permission. Please Sign Out and Sign In again to grant access.",
+           });
+           break; // Stop trying
+        }
+      }
+    } catch (e) {
+      console.warn(`Failed to sync assignment ${assignment.id} to calendar`, e);
+    }
+  }
+}
 
 // Google Classroom API types
 interface GoogleCourse {
@@ -815,11 +947,79 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       setAssignments(allAssignments);
       setMaterials(allMaterials);
       setLastSyncedAt(new Date());
+      
+      // Stop blocking loading screen here so user can interact with the app
+      // while Calendar sync happens in background
+      setIsLoading(false);
+
+      // Client-side Google Calendar Sync
+      try {
+        await syncToGoogleCalendar(allAssignments, token, user.uid, toast);
+      } catch (calErr) {
+        console.error("Calendar sync failed:", calErr);
+      }
+
+      // Notification Logic (Gmail)
+      try {
+        const notifSettingsRef = doc(db, "users", user.uid, "settings", "notifications");
+        const notifSettingsSnap = await getDoc(notifSettingsRef);
+        
+        if (notifSettingsSnap.exists() && notifSettingsSnap.data().enabled) {
+           const settings = notifSettingsSnap.data();
+           
+           if (settings.notifyDueSoon) {
+               const digestRef = doc(db, "users", user.uid, "notifications", "digest");
+               const digestSnap = await getDoc(digestRef);
+               
+               // Check if we already sent a digest today
+               const lastSent = digestSnap.exists() ? digestSnap.data().lastSent?.toDate() : null;
+               const today = new Date();
+               const isSameDay = lastSent && 
+                                 lastSent.getDate() === today.getDate() && 
+                                 lastSent.getMonth() === today.getMonth() && 
+                                 lastSent.getFullYear() === today.getFullYear();
+               
+               if (!isSameDay) {
+                   // Calculate assignments due in the next 24 hours
+                   const tomorrow = new Date(today);
+                   tomorrow.setDate(tomorrow.getDate() + 1);
+                   tomorrow.setHours(23, 59, 59, 999);
+
+                   const upcoming = allAssignments.filter(a => {
+                       if (!a.dueDate || a.systemStatus === 'submitted' || a.systemStatus === 'graded') return false;
+                       const due = new Date(a.dueDate);
+                       return due >= today && due <= tomorrow;
+                   });
+
+                   if (upcoming.length > 0 && user.email) {
+                       const listItems = upcoming.map(a => 
+                         `<li><strong>${a.title}</strong> <span style="color:#666">(${a.courseName})</span><br>Due: ${new Date(a.dueDate!).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</li>`
+                       ).join('');
+                       
+                       const emailBody = `
+                         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                           <h2 style="color: #2563eb;">📚 Daily Digest</h2>
+                           <p>You have <strong>${upcoming.length} assignments</strong> coming up in the next 24 hours:</p>
+                           <ul style="line-height: 1.6;">${listItems}</ul>
+                           <a href="http://localhost:3000" style="display: inline-block; background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px;">Open Student Sphere</a>
+                         </div>
+                       `;
+
+                       await sendGmailNotification(user.email, `Student Sphere: ${upcoming.length} Tasks Due Soon`, emailBody, token);
+                       await setDoc(digestRef, { lastSent: serverTimestamp() });
+                       console.log("Daily digest email delivered.");
+                   }
+               }
+           }
+        }
+      } catch (notifErr) {
+        console.warn("Notification sync failed (non-critical):", notifErr);
+      }
 
       if (!isAutoSync) {
         toast({
           title: "Sync Complete",
-          description: `Successfully synced ${fetchedCourses.length} courses, ${allAssignments.length} assignments, and ${allMaterials.length} materials.`,
+          description: `Successfully synced ${fetchedCourses.length} courses, ${allAssignments.length} assignments, and updated Google Calendar.`,
         });
       }
     } catch (err: any) {

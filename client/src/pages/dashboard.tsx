@@ -409,9 +409,7 @@ export default function DashboardPage() {
   const metrics = getDashboardMetrics();
 
   // Updated to use the new Enhanced Loader
-  if (isLoading || isSyncing) {
-    return <EnhancedLoadingScreen />;
-  }
+
 
   if (assignments.length === 0) {
     return (

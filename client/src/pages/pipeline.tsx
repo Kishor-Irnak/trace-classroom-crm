@@ -246,9 +246,7 @@ export default function PipelinePage() {
     }
   };
 
-  if (isLoading || isSyncing) {
-    return <EnhancedLoadingScreen />;
-  }
+
 
   if (assignments.length === 0) {
     return (

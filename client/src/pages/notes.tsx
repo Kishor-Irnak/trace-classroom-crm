@@ -45,11 +45,11 @@ export default function NotesPage() {
     <div className="flex h-full overflow-hidden bg-background">
       {/* Sidebar: Course List */}
       <div className={cn(
-        "w-full md:w-80 border-r bg-muted/20 flex flex-col h-full shrink-0",
+        "w-full md:w-80 border-r border-border bg-muted/20 flex flex-col h-full shrink-0",
         isMobile && selectedCourseId ? "hidden" : "flex"
       )}>
-        <div className="p-4 border-b flex items-center justify-between bg-white dark:bg-zinc-950">
-          <h2 className="font-semibold text-sm uppercase tracking-wider text-zinc-500">Your Courses</h2>
+        <div className="p-4 border-b border-border flex items-center justify-between bg-background">
+          <h2 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Your Courses</h2>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {courses.map((course) => (
@@ -59,26 +59,26 @@ export default function NotesPage() {
               className={cn(
                 "w-full text-left px-3 py-3 rounded-md transition-all group flex items-center gap-3",
                 selectedCourseId === course.id
-                  ? "bg-zinc-900 text-white shadow-md dark:bg-white dark:text-zinc-900"
-                  : "hover:bg-zinc-100 dark:hover:bg-zinc-900 text-muted-foreground hover:text-foreground"
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "hover:bg-muted text-muted-foreground hover:text-foreground"
               )}
             >
               <div className={cn(
                 "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
                 selectedCourseId === course.id 
-                  ? "bg-white/20" 
-                  : "bg-zinc-100 dark:bg-zinc-800"
+                  ? "bg-primary-foreground/20" 
+                  : "bg-muted"
               )}>
                 <Folder className={cn(
                   "h-4 w-4",
-                  selectedCourseId === course.id ? "text-white dark:text-zinc-900" : "text-zinc-500"
+                  selectedCourseId === course.id ? "text-primary-foreground" : "text-muted-foreground"
                 )} />
               </div>
               <div className="truncate flex-1">
                 <p className="text-sm font-semibold leading-none mb-1 truncate">{course.name}</p>
                 <p className={cn(
                   "text-[10px] uppercase tracking-wider font-medium",
-                  selectedCourseId === course.id ? "text-white/70 shadow-sm" : "text-zinc-400"
+                  selectedCourseId === course.id ? "text-primary-foreground/80" : "text-muted-foreground/70"
                 )}>
                   {course.section || "No Section"}
                 </p>
@@ -94,11 +94,11 @@ export default function NotesPage() {
 
       {/* Main Content: Notes View */}
       <div className={cn(
-        "flex-1 overflow-y-auto bg-white dark:bg-zinc-950",
+        "flex-1 overflow-y-auto bg-background",
         isMobile && !selectedCourseId ? "hidden" : "flex flex-col"
       )}>
         {isMobile && selectedCourseId && (
-          <div className="flex items-center p-4 border-b bg-white dark:bg-zinc-950 sticky top-0 z-10">
+          <div className="flex items-center p-4 border-b border-border bg-background sticky top-0 z-10">
             <Button 
               variant="ghost" 
               size="sm" 
@@ -113,36 +113,36 @@ export default function NotesPage() {
 
         {!selectedCourseId ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-6 max-w-md mx-auto">
-            <div className="h-24 w-24 bg-zinc-50 dark:bg-zinc-900 rounded-2xl flex items-center justify-center border border-zinc-100 dark:border-zinc-800 shadow-sm">
-              <FileText className="h-10 w-10 text-zinc-300 dark:text-zinc-700" />
+            <div className="h-24 w-24 bg-muted/50 rounded-2xl flex items-center justify-center border border-border shadow-sm">
+              <FileText className="h-10 w-10 text-muted-foreground/50" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-xl font-bold tracking-tight">Select a curriculum</h3>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed font-medium mt-2">
+              <h3 className="text-xl font-bold tracking-tight text-foreground">Select a curriculum</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed font-medium mt-2">
                 Choose a course from the listing to accessibility your synchronized PDF lecture records and study guides.
               </p>
             </div>
           </div>
         ) : (
           <div className="p-4 md:p-8 space-y-6 md:space-y-8 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row md:items-end justify-between border-b pb-6 border-zinc-100 dark:border-zinc-800 gap-4">
+            <div className="flex flex-col md:flex-row md:items-end justify-between border-b pb-6 border-border gap-4">
               <div className="space-y-1 max-w-full">
-                <Badge variant="outline" className="text-[10px] font-mono tracking-[0.2em] font-bold uppercase py-0 px-2 rounded-sm border-zinc-200">
+                <Badge variant="outline" className="text-[10px] font-mono tracking-[0.2em] font-bold uppercase py-0 px-2 rounded-sm border-border">
                   Course Resources
                 </Badge>
-                <h1 className="text-lg md:text-xl font-black tracking-tighter uppercase italic break-words leading-tight">
+                <h1 className="text-lg md:text-xl font-black tracking-tighter uppercase italic break-words leading-tight text-foreground">
                   {selectedCourse?.name}
                 </h1>
-                <p className="text-xs md:text-sm font-medium text-zinc-500 dark:text-zinc-400 line-clamp-2">
+                <p className="text-xs md:text-sm font-medium text-muted-foreground line-clamp-2">
                   {selectedCourse?.descriptionHeading || "Curated academic materials and notes."}
                 </p>
               </div>
               <div className="flex gap-2 shrink-0">
-                <div className="bg-zinc-50 dark:bg-zinc-900 px-3 py-1.5 rounded-md border border-zinc-100 dark:border-zinc-800 flex items-center gap-2">
+                <div className="bg-muted/30 px-3 py-1.5 rounded-md border border-border flex items-center gap-2">
                   <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">{pdfMaterials.length} PDF Assets</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap text-muted-foreground">{pdfMaterials.length} PDF Assets</span>
                 </div>
-                <div className="flex bg-muted rounded-md p-1 border">
+                <div className="flex bg-muted rounded-md p-1 border border-border">
                    <Button 
                       variant="ghost" 
                       size="icon" 
@@ -167,7 +167,7 @@ export default function NotesPage() {
               viewMode === "grid" ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 pb-20">
                   {pdfMaterials.map((pdf, idx) => (
-                    <Card key={`${pdf.id}-${idx}`} className="group relative overflow-hidden transition-all hover:shadow-2xl hover:-translate-y-1 border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 shadow-sm">
+                    <Card key={`${pdf.id}-${idx}`} className="group relative overflow-hidden transition-all hover:shadow-2xl hover:-translate-y-1 border-border bg-card shadow-sm">
                       <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         <Button variant="secondary" size="icon" className="h-8 w-8 rounded-full shadow-lg" asChild>
                           <a href={pdf.link} target="_blank" rel="noopener noreferrer">
@@ -176,29 +176,29 @@ export default function NotesPage() {
                         </Button>
                       </div>
                       
-                      <CardHeader className="p-0 border-b border-zinc-100 dark:border-zinc-800">
-                        <div className="aspect-[4/3] bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center overflow-hidden relative group-hover:bg-zinc-100 transition-colors">
-                          <FileText className="h-16 w-16 text-zinc-200 dark:text-zinc-800 transition-transform group-hover:scale-110 duration-500" />
+                      <CardHeader className="p-0 border-b border-border">
+                        <div className="aspect-[4/3] bg-muted flex items-center justify-center overflow-hidden relative group-hover:bg-muted/80 transition-colors">
+                          <FileText className="h-16 w-16 text-muted-foreground/30 transition-transform group-hover:scale-110 duration-500" />
                           <div className="absolute bottom-3 left-3 flex gap-1">
-                             <Badge className="bg-red-500 hover:bg-red-600 text-[9px] font-black italic rounded-sm">PDF</Badge>
-                             <Badge variant="outline" className="bg-white/80 dark:bg-black/80 backdrop-blur text-[9px] font-black rounded-sm border-zinc-200 dark:border-zinc-700">READONLY</Badge>
+                             <Badge className="bg-red-500 hover:bg-red-600 text-[9px] font-black italic rounded-sm text-white">PDF</Badge>
+                             <Badge variant="outline" className="bg-background/80 backdrop-blur text-[9px] font-black rounded-sm border-border text-foreground">READONLY</Badge>
                           </div>
                         </div>
                       </CardHeader>
                       
                       <CardContent className="p-5 space-y-4">
-                        <h4 className="font-bold text-sm tracking-tight leading-snug line-clamp-2 min-h-[2.5rem] group-hover:text-primary transition-colors">
+                        <h4 className="font-bold text-sm tracking-tight leading-snug line-clamp-2 min-h-[2.5rem] text-card-foreground group-hover:text-primary transition-colors">
                           {pdf.title}
                         </h4>
-                        <div className="pt-4 flex items-center justify-between border-t border-zinc-5 dark:border-zinc-800/50">
-                          <span className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-widest">
+                        <div className="pt-4 flex items-center justify-between border-t border-border/50">
+                          <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase tracking-widest">
                             Secured Asset
                           </span>
                           <Button 
                             size="sm" 
                             variant="ghost" 
                             asChild 
-                            className="h-8 text-[11px] font-black uppercase tracking-tighter hover:bg-zinc-900 hover:text-white dark:hover:bg-white dark:hover:text-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md"
+                            className="h-8 text-[11px] font-black uppercase tracking-tighter hover:bg-primary hover:text-primary-foreground border border-border rounded-md"
                           >
                             <a href={pdf.link} target="_blank" rel="noopener noreferrer">
                               Open Material
@@ -214,13 +214,13 @@ export default function NotesPage() {
                   {pdfMaterials.map((pdf, idx) => (
                     <div 
                         key={`${pdf.id}-${idx}`}
-                        className="group flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                        className="group flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors"
                     >
-                        <div className="h-10 w-10 flex items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800 text-red-500 shrink-0">
+                        <div className="h-10 w-10 flex items-center justify-center rounded-md bg-muted text-red-500 shrink-0">
                             <FileText className="h-5 w-5" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-sm truncate group-hover:text-primary transition-colors">
+                            <h4 className="font-medium text-sm truncate text-card-foreground group-hover:text-primary transition-colors">
                                 {pdf.title}
                             </h4>
                             <p className="text-xs text-muted-foreground truncate">
@@ -243,13 +243,13 @@ export default function NotesPage() {
                 </div>
               )
             ) : (
-              <div className="h-96 flex flex-col items-center justify-center text-center border-4 border-dotted rounded-3xl bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 max-w-2xl mx-auto space-y-4">
-                <div className="h-20 w-20 bg-white dark:bg-zinc-900 rounded-full flex items-center justify-center shadow-inner border border-zinc-100 dark:border-zinc-800">
-                  <Folder className="h-8 w-8 text-zinc-200 dark:text-zinc-700" />
+              <div className="h-96 flex flex-col items-center justify-center text-center border-4 border-dotted rounded-3xl bg-muted/20 border-border max-w-2xl mx-auto space-y-4">
+                <div className="h-20 w-20 bg-background rounded-full flex items-center justify-center shadow-inner border border-border">
+                  <Folder className="h-8 w-8 text-muted-foreground" />
                 </div>
                 <div>
-                  <h4 className="text-lg font-bold">No PDF Documents Found</h4>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2 max-w-xs mx-auto font-medium">
+                  <h4 className="text-lg font-bold text-foreground">No PDF Documents Found</h4>
+                  <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto font-medium">
                     This course has no PDF files uploaded to Classroom yet. Make sure your materials are in .pdf format.
                   </p>
                 </div>

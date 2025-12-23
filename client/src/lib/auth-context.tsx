@@ -15,6 +15,7 @@ interface AuthContextType {
   accessToken: string | null;
   signInWithGoogle: () => Promise<void>;
   requestGmailPermissions: () => Promise<boolean>;
+  requestCalendarPermissions: () => Promise<boolean>;
   signOut: () => Promise<void>;
   error: string | null;
 }
@@ -140,6 +141,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const requestCalendarPermissions = async () => {
+    try {
+      setError(null);
+      
+      const provider = new GoogleAuthProvider();
+      provider.addScope("https://www.googleapis.com/auth/calendar.events");
+      
+      // Crucial for getting the refresh token
+      provider.setCustomParameters({
+        access_type: 'offline',
+        prompt: 'consent'
+      });
+
+      const result = await signInWithPopup(auth, provider);
+      const tokenResponse = (result as any)._tokenResponse;
+      
+      if (user && tokenResponse?.oauthRefreshToken) {
+           const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
+           const { db } = await import("./firebase");
+           
+           await setDoc(doc(db, "users", user.uid, "private_tokens", "calendar"), {
+               refreshToken: tokenResponse.oauthRefreshToken,
+               updatedAt: serverTimestamp(),
+               scopes: ["https://www.googleapis.com/auth/calendar.events"]
+           }, { merge: true }); // Merge in case we want to store multiple things
+           return true;
+      }
+      return true;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to get Calendar permissions";
+      setError(errorMessage);
+      console.error("Permission error:", err);
+      return false;
+    }
+  };
+
   const signOut = async () => {
     try {
       await firebaseSignOut(auth);
@@ -151,7 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, accessToken, signInWithGoogle, requestGmailPermissions, signOut, error }}>
+    <AuthContext.Provider value={{ user, loading, accessToken, signInWithGoogle, requestGmailPermissions, requestCalendarPermissions, signOut, error }}>
       {children}
     </AuthContext.Provider>
   );

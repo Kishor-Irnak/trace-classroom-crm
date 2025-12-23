@@ -9,6 +9,7 @@ import {
   FileText,
   Moon,
   Sun,
+  Trophy,
 } from "lucide-react";
 import { useTheme } from "@/lib/theme-context";
 import {
@@ -30,6 +31,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/", label: "Pipeline", icon: LayoutGrid },
+  { path: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { path: "/timeline", label: "Timeline", icon: Calendar },
   { path: "/notes", label: "Notes", icon: FileText },
 ];
