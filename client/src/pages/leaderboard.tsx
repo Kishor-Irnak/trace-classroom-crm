@@ -188,17 +188,17 @@ export default function LeaderboardPage() {
   return (
     <div className="flex flex-col h-full bg-background text-foreground font-sans selection:bg-muted">
       {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-6 gap-4 sm:gap-0 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
           <div className="space-y-1">
-          <h1 className="text-2xl font-medium tracking-tight text-foreground">
+          <h1 className="text-xl sm:text-2xl font-medium tracking-tight text-foreground">
             Class Ranking
           </h1>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest truncate max-w-[200px] sm:max-w-none">
              {selectedCourseName}
           </p>
         </div>
 
-        <div className="w-[240px]">
+        <div className="w-full sm:w-[240px]">
           <Select
             value={selectedCourseId || ""}
             onValueChange={setSelectedCourseId}
@@ -223,12 +223,12 @@ export default function LeaderboardPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-8">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
           
           {/* Action Section: Sync Button (Only if no data or requested) */}
           {(!hasData && !loadingLeaderboard) || isScanning ? (
-             <div className="bg-muted/30 border border-border border-dashed rounded-xl p-8 text-center animate-in fade-in slide-in-from-bottom-2">
+             <div className="bg-muted/30 border border-border border-dashed rounded-xl p-6 sm:p-8 text-center animate-in fade-in slide-in-from-bottom-2">
                  {isScanning ? (
                      <div className="max-w-md mx-auto space-y-4">
                          <div className="flex items-center justify-between text-xs font-mono uppercase text-muted-foreground">
@@ -244,11 +244,11 @@ export default function LeaderboardPage() {
                         </div>
                         <div className="space-y-1">
                             <h3 className="text-lg font-medium">No Score Detected</h3>
-                            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                            <p className="text-sm text-muted-foreground max-w-[280px] sm:max-w-sm mx-auto">
                                 Calculate your XP based on all your past submitted assignments to join the leaderboard.
                             </p>
                         </div>
-                        <Button onClick={syncHistoricalData} size="lg" className="mt-2 font-semibold">
+                        <Button onClick={syncHistoricalData} size="lg" className="mt-2 font-semibold w-full sm:w-auto">
                             Calculate My Archive Score
                         </Button>
                     </div>
@@ -278,49 +278,49 @@ export default function LeaderboardPage() {
                          <div
                             key={student.id}
                             className={cn(
-                                "flex items-center p-4 rounded-xl border transition-all duration-200 group",
+                                "flex items-center p-3 sm:p-4 rounded-xl border transition-all duration-200 group",
                                 isMe 
                                   ? "bg-card border-border shadow-sm ring-1 ring-border" 
                                   : "bg-transparent border-transparent hover:bg-muted/30 hover:border-border/50"
                             )}
                          >
                              {/* Rank */}
-                             <div className="w-12 flex-shrink-0 flex items-center justify-center">
+                             <div className="w-8 sm:w-12 flex-shrink-0 flex items-center justify-center">
                                  {rank === 1 ? (
-                                     <Trophy className="h-5 w-5 text-yellow-500 fill-yellow-500/20" />
+                                     <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500 fill-yellow-500/20" />
                                  ) : rank === 2 ? (
-                                     <Medal className="h-5 w-5 text-zinc-400 fill-zinc-400/20" />
+                                     <Medal className="h-4 w-4 sm:h-5 sm:w-5 text-zinc-400 fill-zinc-400/20" />
                                  ) : rank === 3 ? (
-                                     <Medal className="h-5 w-5 text-amber-700 fill-amber-700/20" />
+                                     <Medal className="h-4 w-4 sm:h-5 sm:w-5 text-amber-700 fill-amber-700/20" />
                                  ) : (
-                                     <span className="text-muted-foreground font-mono text-sm ml-1">#{rank}</span>
+                                     <span className="text-muted-foreground font-mono text-xs sm:text-sm ml-1">#{rank}</span>
                                  )}
                              </div>
 
                              {/* Avatar + Name */}
-                             <div className="flex items-center flex-1 gap-4">
-                                 <Avatar className={cn("h-10 w-10 border", isMe ? "border-foreground/10" : "border-border")}>
+                             <div className="flex items-center flex-1 gap-3 sm:gap-4 overflow-hidden">
+                                 <Avatar className={cn("h-8 w-8 sm:h-10 sm:w-10 border flex-shrink-0", isMe ? "border-foreground/10" : "border-border")}>
                                      <AvatarImage src={student.photoUrl} />
-                                     <AvatarFallback className="text-xs bg-muted text-muted-foreground">
+                                     <AvatarFallback className="text-[10px] sm:text-xs bg-muted text-muted-foreground">
                                          {student.displayName?.[0]?.toUpperCase()}
                                      </AvatarFallback>
                                  </Avatar>
-                                 <div className="flex flex-col">
-                                     <span className={cn("text-sm font-medium", isMe ? "text-foreground" : "text-foreground/80 group-hover:text-foreground")}>
-                                         {student.displayName} {isMe && <span className="text-muted-foreground text-xs font-normal ml-2">(You)</span>}
+                                 <div className="flex flex-col min-w-0">
+                                     <span className={cn("text-xs sm:text-sm font-medium truncate", isMe ? "text-foreground" : "text-foreground/80 group-hover:text-foreground")}>
+                                         {student.displayName} {isMe && <span className="text-muted-foreground text-[10px] sm:text-xs font-normal ml-1 sm:ml-2">(You)</span>}
                                      </span>
-                                     <span className="text-xs text-muted-foreground">
-                                         {student.processedAssignmentIds.length} missions completed
+                                     <span className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                                         {student.processedAssignmentIds.length} <span className="hidden sm:inline">missions completed</span><span className="sm:hidden">missions</span>
                                      </span>
                                  </div>
                              </div>
 
                              {/* XP */}
-                             <div className="text-right px-4">
-                                 <span className="text-lg font-mono font-medium text-foreground tracking-tight">
+                             <div className="text-right pl-2 sm:px-4 flex-shrink-0">
+                                 <span className="text-sm sm:text-lg font-mono font-medium text-foreground tracking-tight">
                                      {student.totalXP.toLocaleString()}
                                  </span>
-                                 <span className="text-xs text-muted-foreground ml-1">XP</span>
+                                 <span className="text-[10px] sm:text-xs text-muted-foreground ml-0.5 sm:ml-1">XP</span>
                              </div>
                          </div>
                      );
