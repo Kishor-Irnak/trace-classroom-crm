@@ -49,7 +49,7 @@ export default function LoginPage() {
         <header className="px-10 py-8 z-10">
           <div className="flex items-center gap-3">
             <img
-              src="/logo.png"
+              src={`${import.meta.env.BASE_URL}logo.png`}
               alt="Trace Logo"
               className="h-10 w-10 object-contain rounded-md"
             />
@@ -114,7 +114,7 @@ export default function LoginPage() {
         {/* Mobile-Only Header */}
         <div className="lg:hidden p-6 border-b border-zinc-100 flex items-center gap-3 bg-white sticky top-0 z-50">
           <img
-            src="/logo.png"
+            src={`${import.meta.env.BASE_URL}logo.png`}
             alt="Trace Logo"
             className="h-9 w-9 object-contain rounded-md"
           />

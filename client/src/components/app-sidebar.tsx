@@ -60,7 +60,7 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
     <div className="flex flex-col h-full bg-background">
       {/* Brand */}
       <div className="h-16 flex items-center px-6 border-b shrink-0">
-        <img src="/logo.png" alt="Trace" className="w-8 h-8 mr-3" />
+        <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Trace" className="w-8 h-8 mr-3" />
         <span className="font-bold text-lg tracking-tight">Trace</span>
         {isMobile && (
           <button className="ml-auto" onClick={onMobileClose}>
