@@ -10,7 +10,7 @@
   "icons": [
     {
       "src": "/favicon.png",
-      "sizes": "any",
+      "sizes": "128x128",
       "type": "image/png"
     }
   ],
@@ -22,14 +22,14 @@
       "short_name": "Pipeline",
       "description": "View assignments in pipeline view",
       "url": "/",
-      "icons": [{ "src": "/favicon.png", "sizes": "any" }]
+      "icons": [{ "src": "/favicon.png", "sizes": "128x128" }]
     },
     {
       "name": "Timeline",
       "short_name": "Timeline",
       "description": "View assignments timeline",
       "url": "/timeline",
-      "icons": [{ "src": "/favicon.png", "sizes": "any" }]
+      "icons": [{ "src": "/favicon.png", "sizes": "128x128" }]
     }
   ]
 }
