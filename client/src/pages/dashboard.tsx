@@ -19,6 +19,8 @@ import { useClassroom, fetchAllPages } from "@/lib/classroom-context";
 import { useAuth } from "@/lib/auth-context";
 import type { Assignment } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { db } from "@/lib/firebase";
+import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 
 // --- Loading Configuration ---
 
@@ -128,134 +130,58 @@ function WeeklyWorkload({
 
 // --- Class Activity Component ---
 function ClassActivityCard({ courses }: { courses: import("@shared/schema").Course[] }) {
-  const { user, accessToken } = useAuth();
-  const [rankData, setRankData] = useState<{rank: number; total: number; percentile: number} | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const { user } = useAuth();
+  const [rankData, setRankData] = useState<{rank: number; total: number; percentile: number; xp: number} | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
   useEffect(() => {
-    async function calculateActivity() {
-      if (!user || !accessToken || courses.length === 0) {
-        if (courses.length === 0) setError("No courses found");
-        return;
-      }
+    if (!user) return;
 
-      const courseId = courses[0].classroomId;
-      const cacheKey = `activity_rank_v2_${courseId}_${user.uid}`;
+    // Listen to the global leaderboard
+    const q = query(
+      collection(db, "leaderboards", "all-courses", "students"), 
+      orderBy("totalXP", "desc")
+    );
 
-      // Check cache first (1 hour expiry)
-      try {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Date.now() - parsed.timestamp < 1000 * 60 * 60) {
-                setRankData(parsed.data);
-                return;
-            }
-        }
-      } catch (e) {
-          // ignore cache error
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        // 1. Fetch Roster
-        const rosterUrl = `https://classroom.googleapis.com/v1/courses/${courseId}/students`;
-        const students = await fetchAllPages<{ userId: string }>(
-            accessToken,
-            rosterUrl,
-            (data: any) => data.students || [],
-            (data: any) => data.nextPageToken
-        );
-
-        // 2. Fetch Assignments
-        const assignmentsUrl = `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork?courseWorkStates=PUBLISHED`;
-        const assignments = await fetchAllPages<any>(
-          accessToken,
-          assignmentsUrl,
-          (data: any) => data.courseWork || [],
-          (data: any) => data.nextPageToken
-        );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+        const total = students.length;
         
-        const counts = new Map<string, number>();
-        students.forEach(s => counts.set(s.userId, 0));
-
-        // 3. Fetch Submissions
-        // Note: For students, this usually only returns their own submissions due to Google privacy.
-        // If so, total=1, rank=1. We handle this gracefully.
-        for (const assignment of assignments) {
-            try {
-                 const submissionsUrl = `https://classroom.googleapis.com/v1/courses/${courseId}/courseWork/${assignment.id}/studentSubmissions`;
-                 const submissions = await fetchAllPages<any>(
-                    accessToken,
-                    submissionsUrl,
-                    (data: any) => data.studentSubmissions || [],
-                    (data: any) => data.nextPageToken
-                 );
-
-                 submissions.forEach((sub: any) => {
-                     if (sub.state === "TURNED_IN" || sub.state === "RETURNED") {
-                         const current = counts.get(sub.userId) || 0;
-                         counts.set(sub.userId, current + 1);
-                     }
-                 });
-            } catch (err) {
-                // Ignore specific errors
-            }
+        if (total === 0) {
+            setRankData(null);
+            setIsLoading(false);
+            return;
         }
 
-        const myCount = counts.get(user.uid) || 0;
-        let rank = 1;
-        let total = 0;
-
-        counts.forEach((count) => {
-            total++;
-            if (count > myCount) {
-                rank++;
-            }
-        });
-
-        // Calculate percentile: 100% - (rank-1)/total * 100
-        // Rank 1 of 10 -> Top 10% ? No, Top 100% or "Top 10%".
-        // Better: (total - rank + 1) / total * 100
-        // Rank 1 of 5: (5-1+1)/5 = 100th percentile.
-        // Rank 5 of 5: (5-5+1)/5 = 20th percentile.
-        const percentile = Math.round(((total - rank + 1) / total) * 100);
-
-        const result = { rank, total, percentile };
-        setRankData(result);
+        const myIndex = students.findIndex((s) => s.id === user.uid);
         
-        // Save to cache
-        localStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: result }));
+        if (myIndex !== -1) {
+            const rank = myIndex + 1;
+            // Percentile calculation: High percentile = Top of class
+            // Rank 1/100 -> 99th percentile (Top 1%) ? 
+            // Usually "Top 1%" means 99th percentile.
+            // Let's stick to the previous formula: (total - rank + 1) / total * 100
+            const percentile = Math.round(((total - rank + 1) / total) * 100);
+            const myData = students[myIndex];
 
-      } catch (err) {
-        setError("Not enough activity yet"); 
-      } finally {
+            setRankData({
+                rank,
+                total,
+                percentile,
+                xp: myData.totalXP || 0
+            });
+        } else {
+            // User not in leaderboard yet
+            setRankData(null);
+        }
         setIsLoading(false);
-      }
-    }
+    }, (error) => {
+        console.error("Error fetching leaderboard for dashboard:", error);
+        setIsLoading(false);
+    });
 
-    calculateActivity();
-  }, [courses, user, accessToken]);
-
-  if (error) {
-      return (
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Class Rank</CardTitle>
-                <Trophy className="h-5 w-5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="flex flex-col gap-1">
-                     <span className="text-3xl font-semibold font-mono tracking-tight text-muted-foreground">-</span>
-                     <p className="text-xs text-muted-foreground">Data unavailable</p>
-                </div>
-            </CardContent>
-        </Card>
-      );
-  }
+    return () => unsubscribe();
+  }, [user]);
 
   return (
     <Card data-testid="card-class-rank">
@@ -279,16 +205,21 @@ function ClassActivityCard({ courses }: { courses: import("@shared/schema").Cour
                 </div>
                 <div className="mt-1 flex flex-col gap-0.5">
                     <p className="text-xs font-medium bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
-                        Top {rankData.percentile}% of class
+                        Top {100 - rankData.percentile < 1 ? 1 : 100 - rankData.percentile}% of class
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                        Based on {rankData.total === 1 ? 'your ' : ''}submissions
+                        {rankData.xp.toLocaleString()} Total XP
                     </p>
                 </div>
             </div>
         ) : (
-             <div className="flex flex-col gap-1">
-                 <span className="text-sm text-muted-foreground">Calculating...</span>
+             <div className="flex flex-col gap-2">
+                 <span className="text-lg font-medium text-muted-foreground">Unranked</span>
+                 <Link href="/leaderboard">
+                    <Button variant="outline" size="sm" className="h-7 text-xs w-full">
+                        Join Leaderboard
+                    </Button>
+                 </Link>
              </div>
         )}
       </CardContent>
