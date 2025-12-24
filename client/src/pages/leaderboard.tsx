@@ -321,7 +321,7 @@ export default function LeaderboardPage() {
           ) : null}
 
 
-          {/* Leaderboard List */}
+          {/* Leaderboard Content */}
           {loadingLeaderboard && leaderboardData.length === 0 ? (
              <div className="space-y-4">
                  {[1,2,3].map(i => (
@@ -333,62 +333,139 @@ export default function LeaderboardPage() {
                  <p className="text-muted-foreground text-sm">Waiting for players...</p>
              </div>
           ) : (
-             <div className="flex flex-col space-y-2">
-                 {leaderboardData.map((student, index) => {
-                     const isMe = student.id === user?.uid;
-                     const rank = index + 1;
-                     
-                     return (
-                         <div
-                            key={student.id}
-                            className={cn(
-                                "flex items-center p-3 sm:p-4 rounded-xl border transition-all duration-200 group",
-                                isMe 
-                                  ? "bg-card border-border shadow-sm ring-1 ring-border" 
-                                  : "bg-transparent border-transparent hover:bg-muted/30 hover:border-border/50"
-                            )}
-                         >
-                             {/* Rank */}
-                             <div className="w-8 sm:w-12 flex-shrink-0 flex items-center justify-center">
-                                 {rank === 1 ? (
-                                     <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500 fill-yellow-500/20" />
-                                 ) : rank === 2 ? (
-                                     <Medal className="h-4 w-4 sm:h-5 sm:w-5 text-zinc-400 fill-zinc-400/20" />
-                                 ) : rank === 3 ? (
-                                     <Medal className="h-4 w-4 sm:h-5 sm:w-5 text-amber-700 fill-amber-700/20" />
-                                 ) : (
-                                     <span className="text-muted-foreground font-mono text-xs sm:text-sm ml-1">#{rank}</span>
-                                 )}
-                             </div>
+             <div className="space-y-6 sm:space-y-8">
+                 {/* Top 3 Podium */}
+                 {leaderboardData.length > 0 && (
+                     <div className={cn(
+                        "flex justify-center items-end gap-2 sm:gap-8 pb-4 px-0 sm:px-2 transition-all duration-500 ease-in-out",
+                        showHelp ? "pt-6 sm:pt-8" : "pt-16 sm:pt-24"
+                     )}>
+                        {/* Rank 2 */}
+                        <div className="flex flex-col items-center gap-2 order-1 w-1/3 sm:w-32 max-w-[100px]">
+                             {leaderboardData[1] ? (
+                                 <>
+                                     <div className="relative">
+                                         <Avatar className="h-14 w-14 sm:h-20 sm:w-20 border-4 border-background ring-2 ring-zinc-300 shadow-xl">
+                                             <AvatarImage src={leaderboardData[1].photoUrl} />
+                                             <AvatarFallback className="text-lg bg-zinc-100 text-zinc-500">
+                                                 {leaderboardData[1].displayName?.[0]?.toUpperCase()}
+                                             </AvatarFallback>
+                                         </Avatar>
+                                         <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-zinc-500 text-white text-[10px] sm:text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full border-2 border-background shadow-sm">
+                                             2
+                                         </div>
+                                     </div>
+                                     <div className="text-center mt-1.5 sm:mt-2 space-y-0.5 w-full">
+                                         <p className="font-semibold text-xs sm:text-sm truncate w-full px-1">
+                                             {leaderboardData[1].displayName}
+                                         </p>
+                                         <p className="text-[10px] sm:text-xs text-primary font-bold">{leaderboardData[1].totalXP.toLocaleString()} XP</p>
+                                     </div>
+                                 </>
+                             ) : <div className="w-full" />}
+                        </div>
 
-                             {/* Avatar + Name */}
-                             <div className="flex items-center flex-1 gap-3 sm:gap-4 overflow-hidden">
-                                 <Avatar className={cn("h-8 w-8 sm:h-10 sm:w-10 border flex-shrink-0", isMe ? "border-foreground/10" : "border-border")}>
-                                     <AvatarImage src={student.photoUrl} />
-                                     <AvatarFallback className="text-[10px] sm:text-xs bg-muted text-muted-foreground">
-                                         {student.displayName?.[0]?.toUpperCase()}
+                        {/* Rank 1 */}
+                        <div className="flex flex-col items-center gap-2 order-2 w-1/3 sm:w-40 max-w-[120px] -mt-6 sm:-mt-8 z-10">
+                             <div className="relative">
+                                 <div className="absolute -top-6 sm:-top-8 left-1/2 -translate-x-1/2 animate-bounce duration-[2000ms]">
+                                     <Crown className="fill-yellow-400 text-yellow-500 h-6 w-6 sm:h-8 sm:w-8 drop-shadow-sm" />
+                                 </div>
+                                 <Avatar className="h-20 w-20 sm:h-28 sm:w-28 border-4 border-background ring-4 ring-yellow-400 shadow-2xl">
+                                     <AvatarImage src={leaderboardData[0].photoUrl} />
+                                     <AvatarFallback className="text-2xl bg-yellow-50 text-yellow-600">
+                                         {leaderboardData[0].displayName?.[0]?.toUpperCase()}
                                      </AvatarFallback>
                                  </Avatar>
-                                 <div className="flex flex-col min-w-0">
-                                     <span className={cn("text-xs sm:text-sm font-medium truncate", isMe ? "text-foreground" : "text-foreground/80 group-hover:text-foreground")}>
-                                         {student.displayName} {isMe && <span className="text-muted-foreground text-[10px] sm:text-xs font-normal ml-1 sm:ml-2">(You)</span>}
-                                     </span>
-                                     <span className="text-[10px] sm:text-xs text-muted-foreground truncate">
-                                         {student.processedAssignmentIds.length} <span className="hidden sm:inline">missions completed</span><span className="sm:hidden">missions</span>
-                                     </span>
+                                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-950 text-xs sm:text-sm font-bold w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-full border-2 border-background shadow-sm">
+                                     1
                                  </div>
                              </div>
-
-                             {/* XP */}
-                             <div className="text-right pl-2 sm:px-4 flex-shrink-0">
-                                 <span className="text-sm sm:text-lg font-mono font-medium text-foreground tracking-tight">
-                                     {student.totalXP.toLocaleString()}
-                                 </span>
-                                 <span className="text-[10px] sm:text-xs text-muted-foreground ml-0.5 sm:ml-1">XP</span>
+                             <div className="text-center mt-2 sm:mt-3 space-y-0.5 w-full">
+                                 <p className="font-bold text-sm sm:text-base truncate w-full px-1">
+                                     {leaderboardData[0].displayName}
+                                 </p>
+                                 <p className="text-xs sm:text-sm text-primary font-black">{leaderboardData[0].totalXP.toLocaleString()} XP</p>
                              </div>
-                         </div>
-                     );
-                 })}
+                        </div>
+
+                        {/* Rank 3 */}
+                        <div className="flex flex-col items-center gap-2 order-3 w-1/3 sm:w-32 max-w-[100px]">
+                             {leaderboardData[2] ? (
+                                 <>
+                                     <div className="relative">
+                                         <Avatar className="h-14 w-14 sm:h-20 sm:w-20 border-4 border-background ring-2 ring-amber-700/50 shadow-xl">
+                                             <AvatarImage src={leaderboardData[2].photoUrl} />
+                                             <AvatarFallback className="text-lg bg-amber-50 text-amber-700">
+                                                 {leaderboardData[2].displayName?.[0]?.toUpperCase()}
+                                             </AvatarFallback>
+                                         </Avatar>
+                                         <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-amber-700 text-amber-50 text-[10px] sm:text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full border-2 border-background shadow-sm">
+                                             3
+                                         </div>
+                                     </div>
+                                     <div className="text-center mt-1.5 sm:mt-2 space-y-0.5 w-full">
+                                         <p className="font-semibold text-xs sm:text-sm truncate w-full px-1">
+                                             {leaderboardData[2].displayName}
+                                         </p>
+                                         <p className="text-[10px] sm:text-xs text-primary font-bold">{leaderboardData[2].totalXP.toLocaleString()} XP</p>
+                                     </div>
+                                 </>
+                             ) : <div className="w-full" />}
+                        </div>
+                     </div>
+                 )}
+
+                 {/* Rest of the List */}
+                 <div className="flex flex-col space-y-2">
+                     {leaderboardData.slice(3).map((student, index) => {
+                         const isMe = student.id === user?.uid;
+                         const rank = index + 4;
+                         
+                         return (
+                             <div
+                                key={student.id}
+                                className={cn(
+                                    "flex items-center p-3 sm:p-4 rounded-xl border transition-all duration-200 group",
+                                    isMe 
+                                      ? "bg-primary/5 border-primary/20 shadow-sm" 
+                                      : "bg-card border-border/40 hover:bg-muted/30 hover:border-border"
+                                )}
+                             >
+                                 {/* Rank */}
+                                 <div className="w-8 sm:w-12 flex-shrink-0 flex items-center justify-center">
+                                     <span className="text-muted-foreground font-mono text-xs sm:text-sm font-medium">#{rank}</span>
+                                 </div>
+
+                                 {/* Avatar + Name */}
+                                 <div className="flex items-center flex-1 gap-3 sm:gap-4 overflow-hidden">
+                                     <Avatar className={cn("h-8 w-8 sm:h-10 sm:w-10 border flex-shrink-0", isMe ? "border-primary/20" : "border-border")}>
+                                         <AvatarImage src={student.photoUrl} />
+                                         <AvatarFallback className="text-[10px] sm:text-xs bg-muted text-muted-foreground">
+                                             {student.displayName?.[0]?.toUpperCase()}
+                                         </AvatarFallback>
+                                     </Avatar>
+                                     <div className="flex flex-col min-w-0">
+                                         <span className={cn("text-xs sm:text-sm font-medium truncate", isMe ? "text-primary" : "text-foreground")}>
+                                             {student.displayName} {isMe && <span className="text-muted-foreground text-[10px] sm:text-xs font-normal ml-1 sm:ml-2">(You)</span>}
+                                         </span>
+                                         <span className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                                             {student.processedAssignmentIds.length} <span className="hidden sm:inline">missions</span>
+                                         </span>
+                                     </div>
+                                 </div>
+
+                                 {/* XP */}
+                                 <div className="text-right pl-2 sm:px-4 flex-shrink-0">
+                                     <span className="text-sm sm:text-lg font-mono font-medium text-foreground tracking-tight">
+                                         {student.totalXP.toLocaleString()}
+                                     </span>
+                                     <span className="text-[10px] sm:text-xs text-muted-foreground ml-0.5 sm:ml-1">XP</span>
+                                 </div>
+                             </div>
+                         );
+                     })}
+                 </div>
              </div>
           )}
         </div>
