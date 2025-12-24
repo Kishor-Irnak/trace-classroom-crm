@@ -23,7 +23,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Trophy, Medal, Crown, Loader2, Scan, AlertCircle } from "lucide-react";
+import { Trophy, Medal, Crown, Loader2, Scan, AlertCircle, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LeaderboardStudent {
@@ -42,6 +42,7 @@ export default function LeaderboardPage() {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardStudent[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [showHelp, setShowHelp] = useState(true);
   
   // Historical Sync States
   const [isScanning, setIsScanning] = useState(false);
@@ -246,6 +247,48 @@ export default function LeaderboardPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
         <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
+          
+          {/* XP Rules Note */}
+          {showHelp && (
+            <div className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-primary/5 to-transparent rounded-xl border border-primary/10 p-4 sm:p-5 flex flex-col sm:flex-row gap-3 sm:gap-5 text-sm animate-in fade-in slide-in-from-top-2 shadow-sm">
+              <div className="absolute top-0 right-0 p-2 sm:p-3">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground/50 hover:text-foreground hover:bg-primary/10 rounded-full transition-colors"
+                  onClick={() => setShowHelp(false)}
+                >
+                  <X className="h-3 w-3 sm:h-4 sm:w-4" />
+                </Button>
+              </div>
+
+              <div className="bg-background/60 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl h-fit w-fit border border-primary/20 shadow-sm shrink-0 sm:mt-1 ring-4 ring-primary/5">
+                  <Info className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+              </div>
+              
+              <div className="space-y-3 pt-0.5 pr-4 sm:pr-10">
+                  <h4 className="font-bold text-foreground leading-none tracking-tight text-sm sm:text-base">
+                    How to earn XP & Rank Up
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-3 text-muted-foreground text-xs sm:text-sm">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0 shadow-[0_0_8px_currentColor]" />
+                        <span className="leading-snug">
+                          Complete assignments to earn <br className="hidden sm:block"/>
+                          <span className="font-bold text-foreground">100 XP</span> instantly.
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-3">
+                         <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 shadow-[0_0_8px_currentColor]" />
+                         <span className="leading-snug">
+                           Submit <span className="font-medium text-foreground">48h early</span> for a <br className="hidden sm:block"/>
+                           <span className="font-bold text-amber-600 dark:text-amber-400">50 XP Speed Bonus</span>.
+                         </span>
+                      </div>
+                  </div>
+              </div>
+            </div>
+          )}
           
           {/* Action Section: Sync Button (Only if no data or requested) */}
           {(!hasData && !loadingLeaderboard) || isScanning ? (
