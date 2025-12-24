@@ -23,7 +23,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Trophy, Medal, Crown, Loader2, Scan } from "lucide-react";
+import { Trophy, Medal, Crown, Loader2, Scan, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface LeaderboardStudent {
@@ -36,7 +36,7 @@ interface LeaderboardStudent {
 }
 
 export default function LeaderboardPage() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { courses, assignments, isLoading: isClassroomLoading } = useClassroom();
   
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
@@ -184,6 +184,27 @@ export default function LeaderboardPage() {
   const myEntry = leaderboardData.find(s => s.id === user?.uid);
   const myXP = myEntry?.totalXP || 0;
   const hasData = !!myEntry && myXP > 0;
+
+  if (!isClassroomLoading && courses.length === 0) {
+     return (
+        <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4 p-6">
+          <div className="text-center space-y-2">
+            <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+            <h2 className="text-lg font-medium text-destructive">Troubleshooting</h2>
+            <p className="text-sm text-muted-foreground max-w-md">
+              It seems data isn't fetching correctly. Please log out and log in again to resolve this.
+            </p>
+          </div>
+          <Button
+            onClick={() => signOut()}
+            variant="destructive"
+            className="px-4 py-2"
+          >
+            Log Out
+          </Button>
+        </div>
+     );
+  }
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground font-sans selection:bg-muted">

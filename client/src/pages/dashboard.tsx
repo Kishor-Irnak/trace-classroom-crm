@@ -334,6 +334,7 @@ function EnhancedLoadingScreen() {
 export default function DashboardPage() {
   const { getDashboardMetrics, isLoading, isSyncing, assignments, syncClassroom, courses } =
     useClassroom();
+  const { signOut } = useAuth();
   const [selectedAssignment, setSelectedAssignment] =
     useState<Assignment | null>(null);
 
@@ -346,25 +347,19 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
         <div className="text-center space-y-2">
-          <TrendingUp className="h-12 w-12 mx-auto text-muted-foreground" />
-          <h2 className="text-lg font-medium">No data yet</h2>
+          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+          <h2 className="text-lg font-medium text-destructive">Troubleshooting</h2>
           <p className="text-sm text-muted-foreground max-w-md">
-            Sync your Google Classroom to see your dashboard with metrics and
-            insights.
+            It seems data isn't fetching correctly. Please log out and log in again to resolve this.
           </p>
         </div>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            syncClassroom().catch((err) => {
-              console.error("Sync failed:", err);
-            });
-          }}
-          className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover-elevate"
-          data-testid="button-sync-empty-dashboard"
+        <Button
+          onClick={() => signOut()}
+          variant="destructive"
+          className="px-4 py-2"
         >
-          Sync Google Classroom
-        </button>
+          Log Out
+        </Button>
       </div>
     );
   }

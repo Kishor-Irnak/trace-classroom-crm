@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useClassroom } from "@/lib/classroom-context";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { FileText, ExternalLink, ChevronRight, Folder, RefreshCw, ArrowLeft, LayoutGrid, List } from "lucide-react";
+import { FileText, ExternalLink, ChevronRight, Folder, RefreshCw, ArrowLeft, LayoutGrid, List, AlertCircle } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,6 +12,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function NotesPage() {
   const { courses, materials, isLoading, isSyncing, syncClassroom } = useClassroom();
+  const { signOut } = useAuth();
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const isMobile = useIsMobile();
@@ -39,6 +41,27 @@ export default function NotesPage() {
 
   if (isLoading && courses.length === 0) {
     return <NotesSkeleton />;
+  }
+
+  if (courses.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4 p-6">
+        <div className="text-center space-y-2">
+          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+          <h2 className="text-lg font-medium text-destructive">Troubleshooting</h2>
+          <p className="text-sm text-muted-foreground max-w-md">
+            It seems data isn't fetching correctly. Please log out and log in again to resolve this.
+          </p>
+        </div>
+        <Button
+          onClick={() => signOut()}
+          variant="destructive"
+          className="px-4 py-2"
+        >
+          Log Out
+        </Button>
+      </div>
+    );
   }
 
   return (

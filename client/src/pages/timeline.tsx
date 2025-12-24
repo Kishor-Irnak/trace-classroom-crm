@@ -10,6 +10,7 @@ import {
   Lightbulb,
   Loader2,
   Mail, // Added Mail icon
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -233,7 +234,7 @@ const isToday = (date: Date) => {
 export default function TimelinePage() {
   const { getTimelineGroups, courses, isLoading, isSyncing, assignments, syncClassroom } =
     useClassroom();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedAssignment, setSelectedAssignment] =
@@ -301,25 +302,19 @@ export default function TimelinePage() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
         <div className="text-center space-y-2">
-          <Calendar className="h-12 w-12 mx-auto text-muted-foreground" />
-          <h2 className="text-lg font-medium">No assignments yet</h2>
+           <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+          <h2 className="text-lg font-medium text-destructive">Troubleshooting</h2>
           <p className="text-sm text-muted-foreground max-w-md">
-            Sync your Google Classroom to see your assignments organized by
-            date.
+            It seems data isn't fetching correctly. Please log out and log in again to resolve this.
           </p>
         </div>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            syncClassroom().catch((err) => {
-              console.error("Sync failed:", err);
-            });
-          }}
-          className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover-elevate"
-          data-testid="button-sync-empty-timeline"
+        <Button
+          onClick={() => signOut()}
+          variant="destructive"
+          className="px-4 py-2"
         >
-          Sync Google Classroom
-        </button>
+          Log Out
+        </Button>
       </div>
     );
   }

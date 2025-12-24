@@ -16,13 +16,15 @@ import {
 } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AssignmentCard } from "@/components/assignment-card";
 import { AssignmentDetail } from "@/components/assignment-detail";
 import { useClassroom } from "@/lib/classroom-context";
 import type { Assignment, AssignmentStatus } from "@shared/schema";
 import { cn } from "@/lib/utils";
-import { Lightbulb, Loader2 } from "lucide-react"; // Added Icons
+import { Lightbulb, Loader2, AlertCircle } from "lucide-react"; // Added Icons
+import { useAuth } from "@/lib/auth-context";
 
 // --- Loading Data & Components ---
 
@@ -199,6 +201,7 @@ export default function PipelinePage() {
     assignments,
     syncClassroom,
   } = useClassroom();
+  const { signOut } = useAuth();
   const [selectedAssignment, setSelectedAssignment] =
     useState<Assignment | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -252,24 +255,19 @@ export default function PipelinePage() {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
         <div className="text-center space-y-2">
-          <h2 className="text-lg font-medium">No assignments yet</h2>
+          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+          <h2 className="text-lg font-medium text-destructive">Troubleshooting</h2>
           <p className="text-sm text-muted-foreground max-w-md">
-            Sync your Google Classroom to see your assignments organized in a
-            Kanban-style board.
+            It seems data isn't fetching correctly. Please log out and log in again to resolve this.
           </p>
         </div>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            syncClassroom().catch((err) => {
-              console.error("Sync failed:", err);
-            });
-          }}
-          className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover-elevate"
-          data-testid="button-sync-empty"
+        <Button
+          onClick={() => signOut()}
+          variant="destructive"
+          className="px-4 py-2"
         >
-          Sync Google Classroom
-        </button>
+          Log Out
+        </Button>
       </div>
     );
   }
