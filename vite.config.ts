@@ -11,12 +11,8 @@ const getBasePath = () => {
   if (process.env.VITE_BASE_URL) {
     return process.env.VITE_BASE_URL;
   }
-  // Use root for custom domain, or subpath for GitHub Pages
-  // Set VITE_USE_CUSTOM_DOMAIN=true to use custom domain
-  if (process.env.VITE_USE_CUSTOM_DOMAIN === "true") {
-    return "/";
-  }
-  return process.env.NODE_ENV === "production" ? "/trace-classroom-crm/" : "/";
+  // Default to root for both dev and production (suitable for custom domains)
+  return "/";
 };
 
 export default defineConfig({

@@ -25,7 +25,6 @@ const CLIENT_ID = functions.config().google?.client_id || "MISSING_CLIENT_ID";
 const CLIENT_SECRET = functions.config().google?.client_secret || "MISSING_CLIENT_SECRET";
 // You should set these using: firebase functions:config:set google.client_id="..." google.client_secret="..."
 
-/*
 export const syncTraceCalendar = functions.pubsub.schedule("every 60 minutes").onRun(async (context) => {
   console.log("Starting Scheduled Calendar Sync...");
 
@@ -69,7 +68,6 @@ export const syncTraceCalendar = functions.pubsub.schedule("every 60 minutes").o
       }
   }
 });
-*/
 
 async function syncUserCalendar(uid: string, settings: CalendarSettings) {
     // 1. Get Credentials
