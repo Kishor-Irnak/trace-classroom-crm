@@ -9,8 +9,9 @@ import {
   ArrowDown,
   Lightbulb,
   Loader2,
-  Mail, // Added Mail icon
+  Mail,
   AlertCircle,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -341,16 +342,19 @@ export default function TimelinePage() {
       let maxDate = new Date();
 
       if (filteredAssignments.length > 0) {
-        const datesWithDueDates = filteredAssignments
-          .filter((a) => a.dueDate)
-          .map((a) => new Date(a.dueDate!));
+        const relevantDates = filteredAssignments.flatMap((a) => {
+          const dates = [];
+          if (a.dueDate) dates.push(new Date(a.dueDate));
+          if (a.createdAt) dates.push(new Date(a.createdAt));
+          return dates;
+        });
 
-        if (datesWithDueDates.length > 0) {
+        if (relevantDates.length > 0) {
           minDate = new Date(
-            Math.min(...datesWithDueDates.map((d) => d.getTime()))
+            Math.min(...relevantDates.map((d) => d.getTime()))
           );
           maxDate = new Date(
-            Math.max(...datesWithDueDates.map((d) => d.getTime()))
+            Math.max(...relevantDates.map((d) => d.getTime()))
           );
         }
       }
@@ -525,10 +529,41 @@ export default function TimelinePage() {
                 {filteredAssignments
                   .filter((a) => a.dueDate)
                   .map((assignment) => {
-                    const style = getTaskStyle(assignment.dueDate);
+                    const isCompleted =
+                      assignment.systemStatus === "submitted" ||
+                      assignment.systemStatus === "graded";
+
+                    // Determine visual start date: createdAt or earliest timeline date
+                    const startDate = assignment.createdAt
+                      ? new Date(assignment.createdAt)
+                      : new Date();
+                    const dueDate = new Date(assignment.dueDate!);
+
+                    // Calculate position and width
+                    // Start relative to earliestDate
+                    const startDiff =
+                      (startDate.getTime() - earliestDate.getTime()) /
+                      (1000 * 3600 * 24);
+
+                    // Duration from Start to Due
+                    const duration =
+                      (dueDate.getTime() - startDate.getTime()) /
+                      (1000 * 3600 * 24);
+
+                    const left = Math.max(0, startDiff * dayWidth);
+                    const width = Math.max(dayWidth, duration * dayWidth);
+
+                    const style = {
+                      left: `${left}px`,
+                      width: `${width}px`,
+                    };
+
                     const statusConfig =
                       STATUS_CONFIG[assignment.systemStatus] ||
                       STATUS_CONFIG.backlog;
+
+                    const completedStyle =
+                      "bg-green-100/80 border-green-300 text-green-800";
 
                     return (
                       <div key={assignment.id} className="relative h-14 group">
@@ -536,7 +571,9 @@ export default function TimelinePage() {
                           onClick={() => setSelectedAssignment(assignment)}
                           className={cn(
                             "absolute top-0 h-12 rounded-lg border shadow-sm transition-all cursor-pointer flex flex-col justify-center px-3 overflow-hidden group hover:scale-[1.01] z-10 hover:z-30 hover:shadow-md",
-                            statusConfig.timelineStyle
+                            isCompleted
+                              ? completedStyle
+                              : statusConfig.timelineStyle
                           )}
                           style={{
                             left: style.left,
@@ -548,6 +585,9 @@ export default function TimelinePage() {
                             <span className="truncate text-xs font-bold leading-none flex items-center gap-1">
                               {assignment.courseId === "system" && (
                                 <Mail className="h-3 w-3 inline-block" />
+                              )}
+                              {isCompleted && (
+                                <Check className="h-3 w-3 inline-block mr-0.5" />
                               )}
                               {assignment.title}
                             </span>

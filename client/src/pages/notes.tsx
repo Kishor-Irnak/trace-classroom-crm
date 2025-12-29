@@ -34,8 +34,8 @@ export default function NotesPage() {
     (m) => m.courseId === selectedCourseId
   );
 
-  // Filter for PDF materials
-  const pdfMaterials = courseMaterials
+  // Filter for PDF and PPT materials
+  const courseDocuments = courseMaterials
     .flatMap((cm) => {
       if (!cm.materials) return [];
 
@@ -53,7 +53,15 @@ export default function NotesPage() {
         return files;
       });
     })
-    .filter((file) => file.title && file.title.toLowerCase().endsWith(".pdf"));
+    .filter((file) => {
+      if (!file.title) return false;
+      const lower = file.title.toLowerCase();
+      return (
+        lower.endsWith(".pdf") ||
+        lower.endsWith(".ppt") ||
+        lower.endsWith(".pptx")
+      );
+    });
 
   if (isLoading && courses.length === 0) {
     return <NotesSkeleton />;
@@ -212,7 +220,7 @@ export default function NotesPage() {
                 <div className="bg-muted/30 px-3 py-1.5 rounded-md border border-border flex items-center gap-2">
                   <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
                   <span className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap text-muted-foreground">
-                    {pdfMaterials.length} PDF Assets
+                    {courseDocuments.length} Documents
                   </span>
                 </div>
                 <div className="flex bg-muted rounded-md p-1 border border-border">
@@ -242,116 +250,137 @@ export default function NotesPage() {
               </div>
             </div>
 
-            {pdfMaterials.length > 0 ? (
+            {courseDocuments.length > 0 ? (
               viewMode === "grid" ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 pb-20">
-                  {pdfMaterials.map((pdf, idx) => (
-                    <Card
-                      key={`${pdf.id}-${idx}`}
-                      className="group relative overflow-hidden transition-all hover:shadow-2xl hover:-translate-y-1 border-border bg-card shadow-sm flex flex-col"
-                    >
-                      <CardHeader className="p-3 border-b border-border space-y-0 pb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center shrink-0 text-red-600">
-                            <FileText className="h-4 w-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h4 className="font-semibold text-sm truncate leading-none text-card-foreground">
-                              {pdf.title}
-                            </h4>
-                            <p className="text-[10px] text-muted-foreground truncate mt-1 font-mono">
-                              PDF DOCUMENT
-                            </p>
-                          </div>
-                        </div>
-                      </CardHeader>
-
-                      <div className="relative aspect-[3/4] bg-muted/30 w-full overflow-hidden group">
-                        {pdf.thumbnail ? (
-                          <img
-                            src={pdf.thumbnail.replace("s220", "s800")}
-                            alt={pdf.title}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                              e.currentTarget.nextElementSibling?.classList.remove(
-                                "hidden"
-                              );
-                            }}
-                          />
-                        ) : null}
-
-                        {/* Fallback or Overlay */}
-                        <div
-                          className={cn(
-                            "absolute inset-0 flex items-center justify-center bg-muted",
-                            pdf.thumbnail ? "hidden" : "flex"
-                          )}
-                        >
-                          <FileText className="h-16 w-16 text-muted-foreground/20" />
-                        </div>
-
-                        {/* Hover Overlay with Actions */}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2 p-4">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="font-semibold shadow-xl h-9"
-                            asChild
-                          >
-                            <a
-                              href={pdf.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                  {courseDocuments.map((doc, idx) => {
+                    const isPdf = doc.title?.toLowerCase().endsWith(".pdf");
+                    return (
+                      <Card
+                        key={`${doc.id}-${idx}`}
+                        className="group relative overflow-hidden transition-all hover:shadow-2xl hover:-translate-y-1 border-border bg-card shadow-sm flex flex-col"
+                      >
+                        <CardHeader className="p-3 border-b border-border space-y-0 pb-2">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={cn(
+                                "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
+                                isPdf
+                                  ? "bg-red-100 text-red-600"
+                                  : "bg-orange-100 text-orange-600"
+                              )}
                             >
-                              <ExternalLink className="h-4 w-4 mr-2" />
-                              Open Material
-                            </a>
-                          </Button>
+                              <FileText className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="font-semibold text-sm truncate leading-none text-card-foreground">
+                                {doc.title}
+                              </h4>
+                              <p className="text-[10px] text-muted-foreground truncate mt-1 font-mono">
+                                {isPdf ? "PDF DOCUMENT" : "PRESENTATION"}
+                              </p>
+                            </div>
+                          </div>
+                        </CardHeader>
+
+                        <div className="relative aspect-[3/4] bg-muted/30 w-full overflow-hidden group">
+                          {doc.thumbnail ? (
+                            <img
+                              src={doc.thumbnail.replace("s220", "s800")}
+                              alt={doc.title}
+                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                e.currentTarget.nextElementSibling?.classList.remove(
+                                  "hidden"
+                                );
+                              }}
+                            />
+                          ) : null}
+
+                          {/* Fallback or Overlay */}
+                          <div
+                            className={cn(
+                              "absolute inset-0 flex items-center justify-center bg-muted",
+                              doc.thumbnail ? "hidden" : "flex"
+                            )}
+                          >
+                            <FileText className="h-16 w-16 text-muted-foreground/20" />
+                          </div>
+
+                          {/* Hover Overlay with Actions */}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2 p-4">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="font-semibold shadow-xl h-9"
+                              asChild
+                            >
+                              <a
+                                href={doc.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <ExternalLink className="h-4 w-4 mr-2" />
+                                Open Material
+                              </a>
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    </Card>
-                  ))}
+                      </Card>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="space-y-2 pb-20">
-                  {pdfMaterials.map((pdf, idx) => (
-                    <div
-                      key={`${pdf.id}-${idx}`}
-                      className="group flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors"
-                    >
-                      <div className="h-10 w-10 flex items-center justify-center rounded-md bg-muted text-red-500 shrink-0">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-sm truncate text-card-foreground group-hover:text-primary transition-colors">
-                          {pdf.title}
-                        </h4>
-                        <p className="text-xs text-muted-foreground truncate">
-                          PDF Document • Read Only
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        asChild
-                        className="shrink-0"
+                  {courseDocuments.map((doc, idx) => {
+                    const isPdf = doc.title?.toLowerCase().endsWith(".pdf");
+                    return (
+                      <div
+                        key={`${doc.id}-${idx}`}
+                        className="group flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors"
                       >
-                        <a
-                          href={pdf.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2"
+                        <div
+                          className={cn(
+                            "h-10 w-10 flex items-center justify-center rounded-md shrink-0",
+                            isPdf
+                              ? "bg-red-100 text-red-600"
+                              : "bg-orange-100 text-orange-600"
+                          )}
                         >
-                          <span className="hidden sm:inline text-xs font-medium">
-                            Open
-                          </span>
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </Button>
-                    </div>
-                  ))}
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm truncate text-card-foreground group-hover:text-primary transition-colors">
+                            {doc.title}
+                          </h4>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {isPdf ? "PDF Document" : "Presentation"} • Read
+                            Only
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          asChild
+                          className="shrink-0"
+                        >
+                          <a
+                            href={doc.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2"
+                          >
+                            <span className="hidden sm:inline text-xs font-medium">
+                              Open
+                            </span>
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               )
             ) : (
@@ -361,11 +390,12 @@ export default function NotesPage() {
                 </div>
                 <div>
                   <h4 className="text-lg font-bold text-foreground">
-                    No PDF Documents Found
+                    No Documents Found
                   </h4>
                   <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto font-medium">
-                    This course has no PDF files uploaded to Classroom yet. Make
-                    sure your materials are in .pdf format.
+                    This course has no PDF or Presentation files uploaded to
+                    Classroom yet. Make sure your materials are in .pdf, .ppt,
+                    or .pptx format.
                   </p>
                 </div>
               </div>

@@ -1,10 +1,27 @@
 import { useState } from "react";
-import { X, Calendar, ExternalLink, Plus, Star, Trash2, Edit2, Save, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import {
+  X,
+  Calendar,
+  ExternalLink,
+  Plus,
+  Star,
+  Trash2,
+  Edit2,
+  Save,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import type { Assignment, Note } from "@shared/schema";
 import { useClassroom } from "@/lib/classroom-context";
 import { cn } from "@/lib/utils";
@@ -31,10 +48,40 @@ function formatTime(timeStr: string | null): string {
 }
 
 function StatusTimeline({ assignment }: { assignment: Assignment }) {
+  const isSubmitted =
+    assignment.systemStatus === "submitted" ||
+    assignment.systemStatus === "graded" ||
+    !!assignment.submittedAt;
+
+  const isGraded =
+    assignment.systemStatus === "graded" ||
+    !!assignment.gradedAt ||
+    assignment.grade !== null;
+
   const steps = [
-    { id: "created", label: "Created", completed: true, date: assignment.createdAt },
-    { id: "submitted", label: "Submitted", completed: !!assignment.submittedAt, date: assignment.submittedAt },
-    { id: "graded", label: "Graded", completed: !!assignment.gradedAt, date: assignment.gradedAt },
+    {
+      id: "created",
+      label: "Created",
+      completed: true,
+      date: assignment.createdAt,
+    },
+    {
+      id: "submitted",
+      label: "Submitted",
+      completed: isSubmitted,
+      date: assignment.submittedAt,
+    },
+    {
+      id: "graded",
+      label:
+        assignment.grade !== null
+          ? `Graded (${assignment.grade}${
+              assignment.maxPoints ? `/${assignment.maxPoints}` : ""
+            })`
+          : "Graded",
+      completed: isGraded,
+      date: assignment.gradedAt,
+    },
   ];
 
   return (
@@ -45,21 +92,25 @@ function StatusTimeline({ assignment }: { assignment: Assignment }) {
         <div className="space-y-4">
           {steps.map((step, index) => (
             <div key={step.id} className="flex items-start gap-3 relative">
-              <div className={cn(
-                "h-4 w-4 rounded-full border-2 shrink-0 mt-0.5",
-                step.completed 
-                  ? "bg-foreground border-foreground" 
-                  : "bg-background border-muted-foreground"
-              )}>
+              <div
+                className={cn(
+                  "h-4 w-4 rounded-full border-2 shrink-0 mt-0.5",
+                  step.completed
+                    ? "bg-foreground border-foreground"
+                    : "bg-background border-muted-foreground"
+                )}
+              >
                 {step.completed && (
                   <CheckCircle className="h-3 w-3 text-background absolute top-0.5 left-0.5" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className={cn(
-                  "text-sm",
-                  step.completed ? "font-medium" : "text-muted-foreground"
-                )}>
+                <p
+                  className={cn(
+                    "text-sm",
+                    step.completed ? "font-medium" : "text-muted-foreground"
+                  )}
+                >
                   {step.label}
                 </p>
                 {step.date && step.completed && (
@@ -81,12 +132,12 @@ function StatusTimeline({ assignment }: { assignment: Assignment }) {
   );
 }
 
-function NoteItem({ 
-  note, 
-  onUpdate, 
-  onDelete 
-}: { 
-  note: Note; 
+function NoteItem({
+  note,
+  onUpdate,
+  onDelete,
+}: {
+  note: Note;
   onUpdate: (content: string, isImportant: boolean) => void;
   onDelete: () => void;
 }) {
@@ -102,7 +153,9 @@ function NoteItem({
     <div className="p-3 rounded-md border space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          {note.isImportant && <Star className="h-3.5 w-3.5 fill-current text-foreground" />}
+          {note.isImportant && (
+            <Star className="h-3.5 w-3.5 fill-current text-foreground" />
+          )}
           <span className="text-xs text-muted-foreground">
             {new Date(note.updatedAt).toLocaleDateString("en-US", {
               month: "short",
@@ -120,7 +173,9 @@ function NoteItem({
             onClick={() => onUpdate(note.content, !note.isImportant)}
             data-testid={`button-toggle-important-${note.id}`}
           >
-            <Star className={cn("h-3.5 w-3.5", note.isImportant && "fill-current")} />
+            <Star
+              className={cn("h-3.5 w-3.5", note.isImportant && "fill-current")}
+            />
           </Button>
           <Button
             variant="ghost"
@@ -142,7 +197,7 @@ function NoteItem({
           </Button>
         </div>
       </div>
-      
+
       {isEditing ? (
         <div className="space-y-2">
           <Textarea
@@ -152,10 +207,18 @@ function NoteItem({
             data-testid={`textarea-edit-note-${note.id}`}
           />
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditing(false)}
+            >
               Cancel
             </Button>
-            <Button size="sm" onClick={handleSave} data-testid={`button-save-note-${note.id}`}>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              data-testid={`button-save-note-${note.id}`}
+            >
               <Save className="h-3.5 w-3.5 mr-1" />
               Save
             </Button>
@@ -168,8 +231,13 @@ function NoteItem({
   );
 }
 
-export function AssignmentDetail({ assignment, isOpen, onClose }: AssignmentDetailProps) {
-  const { getNotesForAssignment, addNote, updateNote, deleteNote } = useClassroom();
+export function AssignmentDetail({
+  assignment,
+  isOpen,
+  onClose,
+}: AssignmentDetailProps) {
+  const { getNotesForAssignment, addNote, updateNote, deleteNote } =
+    useClassroom();
   const [newNoteContent, setNewNoteContent] = useState("");
   const [isAddingNote, setIsAddingNote] = useState(false);
 
@@ -210,7 +278,9 @@ export function AssignmentDetail({ assignment, isOpen, onClose }: AssignmentDeta
                 {formatDate(assignment.dueDate)}
                 {formatTime(assignment.dueTime)}
               </span>
-              {isOverdue && <AlertCircle className="h-4 w-4 text-destructive" />}
+              {isOverdue && (
+                <AlertCircle className="h-4 w-4 text-destructive" />
+              )}
             </div>
 
             {assignment.maxPoints && (
@@ -275,9 +345,9 @@ export function AssignmentDetail({ assignment, isOpen, onClose }: AssignmentDeta
                   data-testid="textarea-new-note"
                 />
                 <div className="flex justify-end gap-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => {
                       setIsAddingNote(false);
                       setNewNoteContent("");
@@ -285,8 +355,8 @@ export function AssignmentDetail({ assignment, isOpen, onClose }: AssignmentDeta
                   >
                     Cancel
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     onClick={handleAddNote}
                     disabled={!newNoteContent.trim()}
                     data-testid="button-save-new-note"
@@ -304,15 +374,19 @@ export function AssignmentDetail({ assignment, isOpen, onClose }: AssignmentDeta
                   <NoteItem
                     key={note.id}
                     note={note}
-                    onUpdate={(content, isImportant) => updateNote(note.id, content, isImportant)}
+                    onUpdate={(content, isImportant) =>
+                      updateNote(note.id, content, isImportant)
+                    }
                     onDelete={() => deleteNote(note.id, assignment.id)}
                   />
                 ))}
               </div>
-            ) : !isAddingNote && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No notes yet
-              </p>
+            ) : (
+              !isAddingNote && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No notes yet
+                </p>
+              )
             )}
           </div>
 

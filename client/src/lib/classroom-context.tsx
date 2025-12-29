@@ -21,43 +21,51 @@ import { db } from "./firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 // Helper to send email via Gmail API
-async function sendGmailNotification(toEmail: string, subject: string, body: string, accessToken: string) {
+async function sendGmailNotification(
+  toEmail: string,
+  subject: string,
+  body: string,
+  accessToken: string
+) {
   const emailLines = [
     `To: ${toEmail}`,
     "Subject: " + subject,
     "Content-Type: text/html; charset=utf-8",
     "MIME-Version: 1.0",
     "",
-    body
+    body,
   ];
   const email = emailLines.join("\r\n");
 
   // Base64url encoding
-  const encodedEmail = btoa(email).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const encodedEmail = btoa(email)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 
-  await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-    method: 'POST',
+  await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      raw: encodedEmail
-    })
+      raw: encodedEmail,
+    }),
   });
 }
 
 // Helper to sync to Google Calendar Client-Side
 async function syncToGoogleCalendar(
-  assignments: Assignment[], 
-  accessToken: string, 
+  assignments: Assignment[],
+  accessToken: string,
   userId: string,
   toast: any
 ) {
   // 1. Check if sync is enabled
   const settingsRef = doc(db, "users", userId, "settings", "calendar");
   const settingsSnap = await getDoc(settingsRef);
-  
+
   if (!settingsSnap.exists() || !settingsSnap.data().enabled) {
     console.log("Calendar sync disabled or not configured.");
     return;
@@ -76,28 +84,31 @@ async function syncToGoogleCalendar(
 
     // Construct Event Data
     const dueDate = new Date(assignment.dueDate);
-    const dateStr = dueDate.toISOString().split('T')[0]; // YYYY-MM-DD
-    
+    const dateStr = dueDate.toISOString().split("T")[0]; // YYYY-MM-DD
+
     // Default to All Day Event for deadlines
     const eventResource: any = {
       summary: `📚 ${assignment.title}`,
-      description: `Course: ${assignment.courseName}\n${assignment.description || ""}\n\nSynced via Student Sphere`,
+      description: `Course: ${assignment.courseName}\n${
+        assignment.description || ""
+      }\n\nSynced via Student Sphere`,
       start: { date: dateStr },
       end: { date: dateStr }, // GCal single day all-day event: start=end is fine? No, usually end is next day for inclusive.
     };
-    
+
     // Adjust end date to be next day for all-day event correctness?
     // Actually GCal API: end date is exclusive. So +1 day.
     const nextDay = new Date(dueDate);
     nextDay.setDate(nextDay.getDate() + 1);
-    eventResource.end.date = nextDay.toISOString().split('T')[0];
+    eventResource.end.date = nextDay.toISOString().split("T")[0];
 
     // 3. Check for existing mapping
     const mapRef = doc(db, "users", userId, "calendarEvents", assignment.id);
     const mapSnap = await getDoc(mapRef);
 
-    const url = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
-    
+    const url =
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+
     try {
       let res;
       if (mapSnap.exists()) {
@@ -121,27 +132,28 @@ async function syncToGoogleCalendar(
           },
           body: JSON.stringify(eventResource),
         });
-        
+
         if (res.ok) {
           const data = await res.json();
           await setDoc(mapRef, {
-             calendarEventId: data.id,
-             assignmentId: assignment.id,
-             updatedAt: serverTimestamp()
+            calendarEventId: data.id,
+            assignmentId: assignment.id,
+            updatedAt: serverTimestamp(),
           });
         }
       }
 
       if (!res.ok) {
         if (res.status === 403 && !permissionErrorShown) {
-           permissionErrorShown = true;
-           console.error("Calendar Sync 403: Permission Denied");
-           toast({
-             variant: "destructive",
-             title: "Calendar Permission Needed",
-             description: "We can't update your Google Calendar because we don't have permission. Please Sign Out and Sign In again to grant access.",
-           });
-           break; // Stop trying
+          permissionErrorShown = true;
+          console.error("Calendar Sync 403: Permission Denied");
+          toast({
+            variant: "destructive",
+            title: "Calendar Permission Needed",
+            description:
+              "We can't update your Google Calendar because we don't have permission. Please Sign Out and Sign In again to grant access.",
+          });
+          break; // Stop trying
         }
       }
     } catch (e) {
@@ -470,9 +482,13 @@ async function fetchCoursework(
         submission?.updateTime && submission.state === "RETURNED"
           ? submission.updateTime
           : null,
-      grade: submission?.returnedGrade || submission?.assignedGrade || null,
+      grade:
+        submission?.returnedGrade ??
+        submission?.assignedGrade ??
+        submission?.draftGrade ??
+        null,
       alternateLink: gc.alternateLink || null,
-      createdAt: now.toISOString(),
+      createdAt: gc.creationTime || now.toISOString(),
       lastSyncedAt: now.toISOString(),
     };
 
@@ -851,152 +867,183 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
   const [hasAutoSynced, setHasAutoSynced] = useState(false);
   const { toast } = useToast();
 
-  const syncClassroom = useCallback(async (isAutoSync = false) => {
-    if (!user) {
-      setError("Please sign in with Google to sync your Classroom data");
-      setIsLoading(false);
-      return;
-    }
-
-    // Try to get a fresh access token if not available
-    let token = accessToken;
-    if (!token) {
-      // Access token might have expired, try to get a fresh one
-      try {
-        // Get the ID token which we can use to verify auth
-        const idToken = await user.getIdToken();
-        console.log(
-          "Got ID token, but need OAuth access token for Classroom API"
-        );
-        setError(
-          "Access token expired. Please sign out and sign in again to refresh your token."
-        );
-        setIsLoading(false);
-        return;
-      } catch (err) {
-        setError("Unable to authenticate. Please sign in again.");
-        setIsLoading(false);
-        return;
-      }
-    }
-
-    setIsSyncing(true);
-    // Only show full-screen loader if we have no data yet
-    if (assignments.length === 0) {
-      setIsLoading(true);
-    }
-    setError(null);
-
-    try {
-      console.log("Starting sync...", { userId: user.uid, hasToken: !!token });
-
-      // Fetch courses
-      const fetchedCourses = await fetchCourses(token, user.uid);
-      console.log(`Fetched ${fetchedCourses.length} courses`);
-
-      if (fetchedCourses.length === 0) {
-        setError(
-          "No active courses found. Make sure you're enrolled in at least one Google Classroom course."
-        );
-        setCourses([]);
-        setAssignments([]);
-        setLastSyncedAt(new Date());
-        setIsSyncing(false);
+  const syncClassroom = useCallback(
+    async (isAutoSync = false) => {
+      if (!user) {
+        setError("Please sign in with Google to sync your Classroom data");
         setIsLoading(false);
         return;
       }
 
-      // Fetch assignments and materials for each course
-      const allAssignments: Assignment[] = [];
-      const allMaterials: NoteMaterial[] = [];
-      for (const course of fetchedCourses) {
+      // Try to get a fresh access token if not available
+      let token = accessToken;
+      if (!token) {
+        // Access token might have expired, try to get a fresh one
         try {
-          console.log(`Fetching data for course: ${course.name}`);
-          const [courseAssignments, courseMaterials] = await Promise.all([
-            fetchCoursework(
-              token,
-              course.classroomId,
-              course.name,
-              user.uid
-            ),
-            fetchCourseMaterials(
-              token,
-              course.classroomId,
-              course.name,
-              user.uid
-            )
-          ]);
+          // Get the ID token which we can use to verify auth
+          const idToken = await user.getIdToken();
           console.log(
-            `Found ${courseAssignments.length} assignments and ${courseMaterials.length} materials for ${course.name}`
+            "Got ID token, but need OAuth access token for Classroom API"
           );
-          allAssignments.push(...courseAssignments);
-          allMaterials.push(...courseMaterials);
+          setError(
+            "Access token expired. Please sign out and sign in again to refresh your token."
+          );
+          setIsLoading(false);
+          return;
         } catch (err) {
-          console.warn(
-            `Failed to fetch data for course ${course.name}:`,
-            err
-          );
-          // Continue with other courses even if one fails
+          setError("Unable to authenticate. Please sign in again.");
+          setIsLoading(false);
+          return;
         }
       }
 
-      console.log(
-        `Sync complete: ${fetchedCourses.length} courses, ${allAssignments.length} assignments, ${allMaterials.length} materials`
-      );
-      setCourses(fetchedCourses);
-      setAssignments(allAssignments);
-      setMaterials(allMaterials);
-      setLastSyncedAt(new Date());
-      
-      // Stop blocking loading screen here so user can interact with the app
-      // while Calendar sync happens in background
-      setIsLoading(false);
-
-      // Client-side Google Calendar Sync
-      try {
-        await syncToGoogleCalendar(allAssignments, token, user.uid, toast);
-      } catch (calErr) {
-        console.error("Calendar sync failed:", calErr);
+      setIsSyncing(true);
+      // Only show full-screen loader if we have no data yet
+      if (assignments.length === 0) {
+        setIsLoading(true);
       }
+      setError(null);
 
-      // Notification Logic (Gmail)
       try {
-        const notifSettingsRef = doc(db, "users", user.uid, "settings", "notifications");
-        const notifSettingsSnap = await getDoc(notifSettingsRef);
-        
-        if (notifSettingsSnap.exists() && notifSettingsSnap.data().enabled) {
-           const settings = notifSettingsSnap.data();
-           
-           if (settings.notifyDueSoon) {
-               const digestRef = doc(db, "users", user.uid, "notifications", "digest");
-               const digestSnap = await getDoc(digestRef);
-               
-               // Check if we already sent a digest today
-               const lastSent = digestSnap.exists() ? digestSnap.data().lastSent?.toDate() : null;
-               const today = new Date();
-               const isSameDay = lastSent && 
-                                 lastSent.getDate() === today.getDate() && 
-                                 lastSent.getMonth() === today.getMonth() && 
-                                 lastSent.getFullYear() === today.getFullYear();
-               
-               if (!isSameDay) {
-                   // Calculate assignments due in the next 24 hours
-                   const tomorrow = new Date(today);
-                   tomorrow.setDate(tomorrow.getDate() + 1);
-                   tomorrow.setHours(23, 59, 59, 999);
+        console.log("Starting sync...", {
+          userId: user.uid,
+          hasToken: !!token,
+        });
 
-                   const upcoming = allAssignments.filter(a => {
-                       if (!a.dueDate || a.systemStatus === 'submitted' || a.systemStatus === 'graded') return false;
-                       const due = new Date(a.dueDate);
-                       return due >= today && due <= tomorrow;
-                   });
+        // Fetch courses
+        const fetchedCourses = await fetchCourses(token, user.uid);
+        console.log(`Fetched ${fetchedCourses.length} courses`);
 
-                   if (upcoming.length > 0 && user.email) {
-                       const listItems = upcoming.map(a => 
-                         `<li><strong>${a.title}</strong> <span style="color:#666">(${a.courseName})</span><br>Due: ${new Date(a.dueDate!).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</li>`
-                       ).join('');
-                       
-                       const emailBody = `
+        if (fetchedCourses.length === 0) {
+          setError(
+            "No active courses found. Make sure you're enrolled in at least one Google Classroom course."
+          );
+          setCourses([]);
+          setAssignments([]);
+          setLastSyncedAt(new Date());
+          setIsSyncing(false);
+          setIsLoading(false);
+          return;
+        }
+
+        // Fetch assignments and materials for each course
+        const allAssignments: Assignment[] = [];
+        const allMaterials: NoteMaterial[] = [];
+        for (const course of fetchedCourses) {
+          try {
+            console.log(`Fetching data for course: ${course.name}`);
+            const [courseAssignments, courseMaterials] = await Promise.all([
+              fetchCoursework(token, course.classroomId, course.name, user.uid),
+              fetchCourseMaterials(
+                token,
+                course.classroomId,
+                course.name,
+                user.uid
+              ),
+            ]);
+            console.log(
+              `Found ${courseAssignments.length} assignments and ${courseMaterials.length} materials for ${course.name}`
+            );
+            allAssignments.push(...courseAssignments);
+            allMaterials.push(...courseMaterials);
+          } catch (err) {
+            console.warn(
+              `Failed to fetch data for course ${course.name}:`,
+              err
+            );
+            // Continue with other courses even if one fails
+          }
+        }
+
+        console.log(
+          `Sync complete: ${fetchedCourses.length} courses, ${allAssignments.length} assignments, ${allMaterials.length} materials`
+        );
+        setCourses(fetchedCourses);
+        setAssignments(allAssignments);
+        setMaterials(allMaterials);
+        setLastSyncedAt(new Date());
+
+        // Stop blocking loading screen here so user can interact with the app
+        // while Calendar sync happens in background
+        setIsLoading(false);
+
+        // Client-side Google Calendar Sync
+        try {
+          await syncToGoogleCalendar(allAssignments, token, user.uid, toast);
+        } catch (calErr) {
+          console.error("Calendar sync failed:", calErr);
+        }
+
+        // Notification Logic (Gmail)
+        try {
+          const notifSettingsRef = doc(
+            db,
+            "users",
+            user.uid,
+            "settings",
+            "notifications"
+          );
+          const notifSettingsSnap = await getDoc(notifSettingsRef);
+
+          if (notifSettingsSnap.exists() && notifSettingsSnap.data().enabled) {
+            const settings = notifSettingsSnap.data();
+
+            if (settings.notifyDueSoon) {
+              const digestRef = doc(
+                db,
+                "users",
+                user.uid,
+                "notifications",
+                "digest"
+              );
+              const digestSnap = await getDoc(digestRef);
+
+              // Check if we already sent a digest today
+              const lastSent = digestSnap.exists()
+                ? digestSnap.data().lastSent?.toDate()
+                : null;
+              const today = new Date();
+              const isSameDay =
+                lastSent &&
+                lastSent.getDate() === today.getDate() &&
+                lastSent.getMonth() === today.getMonth() &&
+                lastSent.getFullYear() === today.getFullYear();
+
+              if (!isSameDay) {
+                // Calculate assignments due in the next 24 hours
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(23, 59, 59, 999);
+
+                const upcoming = allAssignments.filter((a) => {
+                  if (
+                    !a.dueDate ||
+                    a.systemStatus === "submitted" ||
+                    a.systemStatus === "graded"
+                  )
+                    return false;
+                  const due = new Date(a.dueDate);
+                  return due >= today && due <= tomorrow;
+                });
+
+                if (upcoming.length > 0 && user.email) {
+                  const listItems = upcoming
+                    .map(
+                      (a) =>
+                        `<li><strong>${
+                          a.title
+                        }</strong> <span style="color:#666">(${
+                          a.courseName
+                        })</span><br>Due: ${new Date(
+                          a.dueDate!
+                        ).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}</li>`
+                    )
+                    .join("");
+
+                  const emailBody = `
                          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
                            <h2 style="color: #2563eb;">📚 Daily Digest</h2>
                            <p>You have <strong>${upcoming.length} assignments</strong> coming up in the next 24 hours:</p>
@@ -1005,75 +1052,83 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
                          </div>
                        `;
 
-                       await sendGmailNotification(user.email, `Student Sphere: ${upcoming.length} Tasks Due Soon`, emailBody, token);
-                       await setDoc(digestRef, { lastSent: serverTimestamp() });
-                       console.log("Daily digest email delivered.");
-                   }
-               }
-           }
+                  await sendGmailNotification(
+                    user.email,
+                    `Student Sphere: ${upcoming.length} Tasks Due Soon`,
+                    emailBody,
+                    token
+                  );
+                  await setDoc(digestRef, { lastSent: serverTimestamp() });
+                  console.log("Daily digest email delivered.");
+                }
+              }
+            }
+          }
+        } catch (notifErr) {
+          console.warn("Notification sync failed (non-critical):", notifErr);
         }
-      } catch (notifErr) {
-        console.warn("Notification sync failed (non-critical):", notifErr);
-      }
 
-      if (!isAutoSync) {
-        toast({
-          title: "Sync Complete",
-          description: `Successfully synced ${fetchedCourses.length} courses, ${allAssignments.length} assignments, and updated Google Calendar.`,
-        });
-      }
-    } catch (err: any) {
-      console.error("Sync error details:", err);
-      let errorMessage = "Failed to sync";
-
-      if (err?.message) {
-        const errMsg = err.message.toLowerCase();
-        if (
-          errMsg.includes("401") ||
-          errMsg.includes("unauthorized") ||
-          errMsg.includes("invalid_token") ||
-          errMsg.includes("token expired")
-        ) {
-          errorMessage =
-            "Authentication failed. Your access token may have expired. Please sign out and sign in again.";
-        } else if (
-          errMsg.includes("403") ||
-          errMsg.includes("forbidden") ||
-          errMsg.includes("permission denied")
-        ) {
-          errorMessage =
-            "Permission denied. Please make sure you granted Classroom access permissions when signing in. Sign out and sign in again, then grant all requested permissions.";
-        } else if (
-          errMsg.includes("quota") ||
-          errMsg.includes("rate") ||
-          errMsg.includes("429")
-        ) {
-          errorMessage = "API quota exceeded. Please try again later.";
-        } else if (errMsg.includes("cors") || errMsg.includes("network")) {
-          errorMessage =
-            "Network error. Please check your internet connection and try again.";
-        } else {
-          errorMessage = `Sync failed: ${err.message}`;
+        if (!isAutoSync) {
+          toast({
+            title: "Sync Complete",
+            description: `Successfully synced ${fetchedCourses.length} courses, ${allAssignments.length} assignments, and updated Google Calendar.`,
+          });
         }
-      } else if (err instanceof TypeError && err.message.includes("fetch")) {
-        errorMessage = "Network error. Please check your internet connection.";
-      }
+      } catch (err: any) {
+        console.error("Sync error details:", err);
+        let errorMessage = "Failed to sync";
 
-      setError(errorMessage);
-      console.error("Sync error:", err);
+        if (err?.message) {
+          const errMsg = err.message.toLowerCase();
+          if (
+            errMsg.includes("401") ||
+            errMsg.includes("unauthorized") ||
+            errMsg.includes("invalid_token") ||
+            errMsg.includes("token expired")
+          ) {
+            errorMessage =
+              "Authentication failed. Your access token may have expired. Please sign out and sign in again.";
+          } else if (
+            errMsg.includes("403") ||
+            errMsg.includes("forbidden") ||
+            errMsg.includes("permission denied")
+          ) {
+            errorMessage =
+              "Permission denied. Please make sure you granted Classroom access permissions when signing in. Sign out and sign in again, then grant all requested permissions.";
+          } else if (
+            errMsg.includes("quota") ||
+            errMsg.includes("rate") ||
+            errMsg.includes("429")
+          ) {
+            errorMessage = "API quota exceeded. Please try again later.";
+          } else if (errMsg.includes("cors") || errMsg.includes("network")) {
+            errorMessage =
+              "Network error. Please check your internet connection and try again.";
+          } else {
+            errorMessage = `Sync failed: ${err.message}`;
+          }
+        } else if (err instanceof TypeError && err.message.includes("fetch")) {
+          errorMessage =
+            "Network error. Please check your internet connection.";
+        }
 
-      if (!isAutoSync) {
-        toast({
-          variant: "destructive",
-          title: "Sync Failed",
-          description: errorMessage,
-        });
+        setError(errorMessage);
+        console.error("Sync error:", err);
+
+        if (!isAutoSync) {
+          toast({
+            variant: "destructive",
+            title: "Sync Failed",
+            description: errorMessage,
+          });
+        }
+      } finally {
+        setIsSyncing(false);
+        setIsLoading(false);
       }
-    } finally {
-      setIsSyncing(false);
-      setIsLoading(false);
-    }
-  }, [user, accessToken]);
+    },
+    [user, accessToken]
+  );
 
   // Auto-sync on first login if no data exists
   useEffect(() => {
@@ -1087,14 +1142,21 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       return;
     }
-    
+
     if (!hasAutoSynced && !isSyncing) {
       setHasAutoSynced(true);
       // Call syncClassroom directly without including it in dependencies
       syncClassroom(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, accessToken, hasAutoSynced, courses.length, assignments.length, isSyncing]);
+  }, [
+    user,
+    accessToken,
+    hasAutoSynced,
+    courses.length,
+    assignments.length,
+    isSyncing,
+  ]);
 
   // Persistence Effects
   useEffect(() => {
@@ -1106,16 +1168,25 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
   }, [materials]);
 
   useEffect(() => {
-    sessionStorage.setItem("classroom_notes", JSON.stringify(Array.from(notes.entries())));
+    sessionStorage.setItem(
+      "classroom_notes",
+      JSON.stringify(Array.from(notes.entries()))
+    );
   }, [notes]);
 
   useEffect(() => {
-    sessionStorage.setItem("classroom_assignments", JSON.stringify(assignments));
+    sessionStorage.setItem(
+      "classroom_assignments",
+      JSON.stringify(assignments)
+    );
   }, [assignments]);
 
   useEffect(() => {
     if (lastSyncedAt) {
-      sessionStorage.setItem("classroom_lastSyncedAt", lastSyncedAt.toISOString());
+      sessionStorage.setItem(
+        "classroom_lastSyncedAt",
+        lastSyncedAt.toISOString()
+      );
     } else {
       sessionStorage.removeItem("classroom_lastSyncedAt");
     }
