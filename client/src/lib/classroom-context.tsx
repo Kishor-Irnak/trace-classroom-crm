@@ -343,6 +343,30 @@ export async function fetchAllPages<T>(
   return allItems;
 }
 
+const COURSE_COLORS = [
+  "#FFADAD", // Pastel Red
+  "#FFD6A5", // Pastel Orange
+  "#FDFFB6", // Pastel Yellow
+  "#CAFFBF", // Pastel Green
+  "#9BF6FF", // Pastel Cyan
+  "#A0C4FF", // Pastel Blue
+  "#BDB2FF", // Pastel Purple
+  "#FFC6FF", // Pastel Pink
+  "#E0F7FA", // Cyan 50
+  "#F3E5F5", // Purple 50
+  "#E8F5E9", // Green 50
+  "#FFF3E0", // Orange 50
+];
+
+function generateCourseColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % COURSE_COLORS.length;
+  return COURSE_COLORS[index];
+}
+
 // Fetch courses from Google Classroom API
 async function fetchCourses(
   accessToken: string,
@@ -372,6 +396,7 @@ async function fetchCourses(
     courseState: gc.courseState || null,
     alternateLink: gc.alternateLink || null,
     lastSyncedAt: now,
+    color: generateCourseColor(gc.id),
   }));
 }
 
@@ -391,7 +416,6 @@ async function fetchCoursework(
     (data: GoogleCourseworkResponse) => data.nextPageToken
   );
 
-  const now = new Date().toISOString();
   const assignments: Assignment[] = [];
 
   for (const gc of googleCoursework) {
@@ -553,6 +577,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       courseState: "ACTIVE",
       alternateLink: null,
       lastSyncedAt: now.toISOString(),
+      color: generateCourseColor("gc-1"),
     },
     {
       id: "course-2",
@@ -567,6 +592,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       courseState: "ACTIVE",
       alternateLink: null,
       lastSyncedAt: now.toISOString(),
+      color: generateCourseColor("gc-2"),
     },
     {
       id: "course-3",
@@ -581,6 +607,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       courseState: "ACTIVE",
       alternateLink: null,
       lastSyncedAt: now.toISOString(),
+      color: generateCourseColor("gc-3"),
     },
     {
       id: "course-4",
@@ -595,6 +622,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       courseState: "ACTIVE",
       alternateLink: null,
       lastSyncedAt: now.toISOString(),
+      color: generateCourseColor("gc-4"),
     },
   ];
 

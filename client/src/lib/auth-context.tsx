@@ -47,6 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     try {
       setError(null);
+      // Force consent prompt to ensure all scopes are granted
+      googleProvider.setCustomParameters({
+        prompt: "consent",
+        access_type: "offline", // optional, for refresh tokens
+      });
       const result = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(
         result

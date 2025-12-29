@@ -9,7 +9,14 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -22,7 +29,7 @@ import { db } from "@/lib/firebase";
 export default function NotificationsPage() {
   const { user, requestGmailPermissions, accessToken } = useAuth();
   const { toast } = useToast();
-  
+
   // State for alerts
   const [enabled, setEnabled] = useState(false);
   const [config, setConfig] = useState({
@@ -43,11 +50,13 @@ export default function NotificationsPage() {
         if (snapshot.exists()) {
           const data = snapshot.data();
           setEnabled(data.enabled ?? false);
-          setConfig(data.config || {
-            dueReminder: true,
-            missedSubmission: true,
-            workloadWarning: false,
-          });
+          setConfig(
+            data.config || {
+              dueReminder: true,
+              missedSubmission: true,
+              workloadWarning: false,
+            }
+          );
         }
       } catch (e) {
         console.error("Failed to load settings from Firestore", e);
@@ -64,11 +73,15 @@ export default function NotificationsPage() {
       if (!user || isLoading) return; // Don't save initial state over valid data
       try {
         const docRef = doc(db, "users", user.uid, "settings", "notifications");
-        await setDoc(docRef, {
+        await setDoc(
+          docRef,
+          {
             enabled,
             config,
-            updatedAt: new Date().toISOString()
-        }, { merge: true });
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
       } catch (e) {
         console.error("Failed to save settings", e);
       }
@@ -87,20 +100,20 @@ export default function NotificationsPage() {
           title: "Email alerts enabled",
           description: "Trace can now send you academic reminders.",
         });
-        
+
         // Log the event for the Timeline
         if (user?.uid) {
-             const newEvent = {
-                 id: `email-${Date.now()}`,
-                 title: "Assignment due reminder email sent",
-                 body: "This is a test alert to confirm your notifications are working.",
-                 timestamp: new Date().toISOString(),
-                 type: "email"
-             };
-             
-             const key = `trace_email_events_${user.uid}`;
-             const existing = JSON.parse(localStorage.getItem(key) || '[]');
-             localStorage.setItem(key, JSON.stringify([...existing, newEvent]));
+          const newEvent = {
+            id: `email-${Date.now()}`,
+            title: "Assignment due reminder email sent",
+            body: "This is a test alert to confirm your notifications are working.",
+            timestamp: new Date().toISOString(),
+            type: "email",
+          };
+
+          const key = `trace_email_events_${user.uid}`;
+          const existing = JSON.parse(localStorage.getItem(key) || "[]");
+          localStorage.setItem(key, JSON.stringify([...existing, newEvent]));
         }
       } else {
         toast({
@@ -110,19 +123,19 @@ export default function NotificationsPage() {
         });
       }
     } catch (error) {
-       console.error(error);
-       toast({
-          title: "Error",
-          description: "An unexpected error occurred.",
-          variant: "destructive",
-        });
+      console.error(error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
     } finally {
       setIsConnecting(false);
     }
   };
 
   const toggleConfig = (key: keyof typeof config) => {
-    setConfig(prev => ({ ...prev, [key]: !prev[key] }));
+    setConfig((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
@@ -134,113 +147,128 @@ export default function NotificationsPage() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Notifications
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Manage how Trace notifies you about academic activity
           </p>
         </div>
       </div>
 
-      <Card className="border-border/60 shadow-sm">
+      <Card className="border-border shadow-sm">
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-lg">
             <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             Academic Email Alerts
           </CardTitle>
           <CardDescription className="max-w-lg mt-2 leading-relaxed">
-            Trace can send you helpful academic reminders directly to your connected Gmail account ({user?.email}).
+            Trace can send you helpful academic reminders directly to your
+            connected Gmail account ({user?.email}).
           </CardDescription>
         </CardHeader>
-        
+
         <Separator />
-        
+
         <CardContent className="pt-6 space-y-6">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
-              <Label className="text-base font-medium">Assignment due reminder</Label>
+              <Label className="text-base font-medium">
+                Assignment due reminder
+              </Label>
               <p className="text-sm text-muted-foreground">
                 Get an email 24 hours before an assignment is due
               </p>
             </div>
-            <Switch 
-                checked={config.dueReminder} 
-                onCheckedChange={() => toggleConfig('dueReminder')}
-                disabled={!enabled}
-                className="data-[state=checked]:bg-blue-600"
+            <Switch
+              checked={config.dueReminder}
+              onCheckedChange={() => toggleConfig("dueReminder")}
+              disabled={!enabled}
+              className="data-[state=checked]:bg-blue-600"
             />
           </div>
-          
+
           <Separator className="opacity-50" />
 
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-0.5">
-              <Label className="text-base font-medium">Missed submission alert</Label>
+              <Label className="text-base font-medium">
+                Missed submission alert
+              </Label>
               <p className="text-sm text-muted-foreground">
                 Receive a notification immediately when a deadline is missed
               </p>
             </div>
-            <Switch 
-                checked={config.missedSubmission} 
-                onCheckedChange={() => toggleConfig('missedSubmission')}
-                disabled={!enabled}
-                className="data-[state=checked]:bg-blue-600"
+            <Switch
+              checked={config.missedSubmission}
+              onCheckedChange={() => toggleConfig("missedSubmission")}
+              disabled={!enabled}
+              className="data-[state=checked]:bg-blue-600"
             />
           </div>
-          
+
           <Separator className="opacity-50" />
 
           <div className="flex items-start justify-between gap-4">
-             <div className="space-y-0.5">
-              <Label className="text-base font-medium">Heavy workload warning</Label>
+            <div className="space-y-0.5">
+              <Label className="text-base font-medium">
+                Heavy workload warning
+              </Label>
               <p className="text-sm text-muted-foreground">
                 Be notified when you have more than 3 assignments due in a week
               </p>
             </div>
-            <Switch 
-                checked={config.workloadWarning} 
-                onCheckedChange={() => toggleConfig('workloadWarning')}
-                disabled={!enabled}
-                className="data-[state=checked]:bg-blue-600"
+            <Switch
+              checked={config.workloadWarning}
+              onCheckedChange={() => toggleConfig("workloadWarning")}
+              disabled={!enabled}
+              className="data-[state=checked]:bg-blue-600"
             />
           </div>
         </CardContent>
 
         <CardFooter className="flex flex-col items-start gap-4 pt-2 pb-6 bg-muted/20 border-t">
-            {!enabled ? (
-                 <div className="w-full space-y-4">
-                    <div className="flex gap-3 p-3 text-sm text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-900/10 rounded border border-amber-200 dark:border-amber-800/30 items-start">
-                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                        <p>Alerts are currently disabled. You need to grant Trace permission to send emails on your behalf.</p>
-                    </div>
-                    <Button 
-                        onClick={handleEnableClick} 
-                        disabled={isConnecting}
-                        className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                        {isConnecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Connect Gmail & Enable Alerts
-                    </Button>
-                 </div>
-            ) : (
-                <div className="w-full space-y-4">
-                    <div className="flex gap-3 p-3 text-sm text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-900/10 rounded border border-emerald-200 dark:border-emerald-800/30 items-center">
-                        <CheckCircle className="h-4 w-4 shrink-0" />
-                        <p>Academic alerts are active.</p>
-                    </div>
-                     <Button 
-                        variant="outline"
-                        onClick={() => setEnabled(false)} 
-                        className="text-muted-foreground hover:text-foreground"
-                    >
-                        Disable Alerts
-                    </Button>
-                </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-2">
-                Emails are sent only after your consent and can be disabled anytime. We do not read your inbox.
-            </p>
+          {!enabled ? (
+            <div className="w-full space-y-4">
+              <div className="flex gap-3 p-3 text-sm text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-900/10 rounded border border-amber-200 dark:border-amber-800/30 items-start">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <p>
+                  Alerts are currently disabled. You need to grant Trace
+                  permission to send emails on your behalf.
+                </p>
+              </div>
+              <Button
+                onClick={handleEnableClick}
+                disabled={isConnecting}
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isConnecting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Connect Gmail & Enable Alerts
+              </Button>
+            </div>
+          ) : (
+            <div className="w-full space-y-4">
+              <div className="flex gap-3 p-3 text-sm text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-emerald-900/10 rounded border border-emerald-200 dark:border-emerald-800/30 items-center">
+                <CheckCircle className="h-4 w-4 shrink-0" />
+                <p>Academic alerts are active.</p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setEnabled(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Disable Alerts
+              </Button>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground mt-2">
+            Emails are sent only after your consent and can be disabled anytime.
+            We do not read your inbox.
+          </p>
         </CardFooter>
       </Card>
     </div>

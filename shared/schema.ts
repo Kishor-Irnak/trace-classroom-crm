@@ -1,10 +1,21 @@
 import { z } from "zod";
 
-export const assignmentStatusValues = ["backlog", "in_progress", "submitted", "graded", "overdue"] as const;
-export type AssignmentStatus = typeof assignmentStatusValues[number];
+export const assignmentStatusValues = [
+  "backlog",
+  "in_progress",
+  "submitted",
+  "graded",
+  "overdue",
+] as const;
+export type AssignmentStatus = (typeof assignmentStatusValues)[number];
 
-export const userStatusValues = ["backlog", "in_progress", "focus", "review"] as const;
-export type UserStatus = typeof userStatusValues[number];
+export const userStatusValues = [
+  "backlog",
+  "in_progress",
+  "focus",
+  "review",
+] as const;
+export type UserStatus = (typeof userStatusValues)[number];
 
 export const userSchema = z.object({
   id: z.string(),
@@ -33,6 +44,7 @@ export const courseSchema = z.object({
   courseState: z.string().nullable(),
   alternateLink: z.string().nullable(),
   lastSyncedAt: z.string(),
+  color: z.string().optional(),
 });
 
 export type Course = z.infer<typeof courseSchema>;
@@ -74,7 +86,11 @@ export const noteSchema = z.object({
 
 export type Note = z.infer<typeof noteSchema>;
 
-export const insertNoteSchema = noteSchema.omit({ id: true, createdAt: true, updatedAt: true });
+export const insertNoteSchema = noteSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 
 export const updateNoteSchema = noteSchema.partial().required({ id: true });

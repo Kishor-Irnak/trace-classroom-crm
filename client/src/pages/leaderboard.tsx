@@ -574,7 +574,7 @@ export default function LeaderboardPage() {
                         "flex items-center p-3 sm:p-4 rounded-xl border transition-all duration-200 group",
                         isMe
                           ? "bg-primary/5 border-primary/20 shadow-sm"
-                          : "bg-card border-border/40 hover:bg-muted/30 hover:border-border"
+                          : "bg-card border-border hover:bg-muted/30 hover:border-border"
                       )}
                     >
                       {/* Rank */}

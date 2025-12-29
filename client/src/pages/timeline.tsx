@@ -494,7 +494,7 @@ export default function TimelinePage() {
                     </span>
 
                     {/* Right Border for header cells */}
-                    <div className="absolute right-0 top-2 bottom-2 w-[1px] bg-border/50"></div>
+                    <div className="absolute right-0 top-2 bottom-2 w-[1px] bg-border"></div>
                   </div>
                 );
               })}
@@ -510,7 +510,7 @@ export default function TimelinePage() {
                     <div
                       key={i}
                       className={cn(
-                        "flex-shrink-0 h-full border-r border-border/40 relative",
+                        "flex-shrink-0 h-full border-r border-border relative",
                         isCurrentDay ? "bg-accent/50" : ""
                       )}
                       style={{ width: dayWidth }}
@@ -529,6 +529,11 @@ export default function TimelinePage() {
                 {filteredAssignments
                   .filter((a) => a.dueDate)
                   .map((assignment) => {
+                    const course = courses.find(
+                      (c) => c.id === assignment.courseId
+                    );
+                    const courseColor = course?.color;
+
                     const isCompleted =
                       assignment.systemStatus === "submitted" ||
                       assignment.systemStatus === "graded";
@@ -556,6 +561,13 @@ export default function TimelinePage() {
                     const style = {
                       left: `${left}px`,
                       width: `${width}px`,
+                      minWidth: "140px",
+                      backgroundColor: isCompleted ? undefined : courseColor,
+                      borderColor: isCompleted
+                        ? undefined
+                        : courseColor
+                        ? "rgba(0,0,0,0.1)"
+                        : undefined,
                     };
 
                     const statusConfig =
@@ -565,21 +577,19 @@ export default function TimelinePage() {
                     const completedStyle =
                       "bg-green-100/80 border-green-300 text-green-800";
 
+                    const defaultStyle =
+                      "bg-card border shadow-sm " +
+                      (courseColor ? "text-slate-900" : "text-foreground");
+
                     return (
                       <div key={assignment.id} className="relative h-14 group">
                         <div
                           onClick={() => setSelectedAssignment(assignment)}
                           className={cn(
-                            "absolute top-0 h-12 rounded-lg border shadow-sm transition-all cursor-pointer flex flex-col justify-center px-3 overflow-hidden group hover:scale-[1.01] z-10 hover:z-30 hover:shadow-md",
-                            isCompleted
-                              ? completedStyle
-                              : statusConfig.timelineStyle
+                            "absolute top-0 h-12 rounded-lg border transition-all cursor-pointer flex flex-col justify-center px-3 overflow-hidden group hover:scale-[1.01] z-10 hover:z-30 hover:shadow-md",
+                            isCompleted ? completedStyle : defaultStyle
                           )}
-                          style={{
-                            left: style.left,
-                            width: style.width,
-                            minWidth: "140px",
-                          }}
+                          style={style}
                         >
                           <div className="flex items-center justify-between gap-2 mb-0.5">
                             <span className="truncate text-xs font-bold leading-none flex items-center gap-1">

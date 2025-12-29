@@ -75,7 +75,6 @@ function SettingsSkeleton() {
       ))}
     </div>
   );
-
 }
 
 const LOADING_TIPS = [
@@ -152,8 +151,6 @@ function EnhancedLoadingScreen() {
   );
 }
 
-
-
 interface CalendarIntegrationSettings {
   enabled: boolean;
   syncAssignments: boolean;
@@ -166,20 +163,24 @@ interface CalendarIntegrationSettings {
 function IntegrationsTabContent() {
   const { user, requestCalendarPermissions } = useAuth();
   const [isConnecting, setIsConnecting] = useState(false);
-  const [calendarSettings, setCalendarSettings] = useState<CalendarIntegrationSettings>({
-    enabled: false,
-    syncAssignments: true,
-    syncExams: true,
-    syncPersonal: false,
-  });
+  const [calendarSettings, setCalendarSettings] =
+    useState<CalendarIntegrationSettings>({
+      enabled: false,
+      syncAssignments: true,
+      syncExams: true,
+      syncPersonal: false,
+    });
 
   useEffect(() => {
     if (!user) return;
-    const unsubscribe = onSnapshot(doc(db, "users", user.uid, "settings", "calendar"), (snapshot) => {
-      if (snapshot.exists()) {
-        setCalendarSettings(snapshot.data() as CalendarIntegrationSettings);
+    const unsubscribe = onSnapshot(
+      doc(db, "users", user.uid, "settings", "calendar"),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          setCalendarSettings(snapshot.data() as CalendarIntegrationSettings);
+        }
       }
-    });
+    );
     return () => unsubscribe();
   }, [user]);
 
@@ -188,11 +189,15 @@ function IntegrationsTabContent() {
     try {
       const success = await requestCalendarPermissions();
       if (success) {
-        await setDoc(doc(db, "users", user!.uid, "settings", "calendar"), {
-          ...calendarSettings,
-          enabled: true,
-          connectedAt: new Date(),
-        }, { merge: true });
+        await setDoc(
+          doc(db, "users", user!.uid, "settings", "calendar"),
+          {
+            ...calendarSettings,
+            enabled: true,
+            connectedAt: new Date(),
+          },
+          { merge: true }
+        );
       }
     } catch (error) {
       console.error(error);
@@ -202,21 +207,32 @@ function IntegrationsTabContent() {
   };
 
   const handleDisconnectCalendar = async () => {
-     try {
-        await setDoc(doc(db, "users", user!.uid, "settings", "calendar"), {
+    try {
+      await setDoc(
+        doc(db, "users", user!.uid, "settings", "calendar"),
+        {
           enabled: false,
-        }, { merge: true });
-     } catch (error) {
-         console.error(error);
-     }
+        },
+        { merge: true }
+      );
+    } catch (error) {
+      console.error(error);
+    }
   };
 
-  const updateCalendarSetting = async (key: keyof CalendarIntegrationSettings, value: boolean) => {
-    setCalendarSettings(prev => ({ ...prev, [key]: value }));
+  const updateCalendarSetting = async (
+    key: keyof CalendarIntegrationSettings,
+    value: boolean
+  ) => {
+    setCalendarSettings((prev) => ({ ...prev, [key]: value }));
     try {
-      await setDoc(doc(db, "users", user!.uid, "settings", "calendar"), {
-        [key]: value
-      }, { merge: true });
+      await setDoc(
+        doc(db, "users", user!.uid, "settings", "calendar"),
+        {
+          [key]: value,
+        },
+        { merge: true }
+      );
     } catch (error) {
       console.error(error);
     }
@@ -225,86 +241,118 @@ function IntegrationsTabContent() {
   return (
     <div className="space-y-6">
       {/* Google Calendar Card */}
-      <Card className={`rounded-md border shadow-sm transition-all duration-200 ${calendarSettings.enabled ? "ring-1 ring-zinc-200 dark:ring-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50" : "hover:border-zinc-300 dark:hover:border-zinc-700"}`}>
+      <Card
+        className={`rounded-md border shadow-sm transition-all duration-200 ${
+          calendarSettings.enabled
+            ? "ring-1 ring-zinc-200 dark:ring-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50"
+            : "hover:border-zinc-300 dark:hover:border-zinc-700"
+        }`}
+      >
         <div className="p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-6">
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-foreground shrink-0 border border-border/50">
+              <div className="h-10 w-10 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-foreground shrink-0 border border-border">
                 <Calendar className="h-5 w-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                   <h3 className="text-base font-semibold text-foreground">Google Calendar</h3>
-                   {calendarSettings.enabled && (
-                    <Badge variant="outline" className="rounded-sm px-1.5 py-0 text-[10px] font-medium bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 border-zinc-200 dark:border-zinc-700">
+                  <h3 className="text-base font-semibold text-foreground">
+                    Google Calendar
+                  </h3>
+                  {calendarSettings.enabled && (
+                    <Badge
+                      variant="outline"
+                      className="rounded-sm px-1.5 py-0 text-[10px] font-medium bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 border-zinc-200 dark:border-zinc-700"
+                    >
                       Active
                     </Badge>
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                   Sync deadlines and exams directly to your calendar.
+                  Sync deadlines and exams directly to your calendar.
                 </p>
               </div>
             </div>
           </div>
-          
+
           <div className="shrink-0 flex items-center gap-2">
-          {calendarSettings.enabled ? (
-               <Button variant="ghost" size="sm" onClick={handleDisconnectCalendar} className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md h-9 px-4">
-                  Disconnect
-               </Button>
-          ) : (
-              <Button 
-                  onClick={handleConnectCalendar} 
-                  disabled={isConnecting}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-md h-9 px-4 shadow-sm w-full sm:w-auto"
+            {calendarSettings.enabled ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDisconnectCalendar}
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md h-9 px-4"
               >
-                  {isConnecting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : "Connect"}
+                Disconnect
               </Button>
-          )}
+            ) : (
+              <Button
+                onClick={handleConnectCalendar}
+                disabled={isConnecting}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-md h-9 px-4 shadow-sm w-full sm:w-auto"
+              >
+                {isConnecting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  "Connect"
+                )}
+              </Button>
+            )}
           </div>
         </div>
 
         {calendarSettings.enabled && (
           <div className="px-6 pb-6 pt-0 animate-in slide-in-from-top-2 duration-300">
-            <div className="h-px w-full bg-border/50 mb-6" />
-            
-            <div className="space-y-4 pl-[3.25rem]"> {/* Indent to align with text */}
+            <div className="h-px w-full bg-border mb-6" />
+
+            <div className="space-y-4 pl-[3.25rem]">
+              {" "}
+              {/* Indent to align with text */}
               <div className="grid gap-3 max-w-xl">
-                 <div className="flex items-center justify-between p-3 rounded-md border border-border/50 bg-background/50 hover:bg-accent/5 transition-colors">
-                   <div className="space-y-0.5">
-                     <label className="text-sm font-medium text-foreground">
-                       Assignment Deadlines
-                     </label>
-                     <p className="text-xs text-muted-foreground">
-                       Create events for assignment due dates
-                     </p>
-                   </div>
-                   <Switch 
-                      checked={calendarSettings.syncAssignments}
-                      onCheckedChange={(c) => updateCalendarSetting('syncAssignments', c)}
-                   />
-                 </div>
+                <div className="flex items-center justify-between p-3 rounded-md border border-border bg-background/50 hover:bg-accent/5 transition-colors">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-medium text-foreground">
+                      Assignment Deadlines
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Create events for assignment due dates
+                    </p>
+                  </div>
+                  <Switch
+                    checked={calendarSettings.syncAssignments}
+                    onCheckedChange={(c) =>
+                      updateCalendarSetting("syncAssignments", c)
+                    }
+                  />
+                </div>
 
-                 <div className="flex items-center justify-between p-3 rounded-md border border-border/50 bg-background/50 hover:bg-accent/5 transition-colors">
-                   <div className="space-y-0.5">
-                     <label className="text-sm font-medium text-foreground">
-                       Exams
-                     </label>
-                     <p className="text-xs text-muted-foreground">
-                       Create events for scheduled exams
-                     </p>
-                   </div>
-                   <Switch 
-                      checked={calendarSettings.syncExams}
-                      onCheckedChange={(c) => updateCalendarSetting('syncExams', c)}
-                   />
-                 </div>
+                <div className="flex items-center justify-between p-3 rounded-md border border-border bg-background/50 hover:bg-accent/5 transition-colors">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-medium text-foreground">
+                      Exams
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Create events for scheduled exams
+                    </p>
+                  </div>
+                  <Switch
+                    checked={calendarSettings.syncExams}
+                    onCheckedChange={(c) =>
+                      updateCalendarSetting("syncExams", c)
+                    }
+                  />
+                </div>
               </div>
-
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <RefreshCw className="h-3 w-3" />
-                  <span>Last synced: {calendarSettings.lastSyncedAt ? new Date(calendarSettings.lastSyncedAt.seconds * 1000).toLocaleString() : 'Pending...'}</span>
+                <RefreshCw className="h-3 w-3" />
+                <span>
+                  Last synced:{" "}
+                  {calendarSettings.lastSyncedAt
+                    ? new Date(
+                        calendarSettings.lastSyncedAt.seconds * 1000
+                      ).toLocaleString()
+                    : "Pending..."}
+                </span>
               </div>
             </div>
           </div>
@@ -316,11 +364,13 @@ function IntegrationsTabContent() {
         <div className="p-6 flex flex-col sm:flex-row sm:items-start justify-between gap-6">
           <div className="flex-1 space-y-2">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-foreground shrink-0 border border-border/50">
+              <div className="h-10 w-10 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-foreground shrink-0 border border-border">
                 <Mail className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-foreground">Notifications</h3>
+                <h3 className="text-base font-semibold text-foreground">
+                  Notifications
+                </h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   Manage email alerts for due assignments and updates.
                 </p>
@@ -329,8 +379,12 @@ function IntegrationsTabContent() {
           </div>
           <div className="shrink-0">
             <Link href="/settings/notifications">
-              <Button variant="outline" size="sm" className="rounded-md h-9 px-4 w-full sm:w-auto">
-                 Configure
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-md h-9 px-4 w-full sm:w-auto"
+              >
+                Configure
               </Button>
             </Link>
           </div>
@@ -348,8 +402,6 @@ export default function SettingsPage() {
   const [backgroundSync, setBackgroundSync] = useState(true);
   const [timezone, setTimezone] = useState("auto");
   const [isInstalling, setIsInstalling] = useState(false);
-
-
 
   const initials =
     user?.displayName
@@ -391,7 +443,10 @@ export default function SettingsPage() {
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in">
+        <TabsContent
+          value="general"
+          className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in"
+        >
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Connected Account</CardTitle>
@@ -443,15 +498,15 @@ export default function SettingsPage() {
                   data-testid="button-sync-settings"
                 >
                   <RefreshCw
-                    className={`h-4 w-4 mr-2 ${isSyncing ? "animate-spin" : ""}`}
+                    className={`h-4 w-4 mr-2 ${
+                      isSyncing ? "animate-spin" : ""
+                    }`}
                   />
                   {isSyncing ? "Syncing..." : "Sync Now"}
                 </Button>
               </div>
             </CardContent>
           </Card>
-
-
 
           <Card>
             <CardHeader>
@@ -463,7 +518,10 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label htmlFor="background-sync" className="text-sm font-medium">
+                  <Label
+                    htmlFor="background-sync"
+                    className="text-sm font-medium"
+                  >
                     Background Sync
                   </Label>
                   <p className="text-xs text-muted-foreground">
@@ -483,7 +541,9 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Theme</CardTitle>
-              <CardDescription>Choose your preferred color theme</CardDescription>
+              <CardDescription>
+                Choose your preferred color theme
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
@@ -526,8 +586,8 @@ export default function SettingsPage() {
                 Install App
               </CardTitle>
               <CardDescription>
-                Install this app on your device for quick access - works on phones
-                and desktops
+                Install this app on your device for quick access - works on
+                phones and desktops
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -539,8 +599,8 @@ export default function SettingsPage() {
                       App Installed
                     </p>
                     <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                      This app is installed on your device. You can access it from
-                      your home screen.
+                      This app is installed on your device. You can access it
+                      from your home screen.
                     </p>
                   </div>
                 </div>
@@ -551,8 +611,8 @@ export default function SettingsPage() {
                     <div className="flex-1">
                       <p className="text-sm font-medium">Install Available</p>
                       <p className="text-xs text-muted-foreground">
-                        Click the button below to install this app on your device
-                        for a better experience.
+                        Click the button below to install this app on your
+                        device for a better experience.
                       </p>
                     </div>
                   </div>
@@ -567,8 +627,8 @@ export default function SettingsPage() {
                     {isInstalling ? "Installing..." : "Install App"}
                   </Button>
                   <p className="text-xs text-center text-muted-foreground">
-                    After installation, you can access the app from your home screen
-                    or app drawer
+                    After installation, you can access the app from your home
+                    screen or app drawer
                   </p>
                 </div>
               ) : (
@@ -576,7 +636,9 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-3 p-4 bg-muted rounded-lg">
                     <AlertTriangle className="h-5 w-5 text-muted-foreground" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium">Install Not Available</p>
+                      <p className="text-sm font-medium">
+                        Install Not Available
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {typeof window !== "undefined" &&
                         window.matchMedia("(display-mode: standalone)").matches
@@ -586,14 +648,17 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div className="p-3 bg-muted/50 rounded-lg">
-                    <p className="text-xs font-medium mb-2">Manual Installation:</p>
+                    <p className="text-xs font-medium mb-2">
+                      Manual Installation:
+                    </p>
                     <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
                       <li>
-                        <strong>Chrome/Edge:</strong> Click the install icon in the
-                        address bar
+                        <strong>Chrome/Edge:</strong> Click the install icon in
+                        the address bar
                       </li>
                       <li>
-                        <strong>iOS Safari:</strong> Tap Share → Add to Home Screen
+                        <strong>iOS Safari:</strong> Tap Share → Add to Home
+                        Screen
                       </li>
                       <li>
                         <strong>Android Chrome:</strong> Tap Menu → Install App
@@ -629,9 +694,15 @@ export default function SettingsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="auto">Auto-detect</SelectItem>
-                    <SelectItem value="America/New_York">Eastern Time</SelectItem>
-                    <SelectItem value="America/Chicago">Central Time</SelectItem>
-                    <SelectItem value="America/Denver">Mountain Time</SelectItem>
+                    <SelectItem value="America/New_York">
+                      Eastern Time
+                    </SelectItem>
+                    <SelectItem value="America/Chicago">
+                      Central Time
+                    </SelectItem>
+                    <SelectItem value="America/Denver">
+                      Mountain Time
+                    </SelectItem>
                     <SelectItem value="America/Los_Angeles">
                       Pacific Time
                     </SelectItem>
@@ -650,9 +721,7 @@ export default function SettingsPage() {
                 <LogOut className="h-4 w-4" />
                 Account Actions
               </CardTitle>
-              <CardDescription>
-                Manage your session
-              </CardDescription>
+              <CardDescription>Manage your session</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
@@ -675,14 +744,20 @@ export default function SettingsPage() {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogTitle>
+                        Are you absolutely sure?
+                      </AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will sign you out of your account. You will need to sign in again to access your data.
+                        This will sign you out of your account. You will need to
+                        sign in again to access your data.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={signOut} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      <AlertDialogAction
+                        onClick={signOut}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
                         Sign Out
                       </AlertDialogAction>
                     </AlertDialogFooter>
@@ -693,8 +768,11 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="integrations" className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in">
-           <IntegrationsTabContent />
+        <TabsContent
+          value="integrations"
+          className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in"
+        >
+          <IntegrationsTabContent />
         </TabsContent>
       </Tabs>
     </div>
