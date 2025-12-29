@@ -232,8 +232,14 @@ const isToday = (date: Date) => {
 // --- Main Page Component ---
 
 export default function TimelinePage() {
-  const { getTimelineGroups, courses, isLoading, isSyncing, assignments, syncClassroom } =
-    useClassroom();
+  const {
+    getTimelineGroups,
+    courses,
+    isLoading,
+    isSyncing,
+    assignments,
+    syncClassroom,
+  } = useClassroom();
   const { user, signOut } = useAuth();
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
@@ -242,38 +248,38 @@ export default function TimelinePage() {
   const [currentView, setCurrentView] = useState<"timeline" | "calendar">(
     "timeline"
   );
-  
+
   const [emailEvents, setEmailEvents] = useState<Assignment[]>([]);
 
   useEffect(() => {
     if (!user) return;
     try {
-        const key = `trace_email_events_${user.uid}`;
-        const events = JSON.parse(localStorage.getItem(key) || '[]');
-        // Map to Assignment shape
-        const mapped = events.map((e: any) => ({
-            id: e.id,
-            uniqueId: e.id,
-            userId: user.uid,
-            courseId: 'system',
-            courseName: 'System', 
-            classroomId: 'system',
-            title: e.title,
-            description: e.body,
-            dueDate: e.timestamp,
-            dueTime: null,
-            maxPoints: null,
-            systemStatus: 'submitted', // Visual hack: 'submitted' = purple
-            userStatus: null,
-            submissionId: null,
-            submittedAt: null,
-            gradedAt: null,
-            grade: null,
-            alternateLink: null,
-            createdAt: e.timestamp,
-            lastSyncedAt: e.timestamp
-        }));
-        setEmailEvents(mapped);
+      const key = `trace_email_events_${user.uid}`;
+      const events = JSON.parse(localStorage.getItem(key) || "[]");
+      // Map to Assignment shape
+      const mapped = events.map((e: any) => ({
+        id: e.id,
+        uniqueId: e.id,
+        userId: user.uid,
+        courseId: "system",
+        courseName: "System",
+        classroomId: "system",
+        title: e.title,
+        description: e.body,
+        dueDate: e.timestamp,
+        dueTime: null,
+        maxPoints: null,
+        systemStatus: "submitted", // Visual hack: 'submitted' = purple
+        userStatus: null,
+        submissionId: null,
+        submittedAt: null,
+        gradedAt: null,
+        grade: null,
+        alternateLink: null,
+        createdAt: e.timestamp,
+        lastSyncedAt: e.timestamp,
+      }));
+      setEmailEvents(mapped);
     } catch (e) {}
   }, [user]);
 
@@ -297,15 +303,17 @@ export default function TimelinePage() {
 
   // UPDATED: Now returns EnhancedLoadingScreen
 
-
   if (assignments.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
         <div className="text-center space-y-2">
-           <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
-          <h2 className="text-lg font-medium text-destructive">Troubleshooting</h2>
+          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+          <h2 className="text-lg font-medium text-destructive">
+            Troubleshooting
+          </h2>
           <p className="text-sm text-muted-foreground max-w-md">
-            It seems data isn't fetching correctly. Please log out and log in again to resolve this.
+            It seems data isn't fetching correctly. Please log out and log in
+            again to resolve this.
           </p>
         </div>
         <Button
@@ -461,7 +469,9 @@ export default function TimelinePage() {
                     <span
                       className={cn(
                         "text-[10px] uppercase font-bold tracking-wider mb-1",
-                        isCurrentDay ? "text-foreground" : "text-muted-foreground"
+                        isCurrentDay
+                          ? "text-foreground"
+                          : "text-muted-foreground"
                       )}
                     >
                       {date.toLocaleDateString("en-US", { weekday: "narrow" })}
@@ -534,9 +544,11 @@ export default function TimelinePage() {
                             minWidth: "140px",
                           }}
                         >
-                            <div className="flex items-center justify-between gap-2 mb-0.5">
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
                             <span className="truncate text-xs font-bold leading-none flex items-center gap-1">
-                              {assignment.courseId === 'system' && <Mail className="h-3 w-3 inline-block" />}
+                              {assignment.courseId === "system" && (
+                                <Mail className="h-3 w-3 inline-block" />
+                              )}
                               {assignment.title}
                             </span>
                           </div>
@@ -784,7 +796,7 @@ export default function TimelinePage() {
                           <span
                             className={cn(
                               "text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full mb-1",
-                              isToday
+                              isToday && day.isCurrentMonth
                                 ? "bg-primary text-primary-foreground shadow-sm"
                                 : "text-foreground"
                             )}
@@ -913,26 +925,31 @@ export default function TimelinePage() {
               Clear filters
             </Button>
           )}
-          
+
           <div className="ml-auto">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link href="/settings/integrations">
-                        <Button variant="outline" size="sm" className="gap-2 border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900 transition-all font-medium whitespace-nowrap">
-                            <FcGoogle className="h-4 w-4" />
-                            Sync with Google Calendar
-                        </Button>
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="left" className="max-w-xs">
-                    <p className="font-medium">Google Calendar Sync</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Automatically sync your assignments and exam deadlines to your Google Calendar.
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/settings/integrations">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900 transition-all font-medium whitespace-nowrap"
+                    >
+                      <FcGoogle className="h-4 w-4" />
+                      Sync with Google Calendar
+                    </Button>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="max-w-xs">
+                  <p className="font-medium">Google Calendar Sync</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Automatically sync your assignments and exam deadlines to
+                    your Google Calendar.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
