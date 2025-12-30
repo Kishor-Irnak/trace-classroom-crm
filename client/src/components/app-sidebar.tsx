@@ -10,6 +10,7 @@ import {
   Moon,
   Sun,
   Trophy,
+  UserCheck, // Added
 } from "lucide-react";
 import { useTheme } from "@/lib/theme-context";
 import {
@@ -33,6 +34,7 @@ const navItems = [
   { path: "/", label: "Pipeline", icon: LayoutGrid },
   { path: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { path: "/timeline", label: "Timeline", icon: Calendar },
+  { path: "/attendance", label: "Attendance", icon: UserCheck }, // Added
   { path: "/notes", label: "Notes", icon: FileText },
 ];
 
@@ -60,7 +62,11 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
     <div className="flex flex-col h-full bg-background">
       {/* Brand */}
       <div className="h-16 flex items-center px-6 border-b shrink-0">
-        <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Trace" className="w-8 h-8 mr-3" />
+        <img
+          src={`${import.meta.env.BASE_URL}logo.png`}
+          alt="Trace"
+          className="w-8 h-8 mr-3"
+        />
         <span className="font-bold text-lg tracking-tight">Trace</span>
         {isMobile && (
           <button className="ml-auto" onClick={onMobileClose}>
@@ -129,9 +135,9 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
           className="w-full flex items-center px-3 py-2 text-sm font-medium text-muted-foreground rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
         >
           {theme === "dark" ? (
-             <Sun className="w-4 h-4 mr-3" />
+            <Sun className="w-4 h-4 mr-3" />
           ) : (
-             <Moon className="w-4 h-4 mr-3" />
+            <Moon className="w-4 h-4 mr-3" />
           )}
           {theme === "dark" ? "Light Mode" : "Dark Mode"}
         </button>
@@ -149,12 +155,10 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
           <Settings className="w-4 h-4 mr-3" />
           Settings
         </Link>
-        
+
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <button
-              className="w-full flex items-center px-3 py-2 text-sm font-medium text-destructive rounded-md hover:bg-destructive/10 transition-colors"
-            >
+            <button className="w-full flex items-center px-3 py-2 text-sm font-medium text-destructive rounded-md hover:bg-destructive/10 transition-colors">
               <LogOut className="w-4 h-4 mr-3" />
               Sign Out
             </button>
@@ -163,12 +167,16 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
             <AlertDialogHeader>
               <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will sign you out of your account. You will need to sign in again to access your data.
+                This will sign you out of your account. You will need to sign in
+                again to access your data.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={signOut} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              <AlertDialogAction
+                onClick={signOut}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
                 Sign Out
               </AlertDialogAction>
             </AlertDialogFooter>

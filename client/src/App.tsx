@@ -18,6 +18,7 @@ import SettingsPage from "@/pages/settings";
 import NotificationsPage from "@/pages/notifications";
 import IntegrationsPage from "@/pages/integrations";
 import LeaderboardPage from "@/pages/leaderboard";
+import AttendancePage from "@/pages/attendance"; // Added
 import NotFound from "@/pages/not-found";
 
 // Get base path from Vite's BASE_URL
@@ -55,6 +56,8 @@ function AuthenticatedApp() {
               <Route path="/timeline" component={TimelinePage} />
               <Route path="/dashboard" component={DashboardPage} />
               <Route path="/notes" component={NotesPage} />
+              <Route path="/attendance" component={AttendancePage} />{" "}
+              {/* Added */}
               <Route path="/settings" component={SettingsPage} />
               <Route
                 path="/settings/notifications"
