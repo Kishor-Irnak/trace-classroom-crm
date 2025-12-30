@@ -48,7 +48,7 @@ export function EnhancedLoadingScreen({
   }, []);
 
   return (
-    <div className="relative h-full w-full bg-background overflow-hidden flex flex-col">
+    <div className="relative h-screen w-full bg-background overflow-hidden flex flex-col">
       {/* Background Structure (Blurred Skeleton) */}
       {/* Background Structure (Blurred Skeleton or Pattern) */}
       {children ? (
