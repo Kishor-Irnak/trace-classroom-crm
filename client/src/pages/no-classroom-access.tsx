@@ -1,4 +1,11 @@
-import { LogOut, UserCircle } from "lucide-react";
+import {
+  LogOut,
+  UserCircle,
+  BarChart3,
+  BookOpen,
+  Brain,
+  Calendar,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -39,19 +46,21 @@ export default function NoClassroomAccessPage() {
               What Trace Provides
             </h4>
             <ul className="text-sm space-y-2 text-foreground/80">
-              <li className="flex items-start gap-2">
-                <span className="text-primary">📊</span> Live attendance
-                tracking
+              <li className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-primary shrink-0" /> Live
+                attendance tracking
               </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary">📘</span> Course-wise insights
+              <li className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-primary shrink-0" />{" "}
+                Course-wise insights
               </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary">🧠</span> Safe bunk & eligibility
-                predictions
+              <li className="flex items-center gap-2">
+                <Brain className="w-4 h-4 text-primary shrink-0" /> Safe bunk &
+                eligibility predictions
               </li>
-              <li className="flex items-start gap-2">
-                <span className="text-primary">📅</span> Exam & deadline alerts
+              <li className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-primary shrink-0" /> Exam &
+                deadline alerts
               </li>
             </ul>
           </div>

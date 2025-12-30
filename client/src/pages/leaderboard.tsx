@@ -32,6 +32,8 @@ import {
   AlertCircle,
   Info,
   X,
+  Sparkles,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +63,7 @@ export default function LeaderboardPage() {
   );
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [showHelp, setShowHelp] = useState(true);
+  const [showCollegeWarning, setShowCollegeWarning] = useState(true);
 
   // Historical Sync States
   const [isScanning, setIsScanning] = useState(false);
@@ -95,9 +98,14 @@ export default function LeaderboardPage() {
       studentMap.forEach((student) => {
         // 1. Data Preparation
         const studentEmail = student.email || "";
-        const studentDomain =
-          student.emailDomain ||
-          (studentEmail.includes("@") ? studentEmail.split("@")[1] : "");
+        // Try multiple sources for domain: emailDomain field, extract from email, or empty
+        let studentDomain = student.emailDomain || "";
+
+        // If no emailDomain but we have an email, extract it
+        if (!studentDomain && studentEmail.includes("@")) {
+          studentDomain = studentEmail.split("@")[1];
+        }
+
         const studentSubjects = student.enrolledCourseIds || [];
         // Note: 'student' already has the data structure from Firestore
 
@@ -123,11 +131,16 @@ export default function LeaderboardPage() {
         const isProvenClassmate = hasCommonSubject || hasSharedAssignment;
 
         if (viewMode === "college") {
-          // COLLEGE VIEW:
-          // 1. Strict Domain Match (Modern users)
-          // 2. OR Legacy Users who are Proven Classmates.
-          //    (Fixes empty leaderboard for old data while maintaining fairness)
-          shouldShow = isSameDomain || (isLegacyUser && isProvenClassmate);
+          // COLLEGE VIEW: Show ALL students from the same email domain
+          // This is for fun/entertainment, not academic fairness
+          shouldShow = !!isSameDomain;
+
+          // Debug logging
+          if (student.id === user?.uid || isSameDomain) {
+            console.log(
+              `[College Filter] Student: ${student.displayName}, Domain: ${studentDomain}, User Domain: ${userDomain}, Match: ${isSameDomain}`
+            );
+          }
         } else {
           // CLASS VIEW (Default):
           // 1. Strict: Same Domain AND Shared Subject
@@ -225,7 +238,6 @@ export default function LeaderboardPage() {
       }
 
       const isCompleted =
-        assignment.userStatus === "submitted" ||
         assignment.systemStatus === "submitted" ||
         assignment.systemStatus === "graded";
 
@@ -410,6 +422,43 @@ export default function LeaderboardPage() {
                     </span>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* College View Disclaimer */}
+          {viewMode === "college" && showCollegeWarning && (
+            <div className="relative overflow-hidden bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent rounded-xl border border-amber-500/20 p-4 sm:p-5 flex flex-col sm:flex-row gap-3 sm:gap-5 text-sm animate-in fade-in slide-in-from-top-2 shadow-sm">
+              <div className="absolute top-0 right-0 p-2 sm:p-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600/50 hover:text-amber-700 hover:bg-amber-500/10 rounded-full transition-colors"
+                  onClick={() => setShowCollegeWarning(false)}
+                >
+                  <X className="h-3 w-3 sm:h-4 sm:w-4" />
+                </Button>
+              </div>
+              <div className="bg-background/60 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl h-fit w-fit border border-amber-500/30 shadow-sm shrink-0 sm:mt-1 ring-4 ring-amber-500/10">
+                <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-500" />
+              </div>
+
+              <div className="space-y-2 pt-0.5 pr-4 sm:pr-8">
+                <h4 className="font-bold text-foreground leading-none tracking-tight text-sm sm:text-base flex items-center gap-1.5">
+                  College Leaderboard - For Fun Only!
+                  <Sparkles className="h-4 w-4 text-amber-500 fill-amber-500/20" />
+                </h4>
+                <p className="text-muted-foreground text-xs sm:text-sm leading-relaxed">
+                  This leaderboard shows all students from your college.
+                  <span className="block mt-1.5 text-amber-700 dark:text-amber-400 font-medium flex items-start gap-1">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>
+                      Note: This is NOT a fair competition! Different classes
+                      have different subjects, assignments, and workloads.
+                      Rankings are purely for entertainment.
+                    </span>
+                  </span>
+                </p>
               </div>
             </div>
           )}

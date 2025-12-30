@@ -88,7 +88,7 @@ async function syncToGoogleCalendar(
 
     // Default to All Day Event for deadlines
     const eventResource: any = {
-      summary: `📚 ${assignment.title}`,
+      summary: `[Trace] ${assignment.title}`,
       description: `Course: ${assignment.courseName}\n${
         assignment.description || ""
       }\n\nSynced via Student Sphere`,
@@ -1073,7 +1073,7 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
 
                   const emailBody = `
                          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                           <h2 style="color: #2563eb;">📚 Daily Digest</h2>
+                           <h2 style="color: #2563eb;">Daily Digest</h2>
                            <p>You have <strong>${upcoming.length} assignments</strong> coming up in the next 24 hours:</p>
                            <ul style="line-height: 1.6;">${listItems}</ul>
                            <a href="http://localhost:3000" style="display: inline-block; background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px;">Open Student Sphere</a>
