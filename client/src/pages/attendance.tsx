@@ -9,10 +9,21 @@ import {
   BookOpen,
   ArrowUpRight,
   MoreHorizontal,
+  Lock,
+  EyeOff,
+  KeyRound,
+  AlertTriangle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter,
+} from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -24,73 +35,56 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { useClassroom } from "@/lib/classroom-context";
+import { useAuth } from "@/lib/auth-context";
+import {
+  AttendanceService,
+  CourseAttendanceData,
+  CourseAttendanceConfig,
+} from "@/services/attendance-service";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 
-// --- Mock Data Types ---
+// --- Types ---
+type CourseStateStr =
+  | "loading"
+  | "hidden"
+  | "locked"
+  | "loaded"
+  | "error"
+  | "no-config";
 
-interface SubjectAttendance {
-  id: string;
-  name: string;
-  code: string;
-  attended: number;
-  total: number;
-  lastUpdated: string;
+interface EnrichedCourseData {
+  courseId: string;
+  state: CourseStateStr;
+  error?: string;
+  data?: CourseAttendanceData;
 }
 
-interface AttendanceRecord {
-  id: string;
-  date: string;
-  status: "Present" | "Absent";
-  type: "Lecture" | "Practical" | "Tutorial";
-}
-
-const INSIGHTS = [
-  {
-    title: "Critical",
-    value: "DBMS",
-    desc: "Attendance below 70%",
-    risk: "high",
-  },
-  {
-    title: "Safe",
-    value: "CN",
-    desc: "Above 85% requirement",
-    risk: "low",
-  },
-  {
-    title: "Trend",
-    value: "+4%",
-    desc: "Overall improvement",
-    risk: "safe",
-  },
-];
-
-// Fallback mock subjects
-const MOCK_SUBJECTS: SubjectAttendance[] = [
-  {
-    id: "sub-1",
-    name: "Data Structures & Algorithms",
-    code: "CS301",
-    attended: 36,
-    total: 42,
-    lastUpdated: "Today",
-  },
-  {
-    id: "sub-2",
-    name: "Database Management Systems",
-    code: "CS302",
-    attended: 28,
-    total: 45,
-    lastUpdated: "Yesterday",
-  },
-];
-
-// Helper to calculate percentage and color
+// --- Helper Stats ---
 const getStats = (attended: number, total: number) => {
+  if (total === 0)
+    return {
+      percentage: 0,
+      status: "safe",
+      color: "text-muted-foreground",
+      progressColor: "bg-muted",
+    };
+
   const percentage = Math.round((attended / total) * 100);
   let status: "safe" | "warning" | "danger" = "safe";
   let color =
@@ -112,69 +106,193 @@ const getStats = (attended: number, total: number) => {
   return { percentage, status, color, progressColor };
 };
 
-const generateRecords = (subjectId: string): AttendanceRecord[] => {
-  return Array.from({ length: 15 }).map((_, i) => ({
-    id: `${subjectId}-rec-${i}`,
-    date: new Date(Date.now() - i * 86400000 * 2).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    }),
-    status: Math.random() > 0.2 ? "Present" : "Absent",
-    type: Math.random() > 0.3 ? "Lecture" : "Practical",
-  }));
-};
-
 export default function AttendancePage() {
   const { courses } = useClassroom();
+  const { accessToken, user } = useAuth();
+  const { toast } = useToast();
+
   const [selectedSubject, setSelectedSubject] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [courseStates, setCourseStates] = useState<
+    Record<string, EnrichedCourseData>
+  >({});
+  const [unlockKey, setUnlockKey] = useState("");
+  const [unlockingCourseId, setUnlockingCourseId] = useState<string | null>(
+    null
+  );
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const subjects: SubjectAttendance[] = useMemo(() => {
-    if (!courses || courses.length === 0) return MOCK_SUBJECTS;
+  // Initialize course states
+  useEffect(() => {
+    if (!courses) return;
 
-    return courses.map((course, index) => {
-      const total = 30 + ((index * 7) % 20);
-      const attended = Math.floor(total * (0.6 + ((index * 3) % 40) / 100));
-      return {
-        id: course.id,
-        name: course.name,
-        code: course.section || `SEC-${index + 1}`,
-        attended,
-        total,
-        lastUpdated: index % 2 === 0 ? "Today" : "Yesterday",
-      };
-    });
+    const initCourses = async () => {
+      // Parallel fetch configs
+      const results = await Promise.all(
+        courses.map(async (c) => {
+          // If already loaded successfully, don't overwrite with initial state unless forcing refresh
+          if (courseStates[c.id]?.state === "loaded") {
+            return courseStates[c.id];
+          }
+
+          const config = await AttendanceService.getCourseConfig(c.id);
+          console.log(`[DEBUG] Course ${c.name} (${c.id}): Config =`, config);
+
+          if (!config) {
+            return { courseId: c.id, state: "no-config" } as EnrichedCourseData;
+          } else if (!config.isVisible) {
+            return { courseId: c.id, state: "hidden" } as EnrichedCourseData;
+          } else {
+            // Check if already unlocked locally (mimicking session cache)
+            const isUnlocked =
+              sessionStorage.getItem(`unlocked_${c.id}`) === "true";
+            if (isUnlocked) {
+              // Trigger fetch immediately if unlocked
+              fetchAttendance(c.id, config.sheetUrl);
+              return { courseId: c.id, state: "loading" } as EnrichedCourseData;
+            } else {
+              return { courseId: c.id, state: "locked" } as EnrichedCourseData;
+            }
+          }
+        })
+      );
+
+      const newStateMap: Record<string, EnrichedCourseData> = {};
+      results.forEach((r) => {
+        newStateMap[r.courseId] = r;
+      });
+      setCourseStates((prev) => ({ ...prev, ...newStateMap }));
+    };
+
+    initCourses();
   }, [courses]);
 
+  // Select first available course on load
   useEffect(() => {
-    if (subjects.length > 0 && !selectedSubject) {
-      setSelectedSubject(subjects[0].id);
+    if (courses.length > 0 && !selectedSubject) {
+      setSelectedSubject(courses[0].id);
     }
-  }, [subjects, selectedSubject]);
+  }, [courses, selectedSubject]);
 
-  const handleRefresh = () => {
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 1000);
+  const fetchAttendance = async (courseId: string, sheetUrl: string) => {
+    if (!accessToken || !user?.email) return;
+
+    const sheetId = AttendanceService.extractSheetId(sheetUrl);
+    if (!sheetId) {
+      setCourseStates((prev) => ({
+        ...prev,
+        [courseId]: {
+          courseId,
+          state: "error",
+          error: "Invalid configuration",
+        },
+      }));
+      return;
+    }
+
+    // Get the email column from config
+    const config = await AttendanceService.getCourseConfig(courseId);
+    const emailColumn = config?.emailColumn || "A";
+
+    try {
+      const data = await AttendanceService.fetchAttendanceFromSheet(
+        sheetId,
+        accessToken,
+        user.email,
+        emailColumn
+      );
+      setCourseStates((prev) => ({
+        ...prev,
+        [courseId]: { courseId, state: "loaded", data },
+      }));
+    } catch (err: any) {
+      console.error(err);
+      setCourseStates((prev) => ({
+        ...prev,
+        [courseId]: {
+          courseId,
+          state: "error",
+          error: err.message || "Failed to load",
+        },
+      }));
+    }
   };
 
-  const overallAttended = subjects.reduce(
-    (acc, curr) => acc + curr.attended,
+  const handleUnlock = async () => {
+    if (!unlockingCourseId) return;
+
+    const isValid = await AttendanceService.validatePassKey(
+      unlockingCourseId,
+      unlockKey
+    );
+
+    if (isValid) {
+      sessionStorage.setItem(`unlocked_${unlockingCourseId}`, "true");
+      setUnlockingCourseId(null);
+      setUnlockKey("");
+      toast({
+        title: "Course Unlocked",
+        description: "Fetching attendance details...",
+      });
+
+      setCourseStates((prev) => ({
+        ...prev,
+        [unlockingCourseId]: { courseId: unlockingCourseId, state: "loading" },
+      }));
+
+      const config = await AttendanceService.getCourseConfig(unlockingCourseId);
+      if (config) fetchAttendance(unlockingCourseId, config.sheetUrl);
+    } else {
+      toast({
+        title: "Incorrect Key",
+        description: "Please ask your teacher for the correct pass key.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    // Re-fetch all 'loaded' courses
+    const promises = Object.values(courseStates)
+      .filter(
+        (cs) =>
+          cs.state === "loaded" ||
+          cs.state === "error" ||
+          cs.state === "loading"
+      ) // Retry errors too
+      .map(async (cs) => {
+        const config = await AttendanceService.getCourseConfig(cs.courseId); // Re-fetch config too in case URL changed
+        if (config) return fetchAttendance(cs.courseId, config.sheetUrl);
+        return Promise.resolve();
+      });
+
+    await Promise.allSettled(promises);
+    setIsRefreshing(false);
+  };
+
+  // --- Derived Stats ---
+  const loadedCourses = Object.values(courseStates).filter(
+    (cs) => cs.state === "loaded" && cs.data
+  );
+  const overallAttended = loadedCourses.reduce(
+    (acc, curr) => acc + (curr.data?.stats.attendedClasses || 0),
     0
   );
-  const overallTotal = subjects.reduce((acc, curr) => acc + curr.total, 0);
-  const overallStats = getStats(overallAttended || 100, overallTotal || 100);
-
-  const currentSubject =
-    subjects.find((s) => s.id === selectedSubject) || subjects[0];
-  const subjectRecords = useMemo(
-    () => generateRecords(currentSubject.id),
-    [currentSubject.id]
+  const overallTotal = loadedCourses.reduce(
+    (acc, curr) => acc + (curr.data?.stats.totalClasses || 0),
+    0
   );
+  const overallStats = getStats(overallAttended, overallTotal);
 
+  const currentCourseState = courseStates[selectedSubject];
+  const currentSubject = courses.find((s) => s.id === selectedSubject);
+  const currentData = currentCourseState?.data;
+
+  // --- Render ---
   return (
     <div className="h-full flex flex-col bg-background text-foreground overflow-hidden">
-      {/* Page Header */}
-      <div className="flex-none px-6 py-4 border-b border-border z-10 bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
+      {/* Header */}
+      <div className="flex-none px-6 py-4 border-b border-border z-10 bg-background/95 backdrop-blur-sm">
         <div className="flex items-center justify-between max-w-[1600px] mx-auto w-full">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold tracking-tight text-foreground">
@@ -191,11 +309,11 @@ export default function AttendancePage() {
             onClick={handleRefresh}
             className={cn(
               "text-muted-foreground h-8",
-              isLoading && "opacity-70"
+              isRefreshing && "opacity-70"
             )}
           >
             <RotateCw
-              className={cn("h-3.5 w-3.5 mr-2", isLoading && "animate-spin")}
+              className={cn("h-3.5 w-3.5 mr-2", isRefreshing && "animate-spin")}
             />
             Sync Now
           </Button>
@@ -204,9 +322,9 @@ export default function AttendancePage() {
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="max-w-[1600px] mx-auto w-full p-6 space-y-8">
-          {/* ZONE A: HERO (Overall Attendance) */}
+          {/* ZONE A: HERO */}
           <section>
-            <Card className="border-border shadow-sm bg-card hover:bg-accent/5 transition-colors">
+            <Card className="border-border shadow-sm bg-card transition-colors">
               <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
@@ -234,32 +352,8 @@ export default function AttendancePage() {
                       {overallStats.percentage}%
                     </span>
                     <span className="text-sm sm:text-base text-muted-foreground font-medium">
-                      Average across {subjects.length} courses
+                      Average across {loadedCourses.length} active courses
                     </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-8 text-sm border-t sm:border-t-0 sm:border-l border-border pt-4 sm:pt-0 sm:pl-8 w-full sm:w-auto mt-2 sm:mt-0">
-                  <div>
-                    <p className="text-muted-foreground mb-1">
-                      Attended Classes
-                    </p>
-                    <p className="font-semibold text-foreground text-lg">
-                      {overallAttended}{" "}
-                      <span className="text-muted-foreground text-sm font-normal">
-                        / {overallTotal}
-                      </span>
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground mb-1">Risk Level</p>
-                    <p className="font-semibold text-foreground text-lg flex items-center gap-2">
-                      {overallStats.status === "safe" ? (
-                        <span className="text-emerald-500">Low</span>
-                      ) : (
-                        <span className="text-red-500">High</span>
-                      )}
-                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -267,76 +361,147 @@ export default function AttendancePage() {
           </section>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-            {/* ZONE B: PRIMARY CONTENT (Course Cards) */}
+            {/* ZONE B: COURSE CARDS */}
             <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {subjects.map((subject) => {
-                const stats = getStats(subject.attended, subject.total);
+              {courses.map((course) => {
+                const cState = courseStates[course.id];
+                const stateType = cState?.state || "loading";
+                const stats = cState?.data
+                  ? getStats(
+                      cState.data.stats.attendedClasses,
+                      cState.data.stats.totalClasses
+                    )
+                  : null;
+                const isSelected = selectedSubject === course.id;
+
                 return (
                   <Card
-                    key={subject.id}
+                    key={course.id}
                     className={cn(
                       "group cursor-pointer border-border shadow-sm hover:shadow-md transition-all duration-200 bg-card active:scale-[0.99]",
-                      selectedSubject === subject.id &&
-                        "ring-1 ring-primary border-primary"
+                      isSelected && "ring-1 ring-primary border-primary"
                     )}
-                    onClick={() => setSelectedSubject(subject.id)}
+                    onClick={() => setSelectedSubject(course.id)}
                   >
-                    <CardContent className="p-5 h-full flex flex-col justify-between gap-4">
+                    <CardContent className="p-5 h-full flex flex-col justify-between gap-4 min-h-[140px]">
+                      {/* Header part */}
                       <div className="flex justify-between items-start gap-4">
                         <div className="min-w-0">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <h3 className="font-semibold text-foreground truncate pr-2">
-                                {subject.name}
+                                {course.name}
                               </h3>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p>{subject.name}</p>
+                              <p>{course.name}</p>
                             </TooltipContent>
                           </Tooltip>
                           <p className="text-xs text-muted-foreground font-mono mt-1">
-                            {subject.code}
+                            {course.section || "No Section"}
                           </p>
                         </div>
-                        <span
-                          className={cn(
-                            "text-lg font-bold tabular-nums",
-                            stats.percentage < 75
-                              ? "text-destructive"
-                              : "text-muted-foreground/70"
-                          )}
-                        >
-                          {stats.percentage}%
-                        </span>
-                      </div>
 
-                      <div className="space-y-3 mt-auto">
-                        <div className="flex justify-between text-xs text-muted-foreground font-medium">
-                          <span>
-                            {subject.attended} / {subject.total} classes
-                          </span>
+                        {stateType === "loaded" && stats && (
                           <span
                             className={cn(
-                              stats.status === "safe"
-                                ? "text-emerald-500"
-                                : "text-red-500"
+                              "text-lg font-bold tabular-nums",
+                              stats.percentage < 75
+                                ? "text-destructive"
+                                : "text-muted-foreground/70"
                             )}
                           >
-                            {stats.status === "safe"
-                              ? "On Track"
-                              : "Needs Attention"}
+                            {stats.percentage}%
                           </span>
-                        </div>
-                        {/* Thin Progress Bar */}
-                        <div className="h-1 w-full bg-secondary/80 rounded-full overflow-hidden">
-                          <div
-                            className={cn(
-                              "h-full rounded-full transition-all duration-500",
-                              stats.progressColor
-                            )}
-                            style={{ width: `${stats.percentage}%` }}
-                          />
-                        </div>
+                        )}
+                        {stateType === "hidden" && (
+                          <EyeOff className="h-5 w-5 text-muted-foreground/50" />
+                        )}
+                        {stateType === "locked" && (
+                          <Lock className="h-5 w-5 text-amber-500/80" />
+                        )}
+                        {stateType === "error" && (
+                          <AlertTriangle className="h-5 w-5 text-destructive/80" />
+                        )}
+                      </div>
+
+                      {/* Footer/State part */}
+                      <div className="mt-auto">
+                        {stateType === "loaded" && stats && (
+                          <div className="space-y-3">
+                            <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                              <span>
+                                {cState.data?.stats.attendedClasses}/
+                                {cState.data?.stats.totalClasses} classes
+                              </span>
+                              <span
+                                className={
+                                  stats.status === "safe"
+                                    ? "text-emerald-500"
+                                    : "text-red-500"
+                                }
+                              >
+                                {stats.status === "safe"
+                                  ? "On Track"
+                                  : "Low Attendance"}
+                              </span>
+                            </div>
+                            <div className="h-1 w-full bg-secondary/80 rounded-full overflow-hidden">
+                              <div
+                                className={cn(
+                                  "h-full rounded-full transition-all duration-500",
+                                  stats.progressColor
+                                )}
+                                style={{ width: `${stats.percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {stateType === "locked" && (
+                          <div className="flex flex-col gap-2">
+                            <p className="text-xs text-muted-foreground">
+                              Attendance is password protected.
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="w-full"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setUnlockingCourseId(course.id);
+                              }}
+                            >
+                              <KeyRound className="w-3 h-3 mr-2" />
+                              Unlock
+                            </Button>
+                          </div>
+                        )}
+
+                        {stateType === "hidden" && (
+                          <p className="text-xs text-muted-foreground italic">
+                            Attendance hidden by teacher.
+                          </p>
+                        )}
+
+                        {stateType === "no-config" && (
+                          <p className="text-xs text-muted-foreground italic">
+                            Not configured.
+                          </p>
+                        )}
+
+                        {stateType === "error" && (
+                          <p className="text-xs text-destructive">
+                            {cState?.error}
+                          </p>
+                        )}
+
+                        {stateType === "loading" && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <RotateCw className="w-3 h-3 animate-spin" />{" "}
+                            Fetching...
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -344,135 +509,128 @@ export default function AttendancePage() {
               })}
             </div>
 
-            {/* ZONE C: SECONDARY RAIL (History & Insights) */}
+            {/* ZONE C: HISTORY */}
             <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-6">
-              {/* Contextual History Panel */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
                   <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    History
+                    <CalendarDays className="h-4 w-4" /> History
                   </h3>
                   <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
-                    {subjects.find((s) => s.id === selectedSubject)?.code}
+                    {currentSubject?.section ||
+                      currentSubject?.name.slice(0, 3).toUpperCase()}
                   </span>
                 </div>
 
-                <Card className="border-border shadow-sm bg-card overflow-hidden">
-                  <div className="max-h-[320px] overflow-y-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-card z-10 border-b border-border shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-                        <TableRow className="border-none hover:bg-transparent">
-                          <TableHead className="w-[100px] h-9 text-xs">
-                            Date
-                          </TableHead>
-                          <TableHead className="h-9 text-xs">Type</TableHead>
-                          <TableHead className="text-right h-9 text-xs px-4">
-                            Status
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {subjectRecords.map((record) => (
-                          <TableRow
-                            key={record.id}
-                            className="border-b border-border/50 hover:bg-muted/30"
-                          >
-                            <TableCell className="font-mono text-xs text-muted-foreground py-2.5">
-                              {record.date}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground py-2.5">
-                              {record.type}
-                            </TableCell>
-                            <TableCell className="text-right py-2.5 px-4">
-                              <span
-                                className={cn(
-                                  "inline-flex w-2 h-2 rounded-full mr-2",
-                                  record.status === "Present"
-                                    ? "bg-emerald-500"
-                                    : "bg-red-500"
-                                )}
-                              />
-                              <span
-                                className={cn(
-                                  "text-xs font-medium",
-                                  record.status === "Present"
-                                    ? "text-foreground"
-                                    : "text-destructive"
-                                )}
-                              >
-                                {record.status}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <div className="p-2 border-t border-border bg-muted/20 text-center">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-auto text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      View Full History{" "}
-                      <ArrowUpRight className="h-3 w-3 ml-1" />
-                    </Button>
-                  </div>
-                </Card>
-              </div>
-
-              {/* Compact Insights Panel */}
-              <div className="space-y-3 pt-2">
-                <h3 className="text-sm font-semibold text-foreground px-1 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Insights
-                </h3>
-                <div className="space-y-2">
-                  {INSIGHTS.map((insight, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card/50 hover:bg-card transition-colors"
-                    >
-                      <div
-                        className={cn(
-                          "h-8 w-8 rounded-full flex items-center justify-center shrink-0 border",
-                          insight.risk === "low"
-                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
-                            : insight.risk === "high"
-                            ? "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400"
-                            : "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400"
-                        )}
-                      >
-                        {insight.risk === "low" ? (
-                          <CheckCircle2 className="h-4 w-4" />
-                        ) : insight.risk === "high" ? (
-                          <AlertCircle className="h-4 w-4" />
-                        ) : (
-                          <TrendingUp className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline mb-0.5">
-                          <span className="text-xs font-semibold text-foreground uppercase tracking-wide">
-                            {insight.title}
-                          </span>
-                          <span className="text-xs font-bold font-mono text-muted-foreground">
-                            {insight.value}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {insight.desc}
-                        </p>
-                      </div>
+                <Card className="border-border shadow-sm bg-card overflow-hidden h-[400px]">
+                  {!currentData ? (
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6 text-center">
+                      {currentCourseState?.state === "locked" && (
+                        <>
+                          <Lock className="h-8 w-8 mb-3 opacity-20" />
+                          <p className="text-sm">
+                            Unlock this course to view history.
+                          </p>
+                        </>
+                      )}
+                      {currentCourseState?.state === "hidden" && (
+                        <>
+                          <EyeOff className="h-8 w-8 mb-3 opacity-20" />
+                          <p className="text-sm">History is hidden.</p>
+                        </>
+                      )}
+                      {(currentCourseState?.state === "error" ||
+                        currentCourseState?.state === "no-config") && (
+                        <>
+                          <AlertCircle className="h-8 w-8 mb-3 opacity-20" />
+                          <p className="text-sm">No data available.</p>
+                        </>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  ) : (
+                    <div className="max-h-full overflow-y-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-card z-10 border-b border-border">
+                          <TableRow className="border-none">
+                            <TableHead className="w-[100px] text-xs">
+                              Date
+                            </TableHead>
+                            <TableHead className="text-right text-xs">
+                              Status
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {currentData.history.map((record, i) => (
+                            <TableRow
+                              key={i}
+                              className="border-b border-border/50 hover:bg-muted/30"
+                            >
+                              <TableCell className="font-mono text-xs text-muted-foreground py-2.5">
+                                {record.date}
+                              </TableCell>
+                              <TableCell className="text-right py-2.5">
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium",
+                                    record.status === "Present"
+                                      ? "bg-emerald-500/10 text-emerald-600"
+                                      : "bg-red-500/10 text-red-600"
+                                  )}
+                                >
+                                  {record.status}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </Card>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Unlock Dialog */}
+      <Dialog
+        open={!!unlockingCourseId}
+        onOpenChange={(open) => !open && setUnlockingCourseId(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Unlock Attendance</DialogTitle>
+            <DialogDescription>
+              Enter the pass key provided by your teacher to view attendance for
+              this course.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="pass-key">Pass Key</Label>
+              <Input
+                id="pass-key"
+                type="password"
+                placeholder="ENTER-KEY"
+                value={unlockKey}
+                onChange={(e) => setUnlockKey(e.target.value)}
+                className="uppercase tracking-widest font-mono text-center text-lg"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setUnlockingCourseId(null)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleUnlock}>Unlock Access</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

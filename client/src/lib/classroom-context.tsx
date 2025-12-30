@@ -384,7 +384,7 @@ async function fetchCourses(
 
   const now = new Date().toISOString();
   return googleCourses.map((gc) => ({
-    id: `course-${gc.id}`,
+    id: gc.id,
     userId,
     classroomId: gc.id,
     name: gc.name,

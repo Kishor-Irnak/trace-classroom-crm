@@ -30,6 +30,8 @@ const getBasePath = () => {
 };
 
 import { EnhancedLoadingScreen } from "@/components/enhanced-loading-screen";
+import TeacherPage from "@/pages/teacher-dashboard";
+import NoClassroomAccessPage from "@/pages/no-classroom-access";
 
 function AuthenticatedApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -56,8 +58,7 @@ function AuthenticatedApp() {
               <Route path="/timeline" component={TimelinePage} />
               <Route path="/dashboard" component={DashboardPage} />
               <Route path="/notes" component={NotesPage} />
-              <Route path="/attendance" component={AttendancePage} />{" "}
-              {/* Added */}
+              <Route path="/attendance" component={AttendancePage} />
               <Route path="/settings" component={SettingsPage} />
               <Route
                 path="/settings/notifications"
@@ -77,7 +78,7 @@ function AuthenticatedApp() {
 }
 
 function AppContent() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, role } = useAuth();
 
   if (authLoading) {
     return <EnhancedLoadingScreen message="Authenticating..." />;
@@ -87,6 +88,18 @@ function AppContent() {
     return <LoginPage />;
   }
 
+  // Role-based routing
+  if (role === "teacher") {
+    // Strict routing: Teacher should predominantly be at /teacher or dashboard
+    // Since TeacherPage handles its own view state, we just render it.
+    return <TeacherPage />;
+  }
+
+  if (role === "no_access") {
+    return <NoClassroomAccessPage />;
+  }
+
+  // Default to Student UI
   return (
     <ClassroomProvider>
       <AuthenticatedApp />

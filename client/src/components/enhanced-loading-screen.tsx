@@ -16,14 +16,19 @@ const LOADING_TIPS = [
 interface EnhancedLoadingScreenProps {
   children?: ReactNode; // For the background skeleton
   message?: string; // e.g., "Building Schedule", "Syncing Workspace"
+  tips?: string[]; // Optional custom tips
 }
 
 export function EnhancedLoadingScreen({
   children,
   message = "Loading Workspace",
+  tips, // Destructure tips
 }: EnhancedLoadingScreenProps) {
   const [progress, setProgress] = useState(10);
   const [tipIndex, setTipIndex] = useState(0);
+
+  // Use provided tips or fallback to default
+  const activeTips = tips && tips.length > 0 ? tips : LOADING_TIPS;
 
   useEffect(() => {
     // Increment progress bar
@@ -38,7 +43,7 @@ export function EnhancedLoadingScreen({
 
     // Rotate tips
     const tipTimer = setInterval(() => {
-      setTipIndex((prev) => (prev + 1) % LOADING_TIPS.length);
+      setTipIndex((prev) => (prev + 1) % activeTips.length);
     }, 3000);
 
     return () => {
@@ -118,7 +123,7 @@ export function EnhancedLoadingScreen({
                   Pro Tip
                 </span>
                 <p className="text-xs text-muted-foreground leading-relaxed transition-all duration-300 min-h-[40px]">
-                  {LOADING_TIPS[tipIndex]}
+                  {activeTips[tipIndex]}
                 </p>
               </div>
             </div>

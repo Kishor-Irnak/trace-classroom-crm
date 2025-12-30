@@ -18,6 +18,7 @@ import { auth, googleProvider } from "./firebase";
 interface AuthContextType {
   user: FirebaseUser | null;
   loading: boolean;
+  role: "student" | "teacher" | "no_access" | null;
   accessToken: string | null;
   signInWithGoogle: () => Promise<void>;
   requestGmailPermissions: () => Promise<boolean>;
@@ -35,14 +36,102 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return sessionStorage.getItem("google_access_token");
   });
   const [error, setError] = useState<string | null>(null);
+  const [role, setRole] = useState<"student" | "teacher" | "no_access" | null>(
+    () => {
+      return localStorage.getItem("user_role") as
+        | "student"
+        | "teacher"
+        | "no_access"
+        | null;
+    }
+  );
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
-      setLoading(false);
+      if (!user) {
+        setRole(null);
+        setLoading(false);
+      }
+      // If user exists, we wait for role detection which happens via effect below or explicit call
     });
     return unsubscribe;
   }, []);
+
+  // Role detection effect
+  useEffect(() => {
+    async function detectRole() {
+      if (!user || !accessToken) {
+        // If we have user but no access token (e.g. reload), try to get it
+        if (user && !accessToken) {
+          const storedToken = sessionStorage.getItem("google_access_token");
+          if (storedToken) {
+            setAccessToken(storedToken);
+            return; // Let the next render trigger this effect with token
+          }
+        }
+        if (!user) setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        // 1. Check Teacher Role
+        const teacherRes = await fetch(
+          "https://classroom.googleapis.com/v1/courses?teacherId=me&pageSize=1",
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+
+        let isTeacher = false;
+        if (teacherRes.ok) {
+          const teacherData = await teacherRes.json();
+          if (teacherData.courses && teacherData.courses.length > 0) {
+            isTeacher = true;
+          }
+        }
+
+        if (isTeacher) {
+          setRole("teacher");
+          localStorage.setItem("user_role", "teacher");
+          setLoading(false);
+          return;
+        }
+
+        // 2. Check Student Role
+        const studentRes = await fetch(
+          "https://classroom.googleapis.com/v1/courses?studentId=me&pageSize=1",
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+
+        let isStudent = false;
+        if (studentRes.ok) {
+          const studentData = await studentRes.json();
+          if (studentData.courses && studentData.courses.length > 0) {
+            isStudent = true;
+          }
+        }
+
+        if (isStudent) {
+          setRole("student");
+          localStorage.setItem("user_role", "student");
+        } else {
+          setRole("no_access");
+          localStorage.setItem("user_role", "no_access");
+        }
+      } catch (error) {
+        console.error("Role detection failed:", error);
+        setRole("no_access"); // Fallback safety
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    detectRole();
+  }, [user, accessToken]);
 
   const signInWithGoogle = async () => {
     try {
@@ -223,7 +312,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await firebaseSignOut(auth);
       setAccessToken(null);
+      setRole(null);
       sessionStorage.removeItem("google_access_token");
+      localStorage.removeItem("user_role");
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to sign out";
@@ -236,6 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
+        role,
         accessToken,
         signInWithGoogle,
         requestGmailPermissions,

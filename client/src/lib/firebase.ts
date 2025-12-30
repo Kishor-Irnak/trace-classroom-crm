@@ -29,9 +29,8 @@ googleProvider.addScope(
 googleProvider.addScope(
   "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly"
 );
+googleProvider.addScope("https://www.googleapis.com/auth/calendar");
+googleProvider.addScope("https://www.googleapis.com/auth/gmail.send"); // Required for full Calendar access (read/write)
 googleProvider.addScope(
-  "https://www.googleapis.com/auth/calendar"
-); 
-googleProvider.addScope(
-  "https://www.googleapis.com/auth/gmail.send"
-); // Required for full Calendar access (read/write)
+  "https://www.googleapis.com/auth/spreadsheets.readonly"
+); // Required for reading attendance from Google Sheets
