@@ -7,6 +7,8 @@ import {
   CalendarDays,
   Clock,
   BookOpen,
+  ArrowUpRight,
+  MoreHorizontal,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,11 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { useClassroom } from "@/lib/classroom-context";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // --- Mock Data Types ---
 
@@ -39,31 +46,30 @@ interface AttendanceRecord {
   date: string;
   status: "Present" | "Absent";
   type: "Lecture" | "Practical" | "Tutorial";
-  notes?: string;
 }
 
 const INSIGHTS = [
   {
-    title: "Safe Bunks",
-    value: "2",
-    desc: "lectures in Data Structures",
-    risk: "low",
-  },
-  {
     title: "Critical",
     value: "DBMS",
-    desc: "Needs 3 more classes",
+    desc: "Attendance below 70%",
     risk: "high",
   },
   {
-    title: "On Track",
-    value: "92%",
-    desc: "Overall attendance",
+    title: "Safe",
+    value: "CN",
+    desc: "Above 85% requirement",
+    risk: "low",
+  },
+  {
+    title: "Trend",
+    value: "+4%",
+    desc: "Overall improvement",
     risk: "safe",
   },
 ];
 
-// Fallback mock subjects if no context is available
+// Fallback mock subjects
 const MOCK_SUBJECTS: SubjectAttendance[] = [
   {
     id: "sub-1",
@@ -88,32 +94,30 @@ const getStats = (attended: number, total: number) => {
   const percentage = Math.round((attended / total) * 100);
   let status: "safe" | "warning" | "danger" = "safe";
   let color =
-    "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-900/30";
-  let progressColor = "bg-emerald-500 dark:bg-emerald-600";
+    "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
+  let progressColor = "bg-emerald-500 dark:bg-emerald-500";
 
   if (percentage < 70) {
     status = "danger";
     color =
-      "text-red-700 bg-red-50 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/30";
-    progressColor = "bg-red-500 dark:bg-red-600";
+      "text-red-700 bg-red-50 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20";
+    progressColor = "bg-red-500 dark:bg-red-500";
   } else if (percentage < 75) {
     status = "warning";
     color =
-      "text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-900/30";
-    progressColor = "bg-amber-500 dark:bg-amber-600";
+      "text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20";
+    progressColor = "bg-amber-500 dark:bg-amber-500";
   }
 
   return { percentage, status, color, progressColor };
 };
 
-// Generate mock records for a selected subject
 const generateRecords = (subjectId: string): AttendanceRecord[] => {
   return Array.from({ length: 15 }).map((_, i) => ({
     id: `${subjectId}-rec-${i}`,
     date: new Date(Date.now() - i * 86400000 * 2).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
-      year: "numeric",
     }),
     status: Math.random() > 0.2 ? "Present" : "Absent",
     type: Math.random() > 0.3 ? "Lecture" : "Practical",
@@ -125,17 +129,12 @@ export default function AttendancePage() {
   const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Map real courses to mock attendance stats
   const subjects: SubjectAttendance[] = useMemo(() => {
-    if (!courses || courses.length === 0) {
-      return MOCK_SUBJECTS;
-    }
+    if (!courses || courses.length === 0) return MOCK_SUBJECTS;
 
     return courses.map((course, index) => {
-      // Deterministic mock generation based on index to keep it consistent
-      const total = 30 + ((index * 7) % 20); // Random total between 30-50
-      const attended = Math.floor(total * (0.6 + ((index * 3) % 40) / 100)); // Random attendance between 60%-99%
-
+      const total = 30 + ((index * 7) % 20);
+      const attended = Math.floor(total * (0.6 + ((index * 3) % 40) / 100));
       return {
         id: course.id,
         name: course.name,
@@ -147,7 +146,6 @@ export default function AttendancePage() {
     });
   }, [courses]);
 
-  // Set initial selected subject
   useEffect(() => {
     if (subjects.length > 0 && !selectedSubject) {
       setSelectedSubject(subjects[0].id);
@@ -164,7 +162,7 @@ export default function AttendancePage() {
     0
   );
   const overallTotal = subjects.reduce((acc, curr) => acc + curr.total, 0);
-  const overallStats = getStats(overallAttended || 100, overallTotal || 100); // Prevent division by zero
+  const overallStats = getStats(overallAttended || 100, overallTotal || 100);
 
   const currentSubject =
     subjects.find((s) => s.id === selectedSubject) || subjects[0];
@@ -174,209 +172,235 @@ export default function AttendancePage() {
   );
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-muted/10">
-      {/* 1. Header */}
-      <div className="flex-none px-8 py-6 border-b z-10 bg-background">
-        <div className="flex items-center justify-between max-w-7xl mx-auto w-full">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+    <div className="h-full flex flex-col bg-background text-foreground overflow-hidden">
+      {/* Page Header */}
+      <div className="flex-none px-6 py-4 border-b border-border z-10 bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/60">
+        <div className="flex items-center justify-between max-w-[1600px] mx-auto w-full">
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold tracking-tight text-foreground">
               Attendance
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Live attendance synced from your classroom
-            </p>
+            <span className="h-4 w-px bg-border mx-1" />
+            <span className="text-sm text-muted-foreground font-medium">
+              Academic Year 2024-25
+            </span>
           </div>
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={handleRefresh}
-            className={cn("gap-2", isLoading && "opacity-70")}
+            className={cn(
+              "text-muted-foreground h-8",
+              isLoading && "opacity-70"
+            )}
           >
-            <RotateCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-            Refresh
+            <RotateCw
+              className={cn("h-3.5 w-3.5 mr-2", isLoading && "animate-spin")}
+            />
+            Sync Now
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-7xl mx-auto w-full space-y-8">
-          {/* 2. Overall Attendance */}
-          <Card className="shadow-sm border-border bg-card">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-medium text-foreground">
-                  Overall Attendance
-                </CardTitle>
-                <Badge
-                  variant={
-                    overallStats.status === "safe" ? "outline" : "secondary"
-                  }
-                  className={cn(
-                    "uppercase tracking-wider font-mono text-xs",
-                    overallStats.color
-                  )}
-                >
-                  {overallStats.status === "safe"
-                    ? "Safe"
-                    : overallStats.status === "warning"
-                    ? "Warning"
-                    : "Danger"}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-end gap-4 mb-4">
-                <span
-                  className={cn(
-                    "text-5xl font-bold tracking-tight",
-                    overallStats.status === "danger"
-                      ? "text-destructive"
-                      : overallStats.status === "warning"
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-foreground"
-                  )}
-                >
-                  {overallStats.percentage}%
-                </span>
-                <div className="pb-2 text-sm text-muted-foreground font-medium space-y-1">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-                    <span>
-                      Attended: {overallAttended} / {overallTotal} classes
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="max-w-[1600px] mx-auto w-full p-6 space-y-8">
+          {/* ZONE A: HERO (Overall Attendance) */}
+          <section>
+            <Card className="border-border shadow-sm bg-card hover:bg-accent/5 transition-colors">
+              <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Overall Attendance
+                    </span>
+                    <Badge
+                      variant={
+                        overallStats.status === "safe"
+                          ? "outline"
+                          : "destructive"
+                      }
+                      className={cn(
+                        "ml-2 h-5 text-[10px] px-1.5 uppercase",
+                        overallStats.color
+                      )}
+                    >
+                      {overallStats.status === "safe"
+                        ? "Safe Status"
+                        : "Attention Needed"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
+                      {overallStats.percentage}%
+                    </span>
+                    <span className="text-sm sm:text-base text-muted-foreground font-medium">
+                      Average across {subjects.length} courses
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-blue-500 dark:text-blue-400" />
-                    <span>Across {subjects.length} subjects</span>
+                </div>
+
+                <div className="flex items-center gap-8 text-sm border-t sm:border-t-0 sm:border-l border-border pt-4 sm:pt-0 sm:pl-8 w-full sm:w-auto mt-2 sm:mt-0">
+                  <div>
+                    <p className="text-muted-foreground mb-1">
+                      Attended Classes
+                    </p>
+                    <p className="font-semibold text-foreground text-lg">
+                      {overallAttended}{" "}
+                      <span className="text-muted-foreground text-sm font-normal">
+                        / {overallTotal}
+                      </span>
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground mb-1">Risk Level</p>
+                    <p className="font-semibold text-foreground text-lg flex items-center gap-2">
+                      {overallStats.status === "safe" ? (
+                        <span className="text-emerald-500">Low</span>
+                      ) : (
+                        <span className="text-red-500">High</span>
+                      )}
+                    </p>
                   </div>
                 </div>
-              </div>
-              <Progress
-                value={overallStats.percentage}
-                className={cn("h-2", overallStats.progressColor)}
-              />
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </section>
 
-          {/* 3. Subject Cards & Insights Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left: Subject List */}
-            <div className="lg:col-span-2 space-y-6">
-              <h3 className="text-lg font-medium text-foreground flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-muted-foreground" />
-                Your Courses
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {subjects.map((subject) => {
-                  const stats = getStats(subject.attended, subject.total);
-                  return (
-                    <Card
-                      key={subject.id}
-                      className={cn(
-                        "cursor-pointer transition-all duration-200 hover:border-foreground/20 hover:shadow-sm border-border shadow-none group bg-card",
-                        selectedSubject === subject.id &&
-                          "ring-2 ring-primary ring-offset-2 ring-offset-background"
-                      )}
-                      onClick={() => setSelectedSubject(subject.id)}
-                    >
-                      <CardContent className="p-5">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <h4
-                              className="font-semibold text-foreground group-hover:text-primary transition-colors line-clamp-1"
-                              title={subject.name}
-                            >
-                              {subject.name}
-                            </h4>
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {subject.code}
-                            </span>
-                          </div>
-                          <Badge
-                            variant="secondary"
-                            className={cn("font-mono", stats.color)}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+            {/* ZONE B: PRIMARY CONTENT (Course Cards) */}
+            <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {subjects.map((subject) => {
+                const stats = getStats(subject.attended, subject.total);
+                return (
+                  <Card
+                    key={subject.id}
+                    className={cn(
+                      "group cursor-pointer border-border shadow-sm hover:shadow-md transition-all duration-200 bg-card active:scale-[0.99]",
+                      selectedSubject === subject.id &&
+                        "ring-1 ring-primary border-primary"
+                    )}
+                    onClick={() => setSelectedSubject(subject.id)}
+                  >
+                    <CardContent className="p-5 h-full flex flex-col justify-between gap-4">
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="min-w-0">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <h3 className="font-semibold text-foreground truncate pr-2">
+                                {subject.name}
+                              </h3>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{subject.name}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <p className="text-xs text-muted-foreground font-mono mt-1">
+                            {subject.code}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "text-lg font-bold tabular-nums",
+                            stats.percentage < 75
+                              ? "text-destructive"
+                              : "text-muted-foreground/70"
+                          )}
+                        >
+                          {stats.percentage}%
+                        </span>
+                      </div>
+
+                      <div className="space-y-3 mt-auto">
+                        <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                          <span>
+                            {subject.attended} / {subject.total} classes
+                          </span>
+                          <span
+                            className={cn(
+                              stats.status === "safe"
+                                ? "text-emerald-500"
+                                : "text-red-500"
+                            )}
                           >
-                            {stats.percentage}%
-                          </Badge>
+                            {stats.status === "safe"
+                              ? "On Track"
+                              : "Needs Attention"}
+                          </span>
                         </div>
-
-                        <div className="space-y-3">
-                          <Progress
-                            value={stats.percentage}
-                            className={cn("h-1.5", stats.progressColor)}
+                        {/* Thin Progress Bar */}
+                        <div className="h-1 w-full bg-secondary/80 rounded-full overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all duration-500",
+                              stats.progressColor
+                            )}
+                            style={{ width: `${stats.percentage}%` }}
                           />
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>
-                              {subject.attended}/{subject.total} attended
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {subject.lastUpdated}
-                            </span>
-                          </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
 
-            {/* Right: Detailed View & Insights */}
-            <div className="space-y-6">
-              {/* Detailed Tracker */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium text-foreground flex items-center gap-2">
-                    <CalendarDays className="h-5 w-5 text-muted-foreground" />
-                    History: {currentSubject.code}
+            {/* ZONE C: SECONDARY RAIL (History & Insights) */}
+            <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-6">
+              {/* Contextual History Panel */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4" />
+                    History
                   </h3>
+                  <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
+                    {subjects.find((s) => s.id === selectedSubject)?.code}
+                  </span>
                 </div>
 
-                <Card className="border-border shadow-none h-[400px] flex flex-col bg-card">
-                  <div className="flex-1 overflow-auto">
+                <Card className="border-border shadow-sm bg-card overflow-hidden">
+                  <div className="max-h-[320px] overflow-y-auto">
                     <Table>
-                      <TableHeader className="sticky top-0 bg-card z-10 shadow-sm">
-                        <TableRow className="hover:bg-transparent border-border">
-                          <TableHead className="w-[100px]">Date</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead className="text-right">Status</TableHead>
+                      <TableHeader className="sticky top-0 bg-card z-10 border-b border-border shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+                        <TableRow className="border-none hover:bg-transparent">
+                          <TableHead className="w-[100px] h-9 text-xs">
+                            Date
+                          </TableHead>
+                          <TableHead className="h-9 text-xs">Type</TableHead>
+                          <TableHead className="text-right h-9 text-xs px-4">
+                            Status
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {subjectRecords.map((record) => (
                           <TableRow
                             key={record.id}
-                            className="hover:bg-muted/50 border-border"
+                            className="border-b border-border/50 hover:bg-muted/30"
                           >
-                            <TableCell className="font-mono text-xs text-muted-foreground">
+                            <TableCell className="font-mono text-xs text-muted-foreground py-2.5">
                               {record.date}
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              <Badge
-                                variant="outline"
-                                className="font-normal text-[10px] px-2 py-0 h-5"
-                              >
-                                {record.type}
-                              </Badge>
+                            <TableCell className="text-xs text-muted-foreground py-2.5">
+                              {record.type}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right py-2.5 px-4">
                               <span
                                 className={cn(
-                                  "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium",
+                                  "inline-flex w-2 h-2 rounded-full mr-2",
                                   record.status === "Present"
-                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
-                                    : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
+                                    ? "bg-emerald-500"
+                                    : "bg-red-500"
+                                )}
+                              />
+                              <span
+                                className={cn(
+                                  "text-xs font-medium",
+                                  record.status === "Present"
+                                    ? "text-foreground"
+                                    : "text-destructive"
                                 )}
                               >
-                                <span
-                                  className={cn(
-                                    "h-1.5 w-1.5 rounded-full",
-                                    record.status === "Present"
-                                      ? "bg-emerald-500"
-                                      : "bg-red-500"
-                                  )}
-                                />
                                 {record.status}
                               </span>
                             </TableCell>
@@ -385,50 +409,63 @@ export default function AttendancePage() {
                       </TableBody>
                     </Table>
                   </div>
+                  <div className="p-2 border-t border-border bg-muted/20 text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      View Full History{" "}
+                      <ArrowUpRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  </div>
                 </Card>
               </div>
 
-              {/* Smart Insights */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-foreground flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-muted-foreground" />
+              {/* Compact Insights Panel */}
+              <div className="space-y-3 pt-2">
+                <h3 className="text-sm font-semibold text-foreground px-1 flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
                   Insights
                 </h3>
-                <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-2">
                   {INSIGHTS.map((insight, i) => (
-                    <Card key={i} className="border-border shadow-none bg-card">
-                      <CardContent className="p-4 flex items-center gap-4">
-                        <div
-                          className={cn(
-                            "h-10 w-10 rounded-full flex items-center justify-center shrink-0",
-                            insight.risk === "low"
-                              ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                              : insight.risk === "high"
-                              ? "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"
-                              : "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400"
-                          )}
-                        >
-                          {insight.risk === "low" ? (
-                            <CheckCircle2 className="h-5 w-5" />
-                          ) : insight.risk === "high" ? (
-                            <AlertCircle className="h-5 w-5" />
-                          ) : (
-                            <TrendingUp className="h-5 w-5" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-foreground">
-                            {insight.value}{" "}
-                            <span className="font-normal text-muted-foreground">
-                              {insight.desc}
-                            </span>
-                          </div>
-                          <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide mt-0.5">
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card/50 hover:bg-card transition-colors"
+                    >
+                      <div
+                        className={cn(
+                          "h-8 w-8 rounded-full flex items-center justify-center shrink-0 border",
+                          insight.risk === "low"
+                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                            : insight.risk === "high"
+                            ? "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400"
+                            : "bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400"
+                        )}
+                      >
+                        {insight.risk === "low" ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : insight.risk === "high" ? (
+                          <AlertCircle className="h-4 w-4" />
+                        ) : (
+                          <TrendingUp className="h-4 w-4" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline mb-0.5">
+                          <span className="text-xs font-semibold text-foreground uppercase tracking-wide">
                             {insight.title}
-                          </div>
+                          </span>
+                          <span className="text-xs font-bold font-mono text-muted-foreground">
+                            {insight.value}
+                          </span>
                         </div>
-                      </CardContent>
-                    </Card>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {insight.desc}
+                        </p>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
