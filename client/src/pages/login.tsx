@@ -210,8 +210,11 @@ export default function LoginPage() {
               >
                 Privacy Policy
               </a>
-              <a href="#" className="hover:text-zinc-900 transition-colors">
-                Terms
+              <a
+                href="/terms-of-service"
+                className="hover:text-zinc-900 transition-colors"
+              >
+                Terms of Service
               </a>
             </div>
           </div>

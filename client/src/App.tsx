@@ -34,6 +34,7 @@ import { EnhancedLoadingScreen } from "@/components/enhanced-loading-screen";
 import TeacherPage from "@/pages/teacher-dashboard";
 import NoClassroomAccessPage from "@/pages/no-classroom-access";
 import PrivacyPolicyPage from "@/pages/privacy-policy";
+import TermsOfServicePage from "@/pages/terms-of-service";
 
 function AuthenticatedApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -88,6 +89,14 @@ function AppContent() {
     window.location.pathname.endsWith("/privacy-policy")
   ) {
     return <PrivacyPolicyPage />;
+  }
+
+  if (
+    window.location.pathname === "/terms-of-service" ||
+    window.location.pathname === "/terms-of-service/" ||
+    window.location.pathname.endsWith("/terms-of-service")
+  ) {
+    return <TermsOfServicePage />;
   }
 
   const { user, loading: authLoading, role } = useAuth();
