@@ -90,116 +90,84 @@ export function DashboardBadgesCard() {
   const nextBadge = badges.length === 0 ? getNextBadgeProgress() : null;
 
   return (
-    <Link href="/settings?tab=badges">
-      <Card
-        className="flex flex-col h-full cursor-pointer hover:bg-muted/50 transition-colors group"
-        data-testid="card-dashboard-badges"
-      >
-        <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-          <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide group-hover:text-foreground transition-colors">
-            My Badges
-          </CardTitle>
-          <Medal className="h-5 w-5 text-purple-500" />
-        </CardHeader>
-        <CardContent className="flex-1 flex flex-col">
-          {loading ? (
+    <Card className="flex flex-col h-full" data-testid="card-dashboard-badges">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          My Badges
+        </CardTitle>
+        <Medal className="h-5 w-5 text-purple-500" />
+      </CardHeader>
+      <CardContent className="flex-1 flex flex-col">
+        {loading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+        ) : badges.length > 0 ? (
+          <div className="flex flex-col justify-between h-full gap-2">
+            <div>
+              <div className="text-2xl font-semibold font-mono tracking-tight">
+                {badges.length}
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  Achievements
+                </span>
+              </div>
+              <BadgeList badges={badges} limit={3} size="md" className="mt-2" />
+            </div>
+          </div>
+        ) : nextBadge ? (
+          <div className="flex flex-col gap-3 justify-between h-full">
             <div className="space-y-2">
-              <Skeleton className="h-8 w-8 rounded-full" />
-              <Skeleton className="h-3 w-20" />
-            </div>
-          ) : badges.length > 0 ? (
-            <div className="flex flex-col justify-between h-full gap-2">
-              <div>
-                <div className="text-2xl font-semibold font-mono tracking-tight">
-                  {badges.length}
-                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                    Achievements
-                  </span>
-                </div>
-                <BadgeList
-                  badges={badges}
-                  limit={3}
-                  size="md"
-                  className="mt-2"
-                />
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-xs h-7 mt-2 -ml-2 justify-start text-muted-foreground group-hover:text-foreground"
-              >
-                View All Collection &rarr;
-              </Button>
-            </div>
-          ) : nextBadge ? (
-            <div className="flex flex-col gap-3 justify-between h-full">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  {nextBadge.type === "streak" ? (
-                    <Flame className="h-5 w-5 text-orange-500" />
-                  ) : nextBadge.type === "submission" ? (
-                    <Target className="h-5 w-5 text-blue-500" />
-                  ) : (
-                    <CalendarDays className="h-5 w-5 text-emerald-500" />
-                  )}
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-foreground">
-                      {nextBadge.badge.label}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground line-clamp-1">
-                      {nextBadge.badge.description}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="h-2 w-full bg-secondary rounded-full overflow-hidden border border-border/50">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        nextBadge.type === "streak"
-                          ? "bg-orange-500"
-                          : nextBadge.type === "submission"
-                          ? "bg-blue-500"
-                          : "bg-emerald-500"
-                      }`}
-                      style={{ width: `${nextBadge.percentage}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <p className="text-[10px] text-muted-foreground font-medium">
-                      {Math.round(nextBadge.percentage)}%
-                    </p>
-                    <p className="text-[10px] text-muted-foreground font-bold">
-                      {nextBadge.current} / {nextBadge.target} {nextBadge.label}
-                    </p>
-                  </div>
+              <div className="flex items-center gap-2">
+                {nextBadge.type === "streak" ? (
+                  <Flame className="h-5 w-5 text-orange-500" />
+                ) : nextBadge.type === "submission" ? (
+                  <Target className="h-5 w-5 text-blue-500" />
+                ) : (
+                  <CalendarDays className="h-5 w-5 text-emerald-500" />
+                )}
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-foreground">
+                    {nextBadge.badge.label}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground line-clamp-1">
+                    {nextBadge.badge.description}
+                  </p>
                 </div>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full text-xs h-7 bg-transparent"
-              >
-                View All Badges &rarr;
-              </Button>
+              <div className="space-y-1">
+                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden border border-border/50">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      nextBadge.type === "streak"
+                        ? "bg-orange-500"
+                        : nextBadge.type === "submission"
+                        ? "bg-blue-500"
+                        : "bg-emerald-500"
+                    }`}
+                    style={{ width: `${nextBadge.percentage}%` }}
+                  />
+                </div>
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] text-muted-foreground font-medium">
+                    {Math.round(nextBadge.percentage)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-bold">
+                    {nextBadge.current} / {nextBadge.target} {nextBadge.label}
+                  </p>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="flex flex-col gap-2 justify-between h-full">
-              <span className="text-sm text-muted-foreground">
-                No badges earned yet.
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full text-xs h-7 bg-transparent"
-              >
-                See How to Unlock
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </Link>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 justify-between h-full">
+            <span className="text-sm text-muted-foreground">
+              No badges earned yet.
+            </span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

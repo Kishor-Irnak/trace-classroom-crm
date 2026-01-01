@@ -8,9 +8,11 @@ import {
   Lightbulb,
   Loader2,
   Trophy,
+  ArrowUpRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AssignmentCardCompact } from "@/components/assignment-card";
@@ -26,6 +28,7 @@ import { UserCheck } from "lucide-react";
 import { BadgeList } from "@/components/badge-ui";
 import { DashboardBadgesCard } from "@/components/dashboard-badges-card";
 import { StreakCard } from "@/components/streak-card";
+import { TokenRefreshPrompt } from "@/components/token-refresh-prompt";
 
 function OverallAttendanceCard({
   courses,
@@ -155,16 +158,21 @@ function OverallAttendanceCard({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <span className="text-lg font-medium text-muted-foreground">
-              No Data
-            </span>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">
+                No Attendance Yet
+              </p>
+              <p className="text-xs text-muted-foreground/70 leading-relaxed">
+                Ask your teacher to login to Trace to track real-time attendance
+              </p>
+            </div>
             <Link href="/attendance">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs w-full"
+                className="h-7 text-xs w-full mt-1"
               >
-                Configure
+                View Details
               </Button>
             </Link>
           </div>
@@ -214,28 +222,55 @@ function MetricCard({
   icon: typeof Clock;
   variant?: "default" | "warning" | "danger";
 }) {
+  const variantStyles = {
+    default: {
+      bg: "bg-gradient-to-br from-background to-muted/30",
+      iconBg: "bg-primary/10",
+      iconColor: "text-primary",
+      valueColor: "text-foreground",
+      border: "border-border hover:border-primary/50",
+    },
+    warning: {
+      bg: "bg-gradient-to-br from-amber-50/50 to-amber-100/30 dark:from-amber-950/20 dark:to-amber-900/10",
+      iconBg: "bg-amber-500/10",
+      iconColor: "text-amber-600 dark:text-amber-400",
+      valueColor: "text-amber-700 dark:text-amber-300",
+      border: "border-amber-200 dark:border-amber-800 hover:border-amber-400",
+    },
+    danger: {
+      bg: "bg-gradient-to-br from-red-50/50 to-red-100/30 dark:from-red-950/20 dark:to-red-900/10",
+      iconBg: "bg-destructive/10",
+      iconColor: "text-destructive",
+      valueColor: "text-destructive",
+      border: "border-red-200 dark:border-red-800 hover:border-destructive",
+    },
+  };
+
+  const styles = variantStyles[variant];
+
   return (
     <Card
       data-testid={`card-metric-${title.toLowerCase().replace(/\s+/g, "-")}`}
+      className={cn(
+        "overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5",
+        styles.border
+      )}
     >
-      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          {title}
-        </CardTitle>
-        <Icon
-          className={cn(
-            "h-5 w-5",
-            variant === "default" && "text-muted-foreground",
-            variant === "warning" && "text-foreground",
-            variant === "danger" && "text-destructive"
-          )}
-        />
+      <CardHeader className={cn("pb-3", styles.bg)}>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            {title}
+          </CardTitle>
+          <div className={cn("p-2 rounded-lg", styles.iconBg)}>
+            <Icon className={cn("h-4 w-4", styles.iconColor)} />
+          </div>
+        </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-2">
         <div
           className={cn(
-            "text-3xl font-semibold font-mono tracking-tight",
-            variant === "danger" && "text-destructive"
+            "text-3xl font-bold font-mono tracking-tight tabular-nums",
+            styles.valueColor
           )}
         >
           {value}
@@ -253,37 +288,65 @@ function WeeklyWorkload({
   const maxCount = Math.max(...data.map((d) => d.count), 1);
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Weekly Workload</CardTitle>
+    <Card className="overflow-hidden">
+      <CardHeader className="pb-3 bg-gradient-to-br from-background to-muted/20">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-primary" />
+            Weekly Workload
+          </CardTitle>
+          <Badge variant="outline" className="text-xs font-mono">
+            {data.reduce((sum, d) => sum + d.count, 0)} total
+          </Badge>
+        </div>
       </CardHeader>
-      <CardContent>
-        <div className="flex items-end justify-between gap-2 h-32">
+      <CardContent className="pt-4">
+        <div className="flex items-end justify-between gap-3 h-36">
           {data.map((item, index) => (
             <div
               key={index}
-              className="flex flex-col items-center gap-2 flex-1"
+              className="flex flex-col items-center gap-2 flex-1 group"
             >
-              <span className="text-xs font-mono text-muted-foreground">
-                {item.count > 0 ? item.count : ""}
-              </span>
-              <div
-                className={cn(
-                  "w-full rounded-t-sm transition-all",
-                  item.isToday ? "bg-foreground" : "bg-muted",
-                  item.count === 0 && "min-h-[4px]"
-                )}
-                style={{
-                  height:
-                    item.count > 0
-                      ? `${(item.count / maxCount) * 80}px`
-                      : "4px",
-                }}
-              />
               <span
                 className={cn(
-                  "text-xs",
-                  item.isToday ? "font-medium" : "text-muted-foreground"
+                  "text-xs font-bold tabular-nums transition-all",
+                  item.count > 0
+                    ? item.isToday
+                      ? "text-primary"
+                      : "text-muted-foreground"
+                    : "text-transparent"
+                )}
+              >
+                {item.count > 0 ? item.count : "0"}
+              </span>
+              <div className="relative w-full">
+                <div
+                  className={cn(
+                    "w-full rounded-t-md transition-all duration-500 ease-out relative overflow-hidden",
+                    item.isToday
+                      ? "bg-gradient-to-t from-primary to-primary/70 shadow-lg shadow-primary/20"
+                      : "bg-gradient-to-t from-muted to-muted/50",
+                    item.count === 0 && "min-h-[4px] opacity-30",
+                    "group-hover:scale-105 group-hover:shadow-xl"
+                  )}
+                  style={{
+                    height:
+                      item.count > 0
+                        ? `${(item.count / maxCount) * 96}px`
+                        : "4px",
+                  }}
+                >
+                  {item.count > 0 && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/10 to-white/20" />
+                  )}
+                </div>
+              </div>
+              <span
+                className={cn(
+                  "text-xs font-medium transition-colors",
+                  item.isToday
+                    ? "text-primary font-bold"
+                    : "text-muted-foreground group-hover:text-foreground"
                 )}
               >
                 {item.day}
@@ -508,6 +571,7 @@ export default function DashboardPage() {
     assignments,
     syncClassroom,
     courses,
+    error,
   } = useClassroom();
   const { signOut } = useAuth();
   const [selectedAssignment, setSelectedAssignment] =
@@ -515,63 +579,61 @@ export default function DashboardPage() {
 
   const metrics = getDashboardMetrics();
 
+  // Check if there's a token-related error or no data
+  if (error && error.toLowerCase().includes("session")) {
+    return <TokenRefreshPrompt />;
+  }
+
   if (assignments.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
-        <div className="text-center space-y-2">
-          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
-          <h2 className="text-lg font-medium text-destructive">
-            Troubleshooting
-          </h2>
-          <p className="text-sm text-muted-foreground max-w-md">
-            It seems data isn't fetching correctly. Please log out and log in
-            again to resolve this.
-          </p>
-        </div>
-        <Button
-          onClick={() => signOut()}
-          variant="destructive"
-          className="px-4 py-2"
-        >
-          Log Out
-        </Button>
-      </div>
-    );
+    return <TokenRefreshPrompt />;
   }
 
   return (
     <>
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
+      <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
         {metrics.upcoming7Days > 0 && (
-          <div className="flex items-center justify-between p-4 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-xl shadow-sm animate-in slide-in-from-top-2">
-            <div className="flex items-center gap-4">
-              <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg text-amber-700 dark:text-amber-400 shrink-0">
-                <Lightbulb className="h-5 w-5" />
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-50 via-amber-50/80 to-orange-50/50 dark:from-amber-950/40 dark:via-amber-900/20 dark:to-orange-950/20 border border-amber-200/60 dark:border-amber-800/40 shadow-lg shadow-amber-100/50 dark:shadow-amber-950/20 animate-in slide-in-from-top-2">
+            {/* Decorative background pattern */}
+            <div className="absolute inset-0 bg-grid-amber-200/20 dark:bg-grid-amber-800/10 [mask-image:radial-gradient(ellipse_at_center,transparent_20%,black)]" />
+
+            <div className="relative flex items-center justify-between p-5 sm:p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl text-white shadow-lg shadow-amber-500/30 shrink-0">
+                  <Lightbulb className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-amber-900 dark:text-amber-100 flex items-center gap-2">
+                    Weekly Focus
+                    <Badge
+                      variant="secondary"
+                      className="bg-amber-200/60 dark:bg-amber-800/40 text-amber-900 dark:text-amber-100 border-0 text-xs font-bold"
+                    >
+                      {metrics.upcoming7Days}{" "}
+                      {metrics.upcoming7Days === 1 ? "task" : "tasks"}
+                    </Badge>
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
+                    You have{" "}
+                    <span className="font-bold text-amber-900 dark:text-amber-100">
+                      {metrics.upcoming7Days} assignment
+                      {metrics.upcoming7Days !== 1 ? "s" : ""}
+                    </span>{" "}
+                    due within the next 7 days.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-0.5">
-                <p className="text-sm text-foreground font-semibold">
-                  Weekly Focus
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  You have{" "}
-                  <span className="font-medium text-amber-700 dark:text-amber-400">
-                    {metrics.upcoming7Days} assignment
-                    {metrics.upcoming7Days !== 1 ? "s" : ""}
-                  </span>{" "}
-                  due within the next 7 days.
-                </p>
-              </div>
+              {/* Action can be context-aware, e.g., view timeline */}
+              <Link href="/timeline">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hidden sm:flex border-amber-300 dark:border-amber-700 bg-white/50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/50 hover:border-amber-400 dark:hover:border-amber-600 shadow-sm"
+                >
+                  View Timeline
+                  <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
+                </Button>
+              </Link>
             </div>
-            {/* Action can be context-aware, e.g., view timeline */}
-            <Link href="/timeline">
-              <Button
-                variant="outline"
-                size="sm"
-                className="hidden sm:flex border-amber-200 text-amber-900 hover:bg-amber-100/50 hover:text-amber-950 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-900/50"
-              >
-                View Timeline
-              </Button>
-            </Link>
           </div>
         )}
 

@@ -7,6 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useState } from "react";
 
 interface BadgeIconProps {
   badgeId: string;
@@ -22,6 +23,7 @@ export function BadgeIcon({
   showLabel = false,
 }: BadgeIconProps) {
   const badge = BADGES[badgeId];
+  const [isOpen, setIsOpen] = useState(false);
 
   if (!badge) return null;
 
@@ -41,7 +43,7 @@ export function BadgeIcon({
 
   return (
     <TooltipProvider delayDuration={0}>
-      <Tooltip>
+      <Tooltip open={isOpen} onOpenChange={setIsOpen}>
         <TooltipTrigger asChild>
           <div
             className={cn(
@@ -51,7 +53,12 @@ export function BadgeIcon({
               showLabel && "px-3 w-auto h-auto py-1", // Adjust shape if label shown
               className
             )}
-            onClick={(e) => e.stopPropagation()} // Prevent row clicks
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(!isOpen); // Toggle tooltip on click
+            }}
+            onMouseEnter={() => setIsOpen(true)} // Show on hover (desktop)
+            onMouseLeave={() => setIsOpen(false)} // Hide on hover out (desktop)
           >
             <Icon className={cn(iconSizes[size])} strokeWidth={2.5} />
             {showLabel && (
@@ -65,6 +72,7 @@ export function BadgeIcon({
           <TooltipContent
             side="top"
             className="max-w-[200px] text-center p-3 space-y-1 z-50 bg-popover/95 backdrop-blur-sm shadow-xl"
+            onPointerDownOutside={() => setIsOpen(false)} // Close when clicking outside
           >
             <p className="font-bold text-xs uppercase tracking-wide text-popover-foreground">
               {badge.label}

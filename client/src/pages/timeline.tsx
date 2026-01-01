@@ -12,6 +12,9 @@ import {
   Mail,
   AlertCircle,
   Check,
+  ZoomIn,
+  ZoomOut,
+  Minimize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +38,7 @@ import {
 } from "@/components/ui/tooltip";
 import { FcGoogle } from "react-icons/fc";
 import { cn } from "@/lib/utils";
+import { TokenRefreshPrompt } from "@/components/token-refresh-prompt";
 
 // --- Loading Configuration ---
 
@@ -129,6 +133,20 @@ function EnhancedLoadingScreen() {
             </div>
           </div>
 
+          {/* Scroll Down Indicator - Shows when there are tasks below */}
+          {hasVerticalScroll && !isAtBottom && (
+            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 animate-bounce">
+              <div className="bg-white border border-zinc-200 rounded-full shadow-lg px-3 py-2 flex items-center gap-2">
+                <ArrowDown
+                  className="h-4 w-4 text-zinc-950"
+                  strokeWidth={1.5}
+                />
+                <span className="text-xs font-medium text-zinc-900">
+                  More tasks below
+                </span>
+              </div>
+            </div>
+          )}
           {/* Tips Section */}
           <div className="flex gap-3 items-start bg-white border border-zinc-200 p-4 rounded-md shadow-sm max-w-sm mx-auto animate-in fade-in slide-in-from-bottom-2 duration-700">
             <Lightbulb className="h-4 w-4 text-zinc-900 shrink-0 mt-0.5" />
@@ -249,6 +267,8 @@ export default function TimelinePage() {
   const [currentView, setCurrentView] = useState<"timeline" | "calendar">(
     "timeline"
   );
+  const [zoomLevel, setZoomLevel] = useState(1); // 0.5 to 2
+  const [compactView, setCompactView] = useState(false);
 
   const [emailEvents, setEmailEvents] = useState<Assignment[]>([]);
 
@@ -305,27 +325,7 @@ export default function TimelinePage() {
   // UPDATED: Now returns EnhancedLoadingScreen
 
   if (assignments.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
-        <div className="text-center space-y-2">
-          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
-          <h2 className="text-lg font-medium text-destructive">
-            Troubleshooting
-          </h2>
-          <p className="text-sm text-muted-foreground max-w-md">
-            It seems data isn't fetching correctly. Please log out and log in
-            again to resolve this.
-          </p>
-        </div>
-        <Button
-          onClick={() => signOut()}
-          variant="destructive"
-          className="px-4 py-2"
-        >
-          Log Out
-        </Button>
-      </div>
-    );
+    return <TokenRefreshPrompt />;
   }
 
   // Timeline View Component
@@ -333,7 +333,8 @@ export default function TimelinePage() {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const dragStart = useRef({ x: 0, left: 0 });
-    const dayWidth = 60; // Keep fixed width for alignment
+    const baseDayWidth = 60;
+    const dayWidth = baseDayWidth * zoomLevel; // Dynamic width based on zoom
 
     const { earliestDate, latestDate, initialScrollPosition } = useMemo(() => {
       const today = new Date();
@@ -364,20 +365,34 @@ export default function TimelinePage() {
       const bufferedMaxDate = new Date(maxDate);
       bufferedMaxDate.setDate(bufferedMaxDate.getDate() + 30);
 
-      const daysFromStartToToday = Math.ceil(
-        (today.getTime() - bufferedMinDate.getTime()) / (1000 * 3600 * 24)
+      // Find nearest upcoming assignment or today
+      let scrollTarget = today;
+      const upcomingAssignments = filteredAssignments
+        .filter((a) => a.dueDate && new Date(a.dueDate) >= today)
+        .sort(
+          (a, b) =>
+            new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime()
+        );
+
+      if (upcomingAssignments.length > 0) {
+        scrollTarget = new Date(upcomingAssignments[0].dueDate!);
+      }
+
+      const daysFromStartToTarget = Math.ceil(
+        (scrollTarget.getTime() - bufferedMinDate.getTime()) /
+          (1000 * 3600 * 24)
       );
 
-      // Calculate scroll to center 'Today'
+      // Calculate scroll to center the target (nearest task or today)
       const initialScroll =
-        daysFromStartToToday * dayWidth + dayWidth / 2 - window.innerWidth / 2;
+        daysFromStartToTarget * dayWidth + dayWidth / 2 - window.innerWidth / 2;
 
       return {
         earliestDate: bufferedMinDate,
         latestDate: bufferedMaxDate,
         initialScrollPosition: Math.max(0, initialScroll),
       };
-    }, [filteredAssignments]);
+    }, [filteredAssignments, dayWidth]);
 
     const dates = useMemo(
       () => getDaysArray(earliestDate, latestDate),
@@ -444,10 +459,39 @@ export default function TimelinePage() {
       };
     };
 
+    // Scroll detection for vertical overflow
+    const [hasVerticalScroll, setHasVerticalScroll] = useState(false);
+    const [isAtBottom, setIsAtBottom] = useState(false);
+    const verticalScrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      const checkScroll = () => {
+        if (verticalScrollRef.current) {
+          const { scrollHeight, clientHeight, scrollTop } =
+            verticalScrollRef.current;
+          setHasVerticalScroll(scrollHeight > clientHeight);
+          setIsAtBottom(scrollTop + clientHeight >= scrollHeight - 10);
+        }
+      };
+
+      checkScroll();
+      const scrollEl = verticalScrollRef.current;
+      scrollEl?.addEventListener("scroll", checkScroll);
+      window.addEventListener("resize", checkScroll);
+
+      return () => {
+        scrollEl?.removeEventListener("scroll", checkScroll);
+        window.removeEventListener("resize", checkScroll);
+      };
+    }, [filteredAssignments, compactView]);
+
     return (
       <div className="flex-1 overflow-hidden relative flex flex-col h-full bg-background">
         <div
-          ref={scrollContainerRef}
+          ref={(el) => {
+            scrollContainerRef.current = el;
+            verticalScrollRef.current = el;
+          }}
           className={cn(
             "flex-1 overflow-auto relative select-none",
             isDragging ? "cursor-grabbing" : "cursor-default"
@@ -501,7 +545,20 @@ export default function TimelinePage() {
             </div>
 
             {/* 2. MAIN CONTENT AREA (GRID + TASKS) */}
-            <div className="relative pt-6 min-h-[500px]">
+            <div
+              className="relative pt-6"
+              style={{
+                minHeight: compactView
+                  ? `${Math.max(
+                      300,
+                      filteredAssignments.filter((a) => a.dueDate).length * 40
+                    )}px`
+                  : `${Math.max(
+                      400,
+                      filteredAssignments.filter((a) => a.dueDate).length * 60
+                    )}px`,
+              }}
+            >
               {/* Vertical Grid Lines & TODAY LINE */}
               <div className="absolute inset-0 flex pointer-events-none h-full z-0">
                 {dates.map((date, i) => {
@@ -525,7 +582,12 @@ export default function TimelinePage() {
               </div>
 
               {/* Assignments Layer */}
-              <div className="space-y-3 px-0 relative z-10 mt-2">
+              <div
+                className={cn(
+                  "px-0 relative z-10 mt-2",
+                  compactView ? "space-y-1" : "space-y-3"
+                )}
+              >
                 {filteredAssignments
                   .filter((a) => a.dueDate)
                   .map((assignment) => {
@@ -561,7 +623,7 @@ export default function TimelinePage() {
                     const style = {
                       left: `${left}px`,
                       width: `${width}px`,
-                      minWidth: "140px",
+                      minWidth: compactView ? "100px" : "140px",
                       backgroundColor: isCompleted ? undefined : courseColor,
                       borderColor: isCompleted
                         ? undefined
@@ -581,32 +643,57 @@ export default function TimelinePage() {
                       "bg-card border shadow-sm " +
                       (courseColor ? "text-slate-900" : "text-foreground");
 
+                    const taskHeight = compactView ? "h-8" : "h-12";
+                    const containerHeight = compactView ? "h-9" : "h-14";
+
                     return (
-                      <div key={assignment.id} className="relative h-14 group">
+                      <div
+                        key={assignment.id}
+                        className={cn("relative group", containerHeight)}
+                      >
                         <div
                           onClick={() => setSelectedAssignment(assignment)}
                           className={cn(
-                            "absolute top-0 h-12 rounded-lg border transition-all cursor-pointer flex flex-col justify-center px-3 overflow-hidden group hover:scale-[1.01] z-10 hover:z-30 hover:shadow-md",
+                            "absolute top-0 rounded-lg border transition-all cursor-pointer flex flex-col justify-center overflow-hidden group hover:scale-[1.01] z-10 hover:z-30 hover:shadow-md",
+                            taskHeight,
+                            compactView ? "px-2" : "px-3",
                             isCompleted ? completedStyle : defaultStyle
                           )}
                           style={style}
                         >
                           <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <span className="truncate text-xs font-bold leading-none flex items-center gap-1">
+                            <span
+                              className={cn(
+                                "truncate font-bold leading-none flex items-center gap-1",
+                                compactView ? "text-[10px]" : "text-xs"
+                              )}
+                            >
                               {assignment.courseId === "system" && (
-                                <Mail className="h-3 w-3 inline-block" />
+                                <Mail
+                                  className={cn(
+                                    "inline-block",
+                                    compactView ? "h-2.5 w-2.5" : "h-3 w-3"
+                                  )}
+                                />
                               )}
                               {isCompleted && (
-                                <Check className="h-3 w-3 inline-block mr-0.5" />
+                                <Check
+                                  className={cn(
+                                    "inline-block mr-0.5",
+                                    compactView ? "h-2.5 w-2.5" : "h-3 w-3"
+                                  )}
+                                />
                               )}
                               {assignment.title}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between opacity-80">
-                            <span className="text-[10px] font-semibold truncate max-w-[80px]">
-                              {assignment.courseName}
-                            </span>
-                          </div>
+                          {!compactView && (
+                            <div className="flex items-center justify-between opacity-80">
+                              <span className="text-[10px] font-semibold truncate max-w-[80px]">
+                                {assignment.courseName}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -615,6 +702,107 @@ export default function TimelinePage() {
             </div>
           </div>
         </div>
+
+        {/* Scroll Down Indicator - Shows when there are tasks below */}
+        {hasVerticalScroll && !isAtBottom && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 animate-bounce pointer-events-none">
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full shadow-lg px-3 py-2 flex items-center gap-2">
+              <ArrowDown
+                className="h-4 w-4 text-zinc-950 dark:text-zinc-50"
+                strokeWidth={1.5}
+              />
+              <span className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
+                More tasks below
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Zoom Controls - Bottom Right */}
+        <div className="absolute bottom-20 right-6 z-40 flex flex-col gap-2">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-1 flex flex-col gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              onClick={() => {
+                // Save current scroll position
+                const scrollEl = scrollContainerRef.current;
+                const scrollLeft = scrollEl?.scrollLeft || 0;
+                const scrollTop = scrollEl?.scrollTop || 0;
+
+                const newZoom = Math.min(2, zoomLevel + 0.25);
+                setZoomLevel(newZoom);
+
+                // Disable compact view when zooming in past 75%
+                if (newZoom > 0.75) {
+                  setCompactView(false);
+                }
+
+                // Restore scroll position after zoom
+                setTimeout(() => {
+                  if (scrollEl) {
+                    scrollEl.scrollLeft = scrollLeft * (newZoom / zoomLevel);
+                    scrollEl.scrollTop = scrollTop;
+                  }
+                }, 0);
+              }}
+              disabled={zoomLevel >= 2}
+              title="Zoom In (Normal View)"
+            >
+              <ZoomIn
+                className="h-4 w-4 text-zinc-950 dark:text-zinc-50"
+                strokeWidth={1.5}
+              />
+            </Button>
+            <div className="h-px bg-zinc-200 dark:bg-zinc-700" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              onClick={() => {
+                // Save current scroll position
+                const scrollEl = scrollContainerRef.current;
+                const scrollLeft = scrollEl?.scrollLeft || 0;
+                const scrollTop = scrollEl?.scrollTop || 0;
+
+                const newZoom = Math.max(0.5, zoomLevel - 0.25);
+                setZoomLevel(newZoom);
+
+                // Enable compact view when zooming out to 75% or less
+                if (newZoom <= 0.75) {
+                  setCompactView(true);
+                }
+
+                // Restore scroll position after zoom
+                setTimeout(() => {
+                  if (scrollEl) {
+                    scrollEl.scrollLeft = scrollLeft * (newZoom / zoomLevel);
+                    scrollEl.scrollTop = scrollTop;
+                  }
+                }, 0);
+              }}
+              disabled={zoomLevel <= 0.5}
+              title="Zoom Out (Compact View)"
+            >
+              <ZoomOut
+                className="h-4 w-4 text-zinc-950 dark:text-zinc-50"
+                strokeWidth={1.5}
+              />
+            </Button>
+          </div>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-sm px-2 py-1 text-center">
+            <span className="text-[10px] font-mono text-zinc-600 dark:text-zinc-400">
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            {compactView && (
+              <div className="text-[8px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mt-0.5">
+                Compact
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="flex-none p-2 border-t bg-background/70 backdrop-blur-sm flex items-center justify-center text-xs text-muted-foreground font-medium z-30 relative">
           <MousePointer size={14} className="mr-2" />
           Tip: Hold{" "}

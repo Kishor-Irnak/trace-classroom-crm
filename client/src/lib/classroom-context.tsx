@@ -865,7 +865,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
 }
 
 export function ClassroomProvider({ children }: { children: ReactNode }) {
-  const { user, accessToken } = useAuth();
+  const { user, accessToken, refreshAccessToken } = useAuth();
   const [courses, setCourses] = useState<Course[]>(() => {
     const saved = sessionStorage.getItem("classroom_courses");
     return saved ? JSON.parse(saved) : [];
@@ -906,20 +906,32 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       // Try to get a fresh access token if not available
       let token = accessToken;
       if (!token) {
-        // Access token might have expired, try to get a fresh one
+        // Access token might have expired or been cleared, try to refresh it
+        console.log("No access token found, attempting to refresh...");
+
         try {
-          // Get the ID token which we can use to verify auth
-          const idToken = await user.getIdToken();
-          console.log(
-            "Got ID token, but need OAuth access token for Classroom API"
-          );
-          setError(
-            "Access token expired. Please sign out and sign in again to refresh your token."
-          );
-          setIsLoading(false);
-          return;
+          const refreshed = await refreshAccessToken();
+
+          if (refreshed) {
+            // Get the newly refreshed token
+            // Note: We need to wait a moment for the state to update
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            const newToken = sessionStorage.getItem("google_access_token");
+
+            if (newToken) {
+              token = newToken;
+              console.log("Successfully refreshed access token");
+            } else {
+              throw new Error("Token refresh succeeded but token not found");
+            }
+          } else {
+            throw new Error("Token refresh failed");
+          }
         } catch (err) {
-          setError("Unable to authenticate. Please sign in again.");
+          console.error("Failed to refresh token:", err);
+          setError(
+            "Your session has expired. Please click below to sign in again and refresh your access."
+          );
           setIsLoading(false);
           return;
         }
@@ -1155,7 +1167,7 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     },
-    [user, accessToken]
+    [user, accessToken, refreshAccessToken, toast]
   );
 
   // Auto-sync on first login if no data exists

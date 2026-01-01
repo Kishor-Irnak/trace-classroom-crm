@@ -23,6 +23,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   requestGmailPermissions: () => Promise<boolean>;
   requestCalendarPermissions: () => Promise<boolean>;
+  refreshAccessToken: () => Promise<boolean>;
   signOut: () => Promise<void>;
   error: string | null;
 }
@@ -52,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user) {
         setRole(null);
         setLoading(false);
+        setAccessToken(null);
+        sessionStorage.removeItem("google_access_token");
       }
       // If user exists, we wait for role detection which happens via effect below or explicit call
     });
@@ -308,6 +311,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshTokenInternal = async (): Promise<boolean> => {
+    if (!user) return false;
+
+    try {
+      // Force a re-authentication with the same provider to get a fresh token
+      const provider = new GoogleAuthProvider();
+      provider.addScope(
+        "https://www.googleapis.com/auth/classroom.courses.readonly"
+      );
+      provider.addScope(
+        "https://www.googleapis.com/auth/classroom.coursework.me"
+      );
+      provider.addScope(
+        "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly"
+      );
+      provider.addScope(
+        "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly"
+      );
+
+      // Use select_account to allow quick re-auth without full consent
+      provider.setCustomParameters({
+        prompt: "select_account",
+        login_hint: user.email || "",
+      });
+
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+
+      if (credential?.accessToken) {
+        setAccessToken(credential.accessToken);
+        sessionStorage.setItem("google_access_token", credential.accessToken);
+        console.log("Access token refreshed successfully");
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Failed to refresh access token:", err);
+      return false;
+    }
+  };
+
+  const refreshAccessToken = async (): Promise<boolean> => {
+    return refreshTokenInternal();
+  };
+
   const signOut = async () => {
     try {
       await firebaseSignOut(auth);
@@ -332,6 +380,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithGoogle,
         requestGmailPermissions,
         requestCalendarPermissions,
+        refreshAccessToken,
         signOut,
         error,
       }}

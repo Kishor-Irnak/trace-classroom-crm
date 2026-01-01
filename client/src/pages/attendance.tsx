@@ -59,19 +59,30 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
+
+// --- Helper Functions ---
+
+/**
+ * Calculate the current academic year based on the current date.
+ * Academic years typically run from June/July to May/June of the next year.
+ * If current month is January-May, we're in the previous year's academic year.
+ * If current month is June-December, we're in the current year's academic year.
+ */
+function getCurrentAcademicYear(): string {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-indexed (0 = January, 11 = December)
+
+  // If we're in January-May (months 0-4), the academic year started last year
+  // If we're in June-December (months 5-11), the academic year started this year
+  const startYear = currentMonth < 5 ? currentYear - 1 : currentYear;
+  const endYear = startYear + 1;
+
+  // Format as "2024-25"
+  return `${startYear}-${endYear.toString().slice(-2)}`;
+}
 
 // --- Types ---
 type CourseStateStr =
@@ -129,11 +140,10 @@ export default function AttendancePage() {
   const [courseStates, setCourseStates] = useState<
     Record<string, EnrichedCourseData>
   >({});
-  const [unlockKey, setUnlockKey] = useState("");
-  const [unlockingCourseId, setUnlockingCourseId] = useState<string | null>(
-    null
-  );
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Calculate current academic year
+  const academicYear = useMemo(() => getCurrentAcademicYear(), []);
 
   // Initialize course states
   useEffect(() => {
@@ -156,18 +166,9 @@ export default function AttendancePage() {
           } else if (!config.isVisible) {
             return { courseId: c.id, state: "hidden" } as EnrichedCourseData;
           } else {
-            // Check if already unlocked locally (mimicking session cache)
-            // UPDATED: Use localStorage with User ID to persist across re-logins
-            const storageKey = `unlocked_${user.uid}_${c.id}`;
-            const isUnlocked = localStorage.getItem(storageKey) === "true";
-
-            if (isUnlocked) {
-              // Trigger fetch immediately if unlocked
-              fetchAttendance(c.id, config.sheetUrl);
-              return { courseId: c.id, state: "loading" } as EnrichedCourseData;
-            } else {
-              return { courseId: c.id, state: "locked" } as EnrichedCourseData;
-            }
+            // Directly fetch attendance if configured and visible (no pass key needed)
+            fetchAttendance(c.id, config.sheetUrl);
+            return { courseId: c.id, state: "loading" } as EnrichedCourseData;
           }
         })
       );
@@ -353,16 +354,16 @@ export default function AttendancePage() {
   // --- Render ---
   return (
     <div className="h-full flex flex-col bg-background text-foreground overflow-hidden">
-      {/* Header */}
-      <div className="flex-none px-6 py-4 border-b border-border z-10 bg-background/95 backdrop-blur-sm">
-        <div className="flex items-center justify-between max-w-[1600px] mx-auto w-full">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold tracking-tight text-foreground">
+      {/* Header - Hidden on mobile since AppHeader shows the page title */}
+      <div className="hidden sm:flex flex-none px-4 sm:px-6 py-4 border-b border-border z-10 bg-background/95 backdrop-blur-sm">
+        <div className="flex items-center justify-between max-w-[1600px] mx-auto w-full gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <h1 className="text-base sm:text-lg font-semibold tracking-tight text-foreground whitespace-nowrap">
               Attendance
             </h1>
-            <span className="h-4 w-px bg-border mx-1" />
-            <span className="text-sm text-muted-foreground font-medium">
-              Academic Year 2024-25
+            <span className="hidden sm:block h-4 w-px bg-border mx-1" />
+            <span className="hidden sm:inline text-sm text-muted-foreground font-medium whitespace-nowrap">
+              Academic Year {academicYear}
             </span>
           </div>
           <Button
@@ -370,14 +371,17 @@ export default function AttendancePage() {
             size="sm"
             onClick={handleRefresh}
             className={cn(
-              "text-muted-foreground h-8",
+              "text-muted-foreground h-8 shrink-0",
               isRefreshing && "opacity-70"
             )}
           >
             <RotateCw
-              className={cn("h-3.5 w-3.5 mr-2", isRefreshing && "animate-spin")}
+              className={cn(
+                "h-3.5 w-3.5 sm:mr-2",
+                isRefreshing && "animate-spin"
+              )}
             />
-            Refresh Data
+            <span className="hidden sm:inline">Refresh Data</span>
           </Button>
         </div>
       </div>
@@ -386,50 +390,76 @@ export default function AttendancePage() {
         <div className="max-w-[1600px] mx-auto w-full p-6 space-y-8">
           {/* ZONE A: HERO */}
           <section>
-            <Card className="border-border shadow-sm bg-card transition-all duration-300 hover:shadow-md hover:scale-[1.002]">
-              <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-                <div>
-                  <div className="flex items-center gap-1.5 bg-emerald-500/5 px-2 py-0.5 rounded-full border border-emerald-500/10 w-fit mb-2">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                    </span>
-                    <span className="text-[9px] uppercase font-bold tracking-wider text-emerald-600/80">
-                      Realtime
-                    </span>
-                  </div>
+            {loadedCourses.length > 0 ? (
+              <Card className="border-border shadow-sm bg-card transition-all duration-300 hover:shadow-md hover:scale-[1.002]">
+                <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+                  <div>
+                    <div className="flex items-center gap-1.5 bg-emerald-500/5 px-2 py-0.5 rounded-full border border-emerald-500/10 w-fit mb-2">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                      </span>
+                      <span className="text-[9px] uppercase font-bold tracking-wider text-emerald-600/80">
+                        Realtime
+                      </span>
+                    </div>
 
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                      Overall Attendance
-                    </span>
-                    <Badge
-                      variant={
-                        overallStats.status === "safe"
-                          ? "outline"
-                          : "destructive"
-                      }
-                      className={cn(
-                        "ml-2 h-5 text-[10px] px-1.5 uppercase transition-transform duration-300 hover:scale-105",
-                        overallStats.color
-                      )}
-                    >
-                      {overallStats.status === "safe"
-                        ? "Safe Status"
-                        : "Attention Needed"}
-                    </Badge>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                        Overall Attendance
+                      </span>
+                      <Badge
+                        variant={
+                          overallStats.status === "safe"
+                            ? "outline"
+                            : "destructive"
+                        }
+                        className={cn(
+                          "ml-2 h-5 text-[10px] px-1.5 uppercase transition-transform duration-300 hover:scale-105",
+                          overallStats.color
+                        )}
+                      >
+                        {overallStats.status === "safe"
+                          ? "Safe Status"
+                          : "Attention Needed"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground transition-colors duration-300 hover:text-primary">
+                        {overallStats.percentage}%
+                      </span>
+                      <span className="text-sm sm:text-base text-muted-foreground font-medium">
+                        Average across {loadedCourses.length} active courses
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground transition-colors duration-300 hover:text-primary">
-                      {overallStats.percentage}%
-                    </span>
-                    <span className="text-sm sm:text-base text-muted-foreground font-medium">
-                      Average across {loadedCourses.length} active courses
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-border shadow-sm bg-card">
+                <CardContent className="p-8 flex flex-col items-center justify-center text-center gap-4">
+                  <div className="p-4 bg-muted/50 rounded-full">
+                    <CalendarDays className="h-8 w-8 text-muted-foreground/50" />
+                  </div>
+                  <div className="space-y-2 max-w-md">
+                    <h3 className="text-lg font-semibold text-foreground">
+                      No Attendance Configured Yet
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      Invite your teacher to login to{" "}
+                      <span className="font-semibold">Trace</span> to start
+                      tracking real-time attendance for your courses.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground/70 bg-muted/30 px-3 py-2 rounded-md">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    <span>
+                      Once configured, attendance will appear here automatically
                     </span>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
           </section>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
@@ -700,44 +730,6 @@ export default function AttendancePage() {
           </div>
         </div>
       </div>
-
-      {/* Unlock Dialog */}
-      <Dialog
-        open={!!unlockingCourseId}
-        onOpenChange={(open) => !open && setUnlockingCourseId(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Unlock Attendance</DialogTitle>
-            <DialogDescription>
-              Enter the pass key provided by your teacher to view attendance for
-              this course.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="pass-key">Pass Key</Label>
-              <Input
-                id="pass-key"
-                type="password"
-                placeholder="ENTER-KEY"
-                value={unlockKey}
-                onChange={(e) => setUnlockKey(e.target.value)}
-                className="uppercase tracking-widest font-mono text-center text-lg"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setUnlockingCourseId(null)}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleUnlock}>Unlock Access</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

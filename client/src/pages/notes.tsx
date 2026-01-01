@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { TokenRefreshPrompt } from "@/components/token-refresh-prompt";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -42,11 +43,23 @@ export default function NotesPage() {
       return cm.materials.flatMap((m: any) => {
         let files = [];
         if (m.driveFile) {
+          const driveFileData = m.driveFile.driveFile;
+
+          // Try multiple thumbnail sources
+          let thumbnailUrl =
+            driveFileData.thumbnailUrl || driveFileData.iconUrl || null;
+
+          // If no thumbnail, try to construct one from the file ID
+          if (!thumbnailUrl && driveFileData.id) {
+            // Google Drive thumbnail URL format
+            thumbnailUrl = `https://drive.google.com/thumbnail?id=${driveFileData.id}&sz=w800`;
+          }
+
           files.push({
-            id: m.driveFile.driveFile.id,
-            title: m.driveFile.driveFile.title,
-            link: m.driveFile.driveFile.alternateLink,
-            thumbnail: m.driveFile.driveFile.thumbnailUrl,
+            id: driveFileData.id,
+            title: driveFileData.title,
+            link: driveFileData.alternateLink,
+            thumbnail: thumbnailUrl,
             type: "driveFile",
           });
         }
@@ -63,27 +76,7 @@ export default function NotesPage() {
   }
 
   if (courses.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4 p-6">
-        <div className="text-center space-y-2">
-          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
-          <h2 className="text-lg font-medium text-destructive">
-            Troubleshooting
-          </h2>
-          <p className="text-sm text-muted-foreground max-w-md">
-            It seems data isn't fetching correctly. Please log out and log in
-            again to resolve this.
-          </p>
-        </div>
-        <Button
-          onClick={() => signOut()}
-          variant="destructive"
-          className="px-4 py-2"
-        >
-          Log Out
-        </Button>
-      </div>
-    );
+    return <TokenRefreshPrompt />;
   }
 
   return (
@@ -299,26 +292,39 @@ export default function NotesPage() {
                         </CardHeader>
 
                         <div className="relative aspect-[3/4] bg-muted/30 w-full overflow-hidden group">
-                          {doc.thumbnail ? (
+                          {doc.thumbnail && (
                             <img
-                              src={doc.thumbnail.replace("s220", "s800")}
+                              src={
+                                doc.thumbnail.includes("s220")
+                                  ? doc.thumbnail.replace("s220", "s800")
+                                  : doc.thumbnail
+                              }
                               alt={doc.title}
                               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                               referrerPolicy="no-referrer"
                               onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                                e.currentTarget.nextElementSibling?.classList.remove(
-                                  "hidden"
+                                console.log(
+                                  "Thumbnail failed to load:",
+                                  doc.thumbnail
                                 );
+                                e.currentTarget.style.display = "none";
+                                const fallback =
+                                  e.currentTarget.parentElement?.querySelector(
+                                    ".fallback-viewer"
+                                  ) as HTMLElement;
+                                if (fallback) {
+                                  fallback.classList.remove("hidden");
+                                  fallback.classList.add("block");
+                                }
                               }}
                             />
-                          ) : null}
+                          )}
 
                           {/* Fallback or Overlay */}
                           <div
                             className={cn(
-                              "absolute inset-0 w-full h-full", // Full coverage
-                              doc.thumbnail ? "hidden" : "block" // Toggle visibility based on thumbnail existence
+                              "fallback-viewer absolute inset-0 w-full h-full",
+                              doc.thumbnail ? "hidden" : "block"
                             )}
                           >
                             <MockDocViewer
@@ -376,14 +382,38 @@ export default function NotesPage() {
                         key={`${doc.id}-${idx}`}
                         className="group flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors"
                       >
-                        <div
-                          className={cn(
-                            "h-10 w-10 flex items-center justify-center rounded-md shrink-0",
-                            typeColor
-                          )}
-                        >
-                          <FileText className="h-5 w-5" />
+                        {/* Thumbnail or Icon */}
+                        <div className="relative h-16 w-16 rounded-md overflow-hidden shrink-0 bg-muted/30 border border-border">
+                          {doc.thumbnail ? (
+                            <img
+                              src={
+                                doc.thumbnail.includes("s220")
+                                  ? doc.thumbnail.replace("s220", "s400")
+                                  : doc.thumbnail
+                              }
+                              alt={doc.title}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                const fallback = e.currentTarget
+                                  .nextElementSibling as HTMLElement;
+                                if (fallback)
+                                  fallback.classList.remove("hidden");
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className={cn(
+                              "absolute inset-0 flex items-center justify-center",
+                              doc.thumbnail ? "hidden" : "flex",
+                              typeColor
+                            )}
+                          >
+                            <FileText className="h-6 w-6" />
+                          </div>
                         </div>
+
                         <div className="flex-1 min-w-0">
                           <h4 className="font-medium text-sm truncate text-card-foreground group-hover:text-primary transition-colors">
                             {doc.title}

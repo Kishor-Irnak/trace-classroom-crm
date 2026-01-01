@@ -25,6 +25,7 @@ import type { Assignment, AssignmentStatus } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { Lightbulb, Loader2, AlertCircle } from "lucide-react"; // Added Icons
 import { useAuth } from "@/lib/auth-context";
+import { TokenRefreshPrompt } from "@/components/token-refresh-prompt";
 
 // --- Loading Data & Components ---
 
@@ -249,27 +250,8 @@ export default function PipelinePage() {
     }
   };
 
-
-
   if (assignments.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 p-6">
-        <div className="text-center space-y-2">
-          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
-          <h2 className="text-lg font-medium text-destructive">Troubleshooting</h2>
-          <p className="text-sm text-muted-foreground max-w-md">
-            It seems data isn't fetching correctly. Please log out and log in again to resolve this.
-          </p>
-        </div>
-        <Button
-          onClick={() => signOut()}
-          variant="destructive"
-          className="px-4 py-2"
-        >
-          Log Out
-        </Button>
-      </div>
-    );
+    return <TokenRefreshPrompt />;
   }
 
   return (

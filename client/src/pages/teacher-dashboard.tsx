@@ -41,7 +41,7 @@ import { AttendanceService } from "@/services/attendance-service";
 // --- Constants ---
 const TEACHER_TIPS = [
   "You can hide attendance visibility for specific courses during exams.",
-  "Secure pass keys are auto-generated for each course sheet.",
+  "Students can directly view attendance when you make it visible.",
   "Syncing pulls the latest course list from Google Classroom.",
   "Students can only see their own attendance records.",
   "Teacher Dashboard gives you a quick overview of enabled courses.",
@@ -368,7 +368,7 @@ function TeacherCourses({
         {courses.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             <p>No active courses found where you are a teacher.</p>
-            <Button variant="link" onClick={onRefresh}>
+            <Button variant="ghost" onClick={onRefresh}>
               Try Syncing Again
             </Button>
           </div>
@@ -383,7 +383,6 @@ function TeacherAttendanceSettings({ courseId }: { courseId: string }) {
   const { toast } = useToast();
   const [isVisible, setIsVisible] = useState(false);
   const [sheetUrl, setSheetUrl] = useState("");
-  const [passKey, setPassKey] = useState("");
   const [emailColumn, setEmailColumn] = useState("A");
   const [isSaved, setIsSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -396,11 +395,8 @@ function TeacherAttendanceSettings({ courseId }: { courseId: string }) {
       const config = await AttendanceService.getCourseConfig(courseId);
       if (mounted && config) {
         setIsVisible(config.isVisible);
-        setPassKey(config.passKey);
         setSheetUrl(config.sheetUrl);
         setEmailColumn(config.emailColumn || "A");
-      } else if (mounted) {
-        setPassKey(Math.random().toString(36).slice(-8).toUpperCase());
       }
       if (mounted) setLoading(false);
     };
@@ -426,7 +422,7 @@ function TeacherAttendanceSettings({ courseId }: { courseId: string }) {
     try {
       await AttendanceService.saveCourseConfig(courseId, {
         sheetUrl,
-        passKey,
+        passKey: "", // No longer needed, but kept for backward compatibility
         isVisible,
         emailColumn: emailColumn.toUpperCase(),
       });
@@ -504,59 +500,6 @@ function TeacherAttendanceSettings({ courseId }: { courseId: string }) {
           />
           <p className="text-xs text-muted-foreground">
             Column letter where student emails are stored (e.g., A, B, C).
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor={`key-${courseId}`}>Pass Key</Label>
-          <div className="flex gap-2">
-            <Input
-              id={`key-${courseId}`}
-              type="text"
-              value={passKey}
-              readOnly
-              className="font-mono bg-muted flex-1"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              title="Copy to Clipboard"
-              onClick={() => {
-                navigator.clipboard.writeText(passKey);
-                toast({
-                  title: "Copied!",
-                  description: "Pass key copied to clipboard.",
-                });
-              }}
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                />
-              </svg>
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              title="Regenerate Key"
-              onClick={() =>
-                setPassKey(Math.random().toString(36).slice(-8).toUpperCase())
-              }
-            >
-              <RotateCw className="h-4 w-4" />
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Share this key with your students. They will need it to access
-            attendance data.
           </p>
         </div>
 

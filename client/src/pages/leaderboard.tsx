@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 
 import { calculateBadges } from "@/lib/badge-logic";
 import { BadgeList } from "@/components/badge-ui";
+import { TokenRefreshPrompt } from "@/components/token-refresh-prompt";
 
 interface LeaderboardStudent {
   id: string; // userId
@@ -331,33 +332,13 @@ export default function LeaderboardPage() {
   const hasData = !!myEntry && myXP > 0;
 
   if (!isClassroomLoading && courses.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4 p-6">
-        <div className="text-center space-y-2">
-          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
-          <h2 className="text-lg font-medium text-destructive">
-            Troubleshooting
-          </h2>
-          <p className="text-sm text-muted-foreground max-w-md">
-            It seems data isn't fetching correctly. Please log out and log in
-            again to resolve this.
-          </p>
-        </div>
-        <Button
-          onClick={() => signOut()}
-          variant="destructive"
-          className="px-4 py-2"
-        >
-          Log Out
-        </Button>
-      </div>
-    );
+    return <TokenRefreshPrompt />;
   }
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground font-sans selection:bg-muted">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-6 gap-4 sm:gap-0 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
+      <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between p-4 sm:p-6 gap-4 sm:gap-0 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
         <div className="space-y-1">
           <h1 className="text-xl sm:text-2xl font-medium tracking-tight text-foreground">
             Class Ranking
@@ -566,12 +547,13 @@ export default function LeaderboardPage() {
                           <p className="text-[10px] sm:text-xs text-primary font-bold">
                             {leaderboardData[1].totalXP.toLocaleString()} XP
                           </p>
-                          <BadgeList
-                            badges={leaderboardData[1].badges || []}
-                            limit={2}
-                            size="md"
-                            className="justify-center pt-1"
-                          />
+                          <div className="min-h-[24px] flex items-center justify-center pt-1">
+                            <BadgeList
+                              badges={leaderboardData[1].badges || []}
+                              limit={2}
+                              size="sm"
+                            />
+                          </div>
                         </div>
                       </>
                     ) : (
@@ -602,12 +584,13 @@ export default function LeaderboardPage() {
                       <p className="text-xs sm:text-sm text-primary font-black">
                         {leaderboardData[0].totalXP.toLocaleString()} XP
                       </p>
-                      <BadgeList
-                        badges={leaderboardData[0].badges || []}
-                        limit={3}
-                        size="md"
-                        className="justify-center pt-1"
-                      />
+                      <div className="min-h-[28px] flex items-center justify-center pt-1">
+                        <BadgeList
+                          badges={leaderboardData[0].badges || []}
+                          limit={3}
+                          size="sm"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -633,12 +616,13 @@ export default function LeaderboardPage() {
                           <p className="text-[10px] sm:text-xs text-primary font-bold">
                             {leaderboardData[2].totalXP.toLocaleString()} XP
                           </p>
-                          <BadgeList
-                            badges={leaderboardData[2].badges || []}
-                            limit={2}
-                            size="md"
-                            className="justify-center pt-1"
-                          />
+                          <div className="min-h-[24px] flex items-center justify-center pt-1">
+                            <BadgeList
+                              badges={leaderboardData[2].badges || []}
+                              limit={2}
+                              size="sm"
+                            />
+                          </div>
                         </div>
                       </>
                     ) : (
