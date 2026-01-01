@@ -22,10 +22,11 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
     "/": "Pipeline",
     "/timeline": "Timeline",
     "/dashboard": "Dashboard",
+    "/attendance": "Attendance",
     "/notes": "Notes",
     "/settings": "Settings",
   };
-  const currentViewName = viewNames[location] || "Pipeline";
+  const currentViewName = viewNames[location] || "Trace";
 
   return (
     <header className="h-16 bg-background border-b flex items-center px-4 md:px-6 justify-between shrink-0 z-10">
@@ -42,9 +43,7 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
           </Button>
         )}
         {/* Mobile view title */}
-        <span className="md:hidden font-medium text-lg">
-          {currentViewName}
-        </span>
+        <span className="md:hidden font-medium text-lg">{currentViewName}</span>
 
         {/* Search - Desktop only */}
         <div className="relative w-full max-w-md hidden md:block">
@@ -81,4 +80,3 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
     </header>
   );
 }
-

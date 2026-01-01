@@ -20,6 +20,7 @@ import IntegrationsPage from "@/pages/integrations";
 import LeaderboardPage from "@/pages/leaderboard";
 import AttendancePage from "@/pages/attendance"; // Added
 import NotFound from "@/pages/not-found";
+import { StreakTracker } from "@/lib/streak-tracker";
 
 // Get base path from Vite's BASE_URL
 const getBasePath = () => {
@@ -32,6 +33,7 @@ const getBasePath = () => {
 import { EnhancedLoadingScreen } from "@/components/enhanced-loading-screen";
 import TeacherPage from "@/pages/teacher-dashboard";
 import NoClassroomAccessPage from "@/pages/no-classroom-access";
+import PrivacyPolicyPage from "@/pages/privacy-policy";
 
 function AuthenticatedApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -49,6 +51,7 @@ function AuthenticatedApp() {
           mobileOpen={mobileMenuOpen}
           onMobileClose={() => setMobileMenuOpen(false)}
         />
+        <StreakTracker />
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <AppHeader onMobileMenuClick={() => setMobileMenuOpen(true)} />
           <div className="flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth">
@@ -78,6 +81,15 @@ function AuthenticatedApp() {
 }
 
 function AppContent() {
+  // Public route check - must be accessible without auth
+  if (
+    window.location.pathname === "/privacy-policy" ||
+    window.location.pathname === "/privacy-policy/" ||
+    window.location.pathname.endsWith("/privacy-policy")
+  ) {
+    return <PrivacyPolicyPage />;
+  }
+
   const { user, loading: authLoading, role } = useAuth();
 
   if (authLoading) {

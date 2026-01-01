@@ -204,8 +204,11 @@ export default function LoginPage() {
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-zinc-400">
             <span>© 2024 Trace Inc.</span>
             <div className="flex gap-6">
-              <a href="#" className="hover:text-zinc-900 transition-colors">
-                Privacy
+              <a
+                href="/privacy-policy"
+                className="hover:text-zinc-900 transition-colors"
+              >
+                Privacy Policy
               </a>
               <a href="#" className="hover:text-zinc-900 transition-colors">
                 Terms

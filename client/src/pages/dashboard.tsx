@@ -21,6 +21,158 @@ import type { Assignment } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { AttendanceService } from "@/services/attendance-service";
+import { UserCheck } from "lucide-react";
+import { BadgeList } from "@/components/badge-ui";
+import { DashboardBadgesCard } from "@/components/dashboard-badges-card";
+import { StreakCard } from "@/components/streak-card";
+
+function OverallAttendanceCard({
+  courses,
+}: {
+  courses: import("@shared/schema").Course[];
+}) {
+  const { user, accessToken } = useAuth();
+  const [stats, setStats] = useState<{
+    percentage: number;
+    status: "safe" | "warning" | "danger";
+    present: number;
+    total: number;
+  } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      if (!courses.length || !user?.email || !accessToken) {
+        setIsLoading(false);
+        return;
+      }
+
+      let totalAttended = 0;
+      let totalClasses = 0;
+      let loadedCount = 0;
+
+      await Promise.all(
+        courses.map(async (course) => {
+          try {
+            const config = await AttendanceService.getCourseConfig(course.id);
+            // Skip if not visible or no config
+            if (!config || !config.isVisible || !config.sheetUrl) return;
+
+            // Simple lock check mechanism similar to attendance page
+            // For dashboard, we might only show "unlocked" data to avoid prompting for keys here,
+            // OR we just try to fetch and if it fails (due to protected sheet needing logic not handled here), we skip.
+            // However, the service `fetchAttendanceFromSheet` usually requires a sheetID.
+            // If the sheet itself is protected by the app's 'lock' logic, it's just a client-side gate usually.
+            // Let's assume we can fetch if we have the config.
+
+            const sheetId = AttendanceService.extractSheetId(config.sheetUrl);
+            if (!sheetId) return;
+
+            const data = await AttendanceService.fetchAttendanceFromSheet(
+              sheetId,
+              accessToken,
+              user.email!,
+              config.emailColumn || "A"
+            );
+
+            if (data) {
+              totalAttended += data.stats.attendedClasses;
+              totalClasses += data.stats.totalClasses;
+              loadedCount++;
+            }
+          } catch (e) {
+            // value not loaded, ignore
+          }
+        })
+      );
+
+      if (loadedCount === 0 || totalClasses === 0) {
+        setStats(null);
+      } else {
+        const percentage = Math.round((totalAttended / totalClasses) * 100);
+        let status: "safe" | "warning" | "danger" = "safe";
+        if (percentage < 70) status = "danger";
+        else if (percentage < 75) status = "warning";
+
+        setStats({
+          percentage,
+          status,
+          present: totalAttended,
+          total: totalClasses,
+        });
+      }
+      setIsLoading(false);
+    }
+    fetchData();
+  }, [courses, user, accessToken]);
+
+  return (
+    <Card data-testid="card-attendance-overall">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Overall Attendance
+        </CardTitle>
+        <UserCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-16" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        ) : stats ? (
+          <div>
+            <div
+              className={cn(
+                "text-3xl font-semibold font-mono tracking-tight flex items-baseline gap-2",
+                stats.status === "danger"
+                  ? "text-red-500"
+                  : stats.status === "warning"
+                  ? "text-amber-500"
+                  : "text-emerald-600 dark:text-emerald-400"
+              )}
+            >
+              {stats.percentage}%
+            </div>
+            <div className="mt-1 flex flex-col gap-0.5">
+              <p className="text-xs font-medium text-muted-foreground">
+                {stats.present}/{stats.total} Classes Attended
+              </p>
+              <p
+                className={cn(
+                  "text-[10px] uppercase tracking-wider font-bold",
+                  stats.status === "safe"
+                    ? "text-emerald-500"
+                    : stats.status === "warning"
+                    ? "text-amber-500"
+                    : "text-red-500"
+                )}
+              >
+                {stats.status === "safe" ? "On Track" : "Low Attendance"}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <span className="text-lg font-medium text-muted-foreground">
+              No Data
+            </span>
+            <Link href="/attendance">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs w-full"
+              >
+                Configure
+              </Button>
+            </Link>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 // --- Loading Configuration ---
 
@@ -158,6 +310,7 @@ function ClassActivityCard({
     total: number;
     percentile: number;
     xp: number;
+    badges: string[];
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -231,6 +384,7 @@ function ClassActivityCard({
           total,
           percentile,
           xp: myData.totalXP || 0,
+          badges: myData.badges || [],
         });
       } else {
         setRankData(null);
@@ -261,6 +415,7 @@ function ClassActivityCard({
               processedAssignmentIds:
                 data.processedAssignmentIds || data.completedTasks || [],
               totalXP: data.totalXP || data.xp || 0,
+              badges: data.badges || [],
             };
 
             const existing = studentMap.get(doc.id);
@@ -388,23 +543,33 @@ export default function DashboardPage() {
     <>
       <div className="max-w-5xl mx-auto p-6 space-y-6">
         {metrics.upcoming7Days > 0 && (
-          <div className="flex items-center justify-between p-3 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg animate-in slide-in-from-top-2">
-            <div className="flex items-center gap-3">
-              <div className="p-1.5 bg-blue-100 dark:bg-blue-900/40 rounded-md text-blue-700 dark:text-blue-300">
-                <AlertCircle className="h-4 w-4" />
+          <div className="flex items-center justify-between p-4 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-xl shadow-sm animate-in slide-in-from-top-2">
+            <div className="flex items-center gap-4">
+              <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg text-amber-700 dark:text-amber-400 shrink-0">
+                <Lightbulb className="h-5 w-5" />
               </div>
-              <p className="text-sm text-blue-900 dark:text-blue-100 font-medium">
-                ⚠️ {metrics.upcoming7Days} assignment
-                {metrics.upcoming7Days !== 1 ? "s" : ""} due this week
-              </p>
+              <div className="space-y-0.5">
+                <p className="text-sm text-foreground font-semibold">
+                  Weekly Focus
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  You have{" "}
+                  <span className="font-medium text-amber-700 dark:text-amber-400">
+                    {metrics.upcoming7Days} assignment
+                    {metrics.upcoming7Days !== 1 ? "s" : ""}
+                  </span>{" "}
+                  due within the next 7 days.
+                </p>
+              </div>
             </div>
-            <Link href="/settings/notifications">
+            {/* Action can be context-aware, e.g., view timeline */}
+            <Link href="/timeline">
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="text-blue-700 dark:text-blue-300 hover:text-blue-800 hover:bg-blue-100/50 h-8"
+                className="hidden sm:flex border-amber-200 text-amber-900 hover:bg-amber-100/50 hover:text-amber-950 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-900/50"
               >
-                Enable email reminders
+                View Timeline
               </Button>
             </Link>
           </div>
@@ -434,6 +599,9 @@ export default function DashboardPage() {
             icon={CheckCircle}
           />
           <ClassActivityCard courses={courses} assignments={assignments} />
+          <OverallAttendanceCard courses={courses} />
+          <DashboardBadgesCard />
+          <StreakCard />
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">

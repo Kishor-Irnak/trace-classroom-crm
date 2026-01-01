@@ -54,13 +54,8 @@ export default function NotesPage() {
       });
     })
     .filter((file) => {
-      if (!file.title) return false;
-      const lower = file.title.toLowerCase();
-      return (
-        lower.endsWith(".pdf") ||
-        lower.endsWith(".ppt") ||
-        lower.endsWith(".pptx")
-      );
+      // Allow all files that have a title
+      return !!file.title;
     });
 
   if (isLoading && courses.length === 0) {
@@ -254,7 +249,29 @@ export default function NotesPage() {
               viewMode === "grid" ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 pb-20">
                   {courseDocuments.map((doc, idx) => {
-                    const isPdf = doc.title?.toLowerCase().endsWith(".pdf");
+                    const lower = doc.title?.toLowerCase() || "";
+                    const isPdf = lower.endsWith(".pdf");
+                    const isPpt =
+                      lower.endsWith(".ppt") || lower.endsWith(".pptx");
+
+                    let typeColor = "bg-zinc-100 text-zinc-600";
+                    let lightBg = "bg-zinc-50";
+                    let typeLabel = "FILE";
+
+                    if (isPdf) {
+                      typeColor = "bg-red-100 text-red-600";
+                      lightBg = "bg-red-50";
+                      typeLabel = "PDF DOCUMENT";
+                    } else if (isPpt) {
+                      typeColor = "bg-orange-100 text-orange-600";
+                      lightBg = "bg-orange-50";
+                      typeLabel = "PRESENTATION";
+                    } else {
+                      typeColor = "bg-blue-100 text-blue-600";
+                      lightBg = "bg-blue-50";
+                      typeLabel = "DOCUMENT";
+                    }
+
                     return (
                       <Card
                         key={`${doc.id}-${idx}`}
@@ -265,9 +282,7 @@ export default function NotesPage() {
                             <div
                               className={cn(
                                 "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
-                                isPdf
-                                  ? "bg-red-100 text-red-600"
-                                  : "bg-orange-100 text-orange-600"
+                                typeColor
                               )}
                             >
                               <FileText className="h-4 w-4" />
@@ -277,7 +292,7 @@ export default function NotesPage() {
                                 {doc.title}
                               </h4>
                               <p className="text-[10px] text-muted-foreground truncate mt-1 font-mono">
-                                {isPdf ? "PDF DOCUMENT" : "PRESENTATION"}
+                                {typeLabel}
                               </p>
                             </div>
                           </div>
@@ -302,11 +317,13 @@ export default function NotesPage() {
                           {/* Fallback or Overlay */}
                           <div
                             className={cn(
-                              "absolute inset-0 flex items-center justify-center bg-muted",
-                              doc.thumbnail ? "hidden" : "flex"
+                              "absolute inset-0 w-full h-full", // Full coverage
+                              doc.thumbnail ? "hidden" : "block" // Toggle visibility based on thumbnail existence
                             )}
                           >
-                            <FileText className="h-16 w-16 text-muted-foreground/20" />
+                            <MockDocViewer
+                              type={isPdf ? "pdf" : isPpt ? "ppt" : "doc"}
+                            />
                           </div>
 
                           {/* Hover Overlay with Actions */}
@@ -335,7 +352,25 @@ export default function NotesPage() {
               ) : (
                 <div className="space-y-2 pb-20">
                   {courseDocuments.map((doc, idx) => {
-                    const isPdf = doc.title?.toLowerCase().endsWith(".pdf");
+                    const lower = doc.title?.toLowerCase() || "";
+                    const isPdf = lower.endsWith(".pdf");
+                    const isPpt =
+                      lower.endsWith(".ppt") || lower.endsWith(".pptx");
+
+                    let typeColor = "bg-zinc-100 text-zinc-600";
+                    let typeLabel = "File";
+
+                    if (isPdf) {
+                      typeColor = "bg-red-100 text-red-600";
+                      typeLabel = "PDF Document";
+                    } else if (isPpt) {
+                      typeColor = "bg-orange-100 text-orange-600";
+                      typeLabel = "Presentation";
+                    } else {
+                      typeColor = "bg-blue-100 text-blue-600";
+                      typeLabel = "Document";
+                    }
+
                     return (
                       <div
                         key={`${doc.id}-${idx}`}
@@ -344,9 +379,7 @@ export default function NotesPage() {
                         <div
                           className={cn(
                             "h-10 w-10 flex items-center justify-center rounded-md shrink-0",
-                            isPdf
-                              ? "bg-red-100 text-red-600"
-                              : "bg-orange-100 text-orange-600"
+                            typeColor
                           )}
                         >
                           <FileText className="h-5 w-5" />
@@ -356,8 +389,7 @@ export default function NotesPage() {
                             {doc.title}
                           </h4>
                           <p className="text-xs text-muted-foreground truncate">
-                            {isPdf ? "PDF Document" : "Presentation"} • Read
-                            Only
+                            {typeLabel} • Read Only
                           </p>
                         </div>
                         <Button
@@ -393,9 +425,7 @@ export default function NotesPage() {
                     No Documents Found
                   </h4>
                   <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto font-medium">
-                    This course has no PDF or Presentation files uploaded to
-                    Classroom yet. Make sure your materials are in .pdf, .ppt,
-                    or .pptx format.
+                    This course has no documents uploaded to Classroom yet.
                   </p>
                 </div>
               </div>
@@ -430,6 +460,67 @@ function NotesSkeleton() {
             <Skeleton key={i} className="h-64 w-full rounded-2xl" />
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MockDocViewer({ type }: { type: "pdf" | "ppt" | "doc" }) {
+  const isPdf = type === "pdf";
+  const isPpt = type === "ppt";
+
+  const bgClass = isPdf
+    ? "bg-[#FFEEEE]"
+    : isPpt
+    ? "bg-[#FFF4E5]"
+    : "bg-[#E8F0FE]"; // Google Blue light
+
+  return (
+    <div
+      className={cn(
+        "w-full h-full p-4 flex flex-col relative overflow-hidden select-none pointer-events-none",
+        bgClass
+      )}
+    >
+      {/* Paper Mockup */}
+      <div className="w-full h-full bg-white shadow-[0_2px_8px_-2px_rgba(0,0,0,0.1)] rounded-md border border-black/5 p-4 flex flex-col gap-3 relative z-10 transform transition-transform group-hover:-translate-y-1 duration-500">
+        {/* Header Block */}
+        <div className="flex gap-2 mb-1">
+          <div
+            className={cn(
+              "h-12 w-12 rounded-lg shrink-0 flex items-center justify-center mb-1",
+              isPdf
+                ? "bg-red-100 text-red-500"
+                : isPpt
+                ? "bg-orange-100 text-orange-500"
+                : "bg-blue-100 text-blue-500"
+            )}
+          >
+            <FileText className="h-6 w-6" />
+          </div>
+          <div className="space-y-1.5 flex-1 pt-1">
+            <div className="h-3 w-3/4 bg-zinc-100 rounded-full" />
+            <div className="h-2 w-1/2 bg-zinc-100 rounded-full" />
+          </div>
+        </div>
+
+        {/* Text Lines */}
+        <div className="space-y-2 flex-1">
+          <div className="h-2 w-full bg-zinc-50 rounded-full" />
+          <div className="h-2 w-full bg-zinc-50 rounded-full" />
+          <div className="h-2 w-5/6 bg-zinc-50 rounded-full" />
+          <div className="h-2 w-full bg-zinc-50 rounded-full" />
+          <div className="h-2 w-4/5 bg-zinc-50 rounded-full" />
+
+          {isPpt && (
+            <div className="mt-2 h-16 w-full bg-orange-50 rounded border border-orange-100" />
+          )}
+        </div>
+      </div>
+
+      {/* Decorative Background Icon */}
+      <div className="absolute -bottom-4 -right-4 opacity-[0.05] z-0">
+        <FileText className="h-40 w-40" />
       </div>
     </div>
   );

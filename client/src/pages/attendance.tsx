@@ -26,6 +26,19 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
+  collection,
+  doc,
+  setDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+  serverTimestamp,
+  getDoc,
+  updateDoc, // Added
+  arrayUnion, // Added
+} from "firebase/firestore";
+import {
   Table,
   TableBody,
   TableCell,
@@ -58,6 +71,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { db } from "@/lib/firebase";
 
 // --- Types ---
 type CourseStateStr =
@@ -123,7 +137,7 @@ export default function AttendancePage() {
 
   // Initialize course states
   useEffect(() => {
-    if (!courses) return;
+    if (!courses || !user) return;
 
     const initCourses = async () => {
       // Parallel fetch configs
@@ -143,8 +157,10 @@ export default function AttendancePage() {
             return { courseId: c.id, state: "hidden" } as EnrichedCourseData;
           } else {
             // Check if already unlocked locally (mimicking session cache)
-            const isUnlocked =
-              sessionStorage.getItem(`unlocked_${c.id}`) === "true";
+            // UPDATED: Use localStorage with User ID to persist across re-logins
+            const storageKey = `unlocked_${user.uid}_${c.id}`;
+            const isUnlocked = localStorage.getItem(storageKey) === "true";
+
             if (isUnlocked) {
               // Trigger fetch immediately if unlocked
               fetchAttendance(c.id, config.sheetUrl);
@@ -164,7 +180,7 @@ export default function AttendancePage() {
     };
 
     initCourses();
-  }, [courses]);
+  }, [courses, user]); // Added user to dependencies
 
   // Select first available course on load
   useEffect(() => {
@@ -218,7 +234,7 @@ export default function AttendancePage() {
   };
 
   const handleUnlock = async () => {
-    if (!unlockingCourseId) return;
+    if (!unlockingCourseId || !user) return;
 
     const isValid = await AttendanceService.validatePassKey(
       unlockingCourseId,
@@ -226,7 +242,10 @@ export default function AttendancePage() {
     );
 
     if (isValid) {
-      sessionStorage.setItem(`unlocked_${unlockingCourseId}`, "true");
+      // UPDATED: Persist to localStorage
+      const storageKey = `unlocked_${user.uid}_${unlockingCourseId}`;
+      localStorage.setItem(storageKey, "true");
+
       setUnlockingCourseId(null);
       setUnlockKey("");
       toast({
@@ -250,7 +269,8 @@ export default function AttendancePage() {
     }
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setIsRefreshing(true);
     // Re-fetch all 'loaded' courses
     const promises = Object.values(courseStates)
@@ -288,6 +308,48 @@ export default function AttendancePage() {
   const currentSubject = courses.find((s) => s.id === selectedSubject);
   const currentData = currentCourseState?.data;
 
+  // Attendance Badge Awarding Logic
+  useEffect(() => {
+    if (!user || overallTotal < 5) return; // Min threshold to start checking
+
+    const checkAndAwardBadges = async () => {
+      const badgesToAward: string[] = [];
+      const attended = overallAttended;
+      const total = overallTotal;
+      const percentage = total > 0 ? attended / total : 0;
+
+      // Criteria 1: Perfect Week (Approximation: 100% with reasonable volume)
+      if (total >= 10 && percentage === 1) {
+        badgesToAward.push("perfect-week");
+      }
+
+      // Criteria 2: Attendance Champion (High volume consistency)
+      if (total >= 30 && percentage >= 0.95) {
+        badgesToAward.push("attendance-champion");
+      }
+
+      if (badgesToAward.length > 0) {
+        try {
+          const userRef = doc(
+            db,
+            "leaderboards",
+            "all-courses",
+            "students",
+            user.uid
+          );
+          await updateDoc(userRef, {
+            badges: arrayUnion(...badgesToAward),
+          });
+        } catch (error) {
+          console.debug("Could not award attendance badges:", error);
+        }
+      }
+    };
+
+    const timer = setTimeout(checkAndAwardBadges, 3000);
+    return () => clearTimeout(timer);
+  }, [user, overallTotal, overallAttended]);
+
   // --- Render ---
   return (
     <div className="h-full flex flex-col bg-background text-foreground overflow-hidden">
@@ -315,7 +377,7 @@ export default function AttendancePage() {
             <RotateCw
               className={cn("h-3.5 w-3.5 mr-2", isRefreshing && "animate-spin")}
             />
-            Sync Now
+            Refresh Data
           </Button>
         </div>
       </div>
@@ -324,9 +386,19 @@ export default function AttendancePage() {
         <div className="max-w-[1600px] mx-auto w-full p-6 space-y-8">
           {/* ZONE A: HERO */}
           <section>
-            <Card className="border-border shadow-sm bg-card transition-colors">
+            <Card className="border-border shadow-sm bg-card transition-all duration-300 hover:shadow-md hover:scale-[1.002]">
               <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
                 <div>
+                  <div className="flex items-center gap-1.5 bg-emerald-500/5 px-2 py-0.5 rounded-full border border-emerald-500/10 w-fit mb-2">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-emerald-600/80">
+                      Realtime
+                    </span>
+                  </div>
+
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
                       Overall Attendance
@@ -338,7 +410,7 @@ export default function AttendancePage() {
                           : "destructive"
                       }
                       className={cn(
-                        "ml-2 h-5 text-[10px] px-1.5 uppercase",
+                        "ml-2 h-5 text-[10px] px-1.5 uppercase transition-transform duration-300 hover:scale-105",
                         overallStats.color
                       )}
                     >
@@ -348,7 +420,7 @@ export default function AttendancePage() {
                     </Badge>
                   </div>
                   <div className="flex items-baseline gap-3">
-                    <span className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
+                    <span className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground transition-colors duration-300 hover:text-primary">
                       {overallStats.percentage}%
                     </span>
                     <span className="text-sm sm:text-base text-muted-foreground font-medium">
@@ -378,8 +450,11 @@ export default function AttendancePage() {
                   <Card
                     key={course.id}
                     className={cn(
-                      "group cursor-pointer border-border shadow-sm hover:shadow-md transition-all duration-200 bg-card active:scale-[0.99]",
-                      isSelected && "ring-1 ring-primary border-primary"
+                      "group cursor-pointer border-border shadow-sm bg-card active:scale-[0.99]",
+                      "transition-all duration-300 ease-out",
+                      "hover:shadow-md hover:-translate-y-1 hover:border-primary/30",
+                      isSelected &&
+                        "ring-1 ring-primary border-primary shadow-md"
                     )}
                     onClick={() => setSelectedSubject(course.id)}
                   >
@@ -548,43 +623,75 @@ export default function AttendancePage() {
                       )}
                     </div>
                   ) : (
-                    <div className="max-h-full overflow-y-auto">
-                      <Table>
-                        <TableHeader className="sticky top-0 bg-card z-10 border-b border-border">
-                          <TableRow className="border-none">
-                            <TableHead className="w-[100px] text-xs">
-                              Date
-                            </TableHead>
-                            <TableHead className="text-right text-xs">
-                              Status
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {currentData.history.map((record, i) => (
-                            <TableRow
-                              key={i}
-                              className="border-b border-border/50 hover:bg-muted/30"
-                            >
-                              <TableCell className="font-mono text-xs text-muted-foreground py-2.5">
-                                {record.date}
-                              </TableCell>
-                              <TableCell className="text-right py-2.5">
-                                <span
+                    <div className="h-full overflow-y-auto [&::-webkit-scrollbar]:hidden p-4">
+                      <div className="relative border-l border-muted/60 ml-1.5 space-y-3 pb-2">
+                        {currentData.history.map((record, i) => {
+                          const isPresent = record.status === "Present";
+                          const showRecentLabel = i === 0;
+                          const showEarlierLabel = i === 5;
+
+                          return (
+                            <div key={i} className="group">
+                              {/* Visual Grouping Labels */}
+                              {showRecentLabel && (
+                                <div className="ml-5 mb-3 mt-1">
+                                  <span className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest pl-1">
+                                    Recent Activity
+                                  </span>
+                                </div>
+                              )}
+                              {showEarlierLabel && (
+                                <div className="ml-5 mb-3 mt-4 pt-4 border-t border-dashed border-border/60">
+                                  <span className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest pl-1">
+                                    Earlier
+                                  </span>
+                                </div>
+                              )}
+
+                              <div className="relative pl-5 select-none">
+                                {/* Timeline Dot */}
+                                <div
                                   className={cn(
-                                    "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium",
-                                    record.status === "Present"
-                                      ? "bg-emerald-500/10 text-emerald-600"
-                                      : "bg-red-500/10 text-red-600"
+                                    "absolute -left-[4.5px] top-2.5 h-2.5 w-2.5 rounded-full ring-[3px] ring-card transition-all duration-300 z-10",
+                                    "group-hover:scale-110 group-hover:shadow-sm",
+                                    isPresent
+                                      ? "bg-emerald-500 group-hover:bg-emerald-600"
+                                      : "bg-rose-500 group-hover:bg-rose-600"
                                   )}
-                                >
-                                  {record.status}
-                                </span>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                                />
+
+                                {/* Connecting Line Highlight */}
+                                {i !== currentData.history.length - 1 && (
+                                  <div className="absolute left-[0px] top-4 bottom-[-12px] w-[1px] bg-muted/40 group-hover:bg-foreground/10 transition-colors duration-300 block" />
+                                )}
+
+                                <div className="flex flex-col gap-1 sm:gap-0.5 transition-transform duration-300 ease-out group-hover:translate-x-1 pb-3">
+                                  {/* Mobile & Desktop Unified: Status First */}
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-4">
+                                    {/* Status Pill - Dominant */}
+                                    <div
+                                      className={cn(
+                                        "inline-flex items-center justify-center px-2.5 py-1 rounded-md text-[10px] font-bold tracking-wide uppercase transition-all duration-200 w-full sm:w-fit cursor-default",
+                                        "shadow-sm border",
+                                        isPresent
+                                          ? "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 group-hover:border-emerald-200"
+                                          : "bg-rose-50 text-rose-700 border-rose-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 group-hover:border-rose-200"
+                                      )}
+                                    >
+                                      {record.status}
+                                    </div>
+
+                                    {/* Date - Muted/Secondary */}
+                                    <span className="text-[10px] text-muted-foreground font-mono pl-0.5 sm:pl-0">
+                                      {record.date}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </Card>

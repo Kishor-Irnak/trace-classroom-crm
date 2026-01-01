@@ -37,6 +37,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { calculateBadges } from "@/lib/badge-logic";
+import { BadgeList } from "@/components/badge-ui";
+
 interface LeaderboardStudent {
   id: string; // userId
   displayName: string;
@@ -47,6 +50,7 @@ interface LeaderboardStudent {
   email?: string;
   emailDomain?: string;
   enrolledCourseIds?: string[];
+  badges?: string[];
 }
 
 export default function LeaderboardPage() {
@@ -183,6 +187,7 @@ export default function LeaderboardPage() {
             emailDomain:
               data.emailDomain || (data.email ? data.email.split("@")[1] : ""),
             enrolledCourseIds: data.enrolledCourseIds || data.subjects || [],
+            badges: data.badges || [],
           } as LeaderboardStudent;
 
           const existing = studentMap.get(doc.id);
@@ -225,6 +230,7 @@ export default function LeaderboardPage() {
 
     // 3. Iterate and Calculate
     let processedCount = 0;
+    const completedAssignments: any[] = []; // Store for badge calc
 
     // Process in chunks for visual effect if list is short, or just loop
     for (const assignment of relevantAssignments) {
@@ -257,6 +263,7 @@ export default function LeaderboardPage() {
         }
 
         processedIds.push(assignment.id);
+        completedAssignments.push(assignment);
       }
     }
 
@@ -272,6 +279,18 @@ export default function LeaderboardPage() {
         "students",
         user.uid
       );
+
+      // Fetch existing badges to preserve history
+      const currentDoc = await getDoc(userRef);
+      const currentBadges = new Set(
+        currentDoc.exists() ? currentDoc.data().badges || [] : []
+      );
+
+      // Award productivity badges based on submission count
+      const submissionCount = processedIds.length;
+      if (submissionCount >= 10) currentBadges.add("10-submissions");
+      if (submissionCount >= 25) currentBadges.add("25-submissions");
+      if (submissionCount >= 50) currentBadges.add("50-submissions");
 
       // Data Preparation: derive domain and subject list
       const email = user.email || "";
@@ -289,6 +308,7 @@ export default function LeaderboardPage() {
           totalXP: calculatedXP,
           processedAssignmentIds: processedIds,
           lastSyncedAt: serverTimestamp(),
+          badges: Array.from(currentBadges),
         },
         { merge: true }
       );
@@ -546,6 +566,12 @@ export default function LeaderboardPage() {
                           <p className="text-[10px] sm:text-xs text-primary font-bold">
                             {leaderboardData[1].totalXP.toLocaleString()} XP
                           </p>
+                          <BadgeList
+                            badges={leaderboardData[1].badges || []}
+                            limit={2}
+                            size="md"
+                            className="justify-center pt-1"
+                          />
                         </div>
                       </>
                     ) : (
@@ -576,6 +602,12 @@ export default function LeaderboardPage() {
                       <p className="text-xs sm:text-sm text-primary font-black">
                         {leaderboardData[0].totalXP.toLocaleString()} XP
                       </p>
+                      <BadgeList
+                        badges={leaderboardData[0].badges || []}
+                        limit={3}
+                        size="md"
+                        className="justify-center pt-1"
+                      />
                     </div>
                   </div>
 
@@ -601,6 +633,12 @@ export default function LeaderboardPage() {
                           <p className="text-[10px] sm:text-xs text-primary font-bold">
                             {leaderboardData[2].totalXP.toLocaleString()} XP
                           </p>
+                          <BadgeList
+                            badges={leaderboardData[2].badges || []}
+                            limit={2}
+                            size="md"
+                            className="justify-center pt-1"
+                          />
                         </div>
                       </>
                     ) : (
@@ -647,19 +685,28 @@ export default function LeaderboardPage() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col min-w-0">
-                          <span
-                            className={cn(
-                              "text-xs sm:text-sm font-medium truncate",
-                              isMe ? "text-primary" : "text-foreground"
-                            )}
-                          >
-                            {student.displayName}{" "}
-                            {isMe && (
-                              <span className="text-muted-foreground text-[10px] sm:text-xs font-normal ml-1 sm:ml-2">
-                                (You)
-                              </span>
-                            )}
-                          </span>
+                          <div className="flex items-center gap-1.5 sm:gap-2">
+                            <span
+                              className={cn(
+                                "text-xs sm:text-sm font-medium truncate",
+                                isMe ? "text-primary" : "text-foreground"
+                              )}
+                            >
+                              {student.displayName}{" "}
+                              {isMe && (
+                                <span className="text-muted-foreground text-[10px] sm:text-xs font-normal ml-0.5 sm:ml-2">
+                                  (You)
+                                </span>
+                              )}
+                            </span>
+                            {/* Badges Display */}
+                            <BadgeList
+                              badges={student.badges || []}
+                              limit={3}
+                              size="md"
+                              className="scale-100" // Reset scale
+                            />
+                          </div>
                           <span className="text-[10px] sm:text-xs text-muted-foreground truncate">
                             {student.processedAssignmentIds.length}{" "}
                             <span className="hidden sm:inline">missions</span>

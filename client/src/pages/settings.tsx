@@ -16,7 +16,9 @@ import {
   Lightbulb,
   Mail,
   Calendar,
+  Medal, // Added
 } from "lucide-react";
+import { BadgeShowroom } from "@/components/badge-showroom";
 import {
   Card,
   CardContent,
@@ -396,12 +398,146 @@ function IntegrationsTabContent() {
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
-  const { lastSyncedAt, isSyncing, syncClassroom, isLoading } = useClassroom();
+  const { lastSyncedAt, isSyncing, syncClassroom, isLoading, courses } =
+    useClassroom();
   const { isInstallable, isInstalled, promptInstall } = useInstallPrompt();
   const { theme, setTheme } = useTheme();
   const [backgroundSync, setBackgroundSync] = useState(true);
   const [timezone, setTimezone] = useState("auto");
+
   const [isInstalling, setIsInstalling] = useState(false);
+  const [myBadges, setMyBadges] = useState<string[]>([]);
+  const [loginStreak, setLoginStreak] = useState(0);
+  const [submissionCount, setSubmissionCount] = useState(0);
+  const [attendanceStats, setAttendanceStats] = useState<
+    { total: number; attended: number } | undefined
+  >();
+  const [activeTab, setActiveTab] = useState("general");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    if (tab && ["general", "badges", "integrations"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(
+      doc(db, "leaderboards", "all-courses", "students", user.uid),
+      (docCb) => {
+        if (docCb.exists()) {
+          const data = docCb.data();
+          setMyBadges(data.badges || []);
+          setLoginStreak(data.loginStreak || 0);
+          setSubmissionCount(data.processedAssignmentIds?.length || 0);
+        } else {
+          setMyBadges([]);
+          setLoginStreak(0);
+          setSubmissionCount(0);
+        }
+      }
+    );
+    return () => unsub();
+  }, [user]);
+
+  // Calculate attendance stats from courses
+  useEffect(() => {
+    if (!courses || courses.length === 0) return;
+
+    let totalClasses = 0;
+    let attendedClasses = 0;
+
+    courses.forEach((course) => {
+      // Check if course has attendance data
+      if (course.attendanceData && typeof course.attendanceData === "object") {
+        const records = Object.values(course.attendanceData);
+        totalClasses += records.length;
+        attendedClasses += records.filter((r: any) => {
+          // Handle different formats: 'present', 'PRESENT', true, 1
+          if (typeof r === "string") {
+            return r.toLowerCase() === "present";
+          }
+          return r === true || r === 1;
+        }).length;
+      }
+    });
+
+    console.log("Attendance Stats Calculated:", {
+      totalClasses,
+      attendedClasses,
+    });
+
+    if (totalClasses > 0) {
+      setAttendanceStats({ total: totalClasses, attended: attendedClasses });
+    }
+  }, [courses]);
+
+  // Auto-award badges based on current stats
+  useEffect(() => {
+    if (!user || activeTab !== "badges") return;
+
+    const checkAndAwardBadges = async () => {
+      const userRef = doc(
+        db,
+        "leaderboards",
+        "all-courses",
+        "students",
+        user.uid
+      );
+      const docSnap = await getDoc(userRef);
+
+      if (!docSnap.exists()) return;
+
+      const data = docSnap.data();
+      const currentBadges = new Set(data.badges || []);
+      let badgesChanged = false;
+
+      // Check streak badges
+      const streak = data.loginStreak || 0;
+      if (streak >= 5 && !currentBadges.has("5-day-consistent")) {
+        currentBadges.add("5-day-consistent");
+        badgesChanged = true;
+      }
+      if (streak >= 10 && !currentBadges.has("10-day-consistent")) {
+        currentBadges.add("10-day-consistent");
+        badgesChanged = true;
+      }
+      if (streak >= 30 && !currentBadges.has("30-day-consistent")) {
+        currentBadges.add("30-day-consistent");
+        badgesChanged = true;
+      }
+
+      // Check submission badges
+      const submissions = data.processedAssignmentIds?.length || 0;
+      if (submissions >= 10 && !currentBadges.has("10-submissions")) {
+        currentBadges.add("10-submissions");
+        badgesChanged = true;
+      }
+      if (submissions >= 25 && !currentBadges.has("25-submissions")) {
+        currentBadges.add("25-submissions");
+        badgesChanged = true;
+      }
+      if (submissions >= 50 && !currentBadges.has("50-submissions")) {
+        currentBadges.add("50-submissions");
+        badgesChanged = true;
+      }
+
+      // Update if badges changed
+      if (badgesChanged) {
+        await setDoc(
+          userRef,
+          {
+            badges: Array.from(currentBadges),
+          },
+          { merge: true }
+        );
+      }
+    };
+
+    checkAndAwardBadges();
+  }, [user, activeTab]);
 
   const initials =
     user?.displayName
@@ -437,9 +573,10 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 lg:w-[400px] mb-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 lg:w-[400px] mb-6">
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="badges">Badges</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
         </TabsList>
 
@@ -764,6 +901,31 @@ export default function SettingsPage() {
                   </AlertDialogContent>
                 </AlertDialog>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent
+          value="badges"
+          className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 fade-in"
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Medal className="h-5 w-5 text-amber-500" />
+                Achievements & Badges
+              </CardTitle>
+              <CardDescription>
+                Track your progress and unlock rewards by staying consistent.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <BadgeShowroom
+                earnedBadges={myBadges}
+                currentStreak={loginStreak}
+                submissionCount={submissionCount}
+                attendanceStats={attendanceStats}
+              />
             </CardContent>
           </Card>
         </TabsContent>
