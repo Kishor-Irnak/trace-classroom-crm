@@ -216,6 +216,10 @@ export default function PipelinePage() {
     }
   }
 
+  if (isLoading) {
+    return <PipelineSkeleton />;
+  }
+
   // Drag scroll functionality (from timeline)
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);

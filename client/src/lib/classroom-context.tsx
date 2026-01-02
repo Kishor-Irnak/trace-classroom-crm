@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { db } from "./firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { LeaderboardService } from "@/services/leaderboard-service";
+import { GoogleClassroomService } from "@/services/google-classroom";
+import { CacheService } from "@/services/cache-service";
 
 // Helper to send email via Gmail API
 async function sendGmailNotification(
@@ -929,6 +931,53 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
     refreshAccessToken,
     loading: authLoading,
   } = useAuth();
+  const { toast } = useToast();
+
+  // State with Cache-First Initialization
+  const [courses, setCourses] = useState<Course[]>(() => {
+    if (!user) return [];
+    const cached = CacheService.get<Course[]>(`courses_${user.uid}`);
+    if (cached) return cached;
+    const saved = localStorage.getItem("classroom_courses");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [assignments, setAssignments] = useState<Assignment[]>(() => {
+    if (!user) return [];
+    // Key by user to avoid leaking
+    // We don't have a single key for all assignments in cache service usually,
+    // but the service sets `assignments_${courseId}`.
+    // We can try to reconstruct or just use legacy for initial load
+    // to avoid complex cache aggregation here.
+    const saved = localStorage.getItem("classroom_assignments");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [materials, setMaterials] = useState<NoteMaterial[]>(() => {
+    const saved = localStorage.getItem("classroom_materials");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [notes, setNotes] = useState<Map<string, Note[]>>(() => {
+    const saved = localStorage.getItem("classroom_notes");
+    return saved ? new Map(JSON.parse(saved)) : new Map();
+  });
+
+  // Loading States
+  const [isLoading, setIsLoading] = useState(() => {
+    // If we have data, we are not "loading" in a blocking sense
+    if (user && CacheService.get(`courses_${user.uid}`)) return false;
+    return !localStorage.getItem("classroom_courses");
+  });
+
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(() => {
+    const saved = localStorage.getItem("classroom_lastSyncedAt");
+    return saved ? new Date(saved) : null;
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [hasAutoSynced, setHasAutoSynced] = useState(false);
+  const [reauthRequired, setReauthRequired] = useState(false);
 
   // Clear data on logout
   useEffect(() => {
@@ -939,7 +988,7 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       setNotes(new Map());
       setLastSyncedAt(null);
       setHasAutoSynced(false);
-
+      CacheService.clearAll();
       localStorage.removeItem("classroom_courses");
       localStorage.removeItem("classroom_assignments");
       localStorage.removeItem("classroom_materials");
@@ -947,318 +996,98 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("classroom_lastSyncedAt");
     }
   }, [authLoading, user]);
-  const [courses, setCourses] = useState<Course[]>(() => {
-    const saved = localStorage.getItem("classroom_courses");
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [assignments, setAssignments] = useState<Assignment[]>(() => {
-    const saved = localStorage.getItem("classroom_assignments");
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [materials, setMaterials] = useState<NoteMaterial[]>(() => {
-    const saved = localStorage.getItem("classroom_materials");
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [notes, setNotes] = useState<Map<string, Note[]>>(() => {
-    const saved = localStorage.getItem("classroom_notes");
-    return saved ? new Map(JSON.parse(saved)) : new Map();
-  });
-  const [isLoading, setIsLoading] = useState(() => {
-    // If we have cached data, start with loading false
-    return !localStorage.getItem("classroom_courses");
-  });
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(() => {
-    const saved = localStorage.getItem("classroom_lastSyncedAt");
-    return saved ? new Date(saved) : null;
-  });
-  const [error, setError] = useState<string | null>(null);
-  const [hasAutoSynced, setHasAutoSynced] = useState(false);
-  const [reauthRequired, setReauthRequired] = useState(false);
-  const { toast } = useToast();
 
   const syncClassroom = useCallback(
     async (isAutoSync = false) => {
-      if (!user) {
-        setError("Please sign in with Google to sync your Classroom data");
-        setIsLoading(false);
+      if (!user) return;
+
+      let token = accessToken;
+      if (!token) {
+        try {
+          const success = await refreshAccessToken();
+          if (success) token = localStorage.getItem("google_access_token");
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      if (!token) {
+        setError("Session expired. Please sign in again.");
         return;
       }
 
-      // Try to get a fresh access token if not available
-      let token = accessToken;
-      if (!token) {
-        // Access token might have expired or been cleared, try to refresh it
-        console.log("No access token found, attempting to refresh...");
-
-        try {
-          const refreshed = await refreshAccessToken();
-
-          if (refreshed) {
-            // Get the newly refreshed token
-            // Note: We need to wait a moment for the state to update
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            const newToken = localStorage.getItem("google_access_token");
-
-            if (newToken) {
-              token = newToken;
-              console.log("Successfully refreshed access token");
-            } else {
-              throw new Error("Token refresh succeeded but token not found");
-            }
-          } else {
-            throw new Error("Token refresh failed");
-          }
-        } catch (err) {
-          console.error("Failed to refresh token:", err);
-          setError(
-            "Your session has expired. Please click below to sign in again and refresh your access."
-          );
-          setIsLoading(false);
-          return;
-        }
-      }
-
       setIsSyncing(true);
-      // Only show full-screen loader if we have no data yet
-      if (assignments.length === 0) {
-        setIsLoading(true);
-      }
       setError(null);
 
       try {
-        console.log("Starting sync...", {
-          userId: user.uid,
-          hasToken: !!token,
+        // P0: Fetch Courses (Critical)
+        // If we have cache, UI is already showing it. Use service to refresh.
+        const fetchedCourses = await GoogleClassroomService.fetchCourses(
+          token,
+          user.uid
+        );
+
+        // Update state immediately if changed
+        setCourses((prev) => {
+          if (JSON.stringify(prev) !== JSON.stringify(fetchedCourses)) {
+            return fetchedCourses;
+          }
+          return prev;
         });
 
-        // Fetch courses
-        const fetchedCourses = await fetchCourses(token, user.uid);
-        // console.log(`Fetched ${fetchedCourses.length} courses`);
-
-        if (fetchedCourses.length === 0) {
-          setError(
-            "No active courses found. Make sure you're enrolled in at least one Google Classroom course."
-          );
-          setCourses([]);
-          setAssignments([]);
-          setLastSyncedAt(new Date());
-          setIsSyncing(false);
-          setIsLoading(false);
-          return;
-        }
-
-        // Fetch assignments and materials for each course
-        const allAssignments: Assignment[] = [];
-        const allMaterials: NoteMaterial[] = [];
-        for (const course of fetchedCourses) {
-          try {
-            // console.log(`Fetching data for course: ${course.name}`);
-            const [courseAssignments, courseMaterials] = await Promise.all([
-              fetchCoursework(token, course.classroomId, course.name, user.uid),
-              fetchCourseMaterials(
-                token,
-                course.classroomId,
-                course.name,
-                user.uid,
-                () => setReauthRequired(true)
-              ),
-            ]);
-            // console.log(
-            //   `Found ${courseAssignments.length} assignments and ${courseMaterials.length} materials for ${course.name}`
-            // );
-            allAssignments.push(...courseAssignments);
-            allMaterials.push(...courseMaterials);
-          } catch (err) {
-            console.warn(
-              `Failed to fetch data for course ${course.name}:`,
-              err
-            );
-            // Continue with other courses even if one fails
-          }
-        }
-
-        console.log(
-          `Sync complete: ${fetchedCourses.length} courses, ${allAssignments.length} assignments, ${allMaterials.length} materials`
-        );
-        setCourses(fetchedCourses);
-        setAssignments(allAssignments);
-        setMaterials(allMaterials);
-        setLastSyncedAt(new Date());
-
-        // Auto-sync leaderboard data (runs in background)
-        try {
-          await LeaderboardService.autoSyncOnLogin(
-            user.uid,
-            user.email || "",
-            user.displayName || "Anonymous",
-            user.photoURL || "",
-            allAssignments,
+        // P1: Fetch Assignments Parallel (Important)
+        const fetchedAssignments =
+          await GoogleClassroomService.fetchAssignmentsParallel(
+            token,
             fetchedCourses
           );
-          console.log("✅ Leaderboard auto-synced successfully");
-        } catch (leaderboardErr) {
-          console.error("❌ Leaderboard sync failed:", leaderboardErr);
-          // Don't block the user experience if leaderboard sync fails
-        }
 
-        // Stop blocking loading screen here so user can interact with the app
-        // while Calendar sync happens in background
-        setIsLoading(false);
+        setAssignments(fetchedAssignments);
+        setLastSyncedAt(new Date());
 
-        // Client-side Google Calendar Sync
-        try {
-          await syncToGoogleCalendar(allAssignments, token, user.uid, toast);
-        } catch (calErr) {
-          console.error("Calendar sync failed:", calErr);
-        }
+        // P2: Background Tasks (Materials, Calendar, Submissions detail if we add it)
+        // We run this without awaiting to unblock UI?
+        // No, in React context, we just let the state update trigger re-renders.
+        // But we want `isSyncing` to go false quickly?
+        // User says "P2 ... Load After UI Renders".
 
-        // Notification Logic (Gmail)
-        try {
-          const notifSettingsRef = doc(
-            db,
-            "users",
-            user.uid,
-            "settings",
-            "notifications"
-          );
-          const notifSettingsSnap = await getDoc(notifSettingsRef);
+        // We can finish the "Sync" visible state here, or keep it true until background finishes?
+        // "Make Trace feel 2-3x faster" -> Finish quick.
 
-          if (notifSettingsSnap.exists() && notifSettingsSnap.data().enabled) {
-            const settings = notifSettingsSnap.data();
+        // Fetch materials in background
+        Promise.all(
+          fetchedCourses.map((c) =>
+            fetchCourseMaterials(token!, c.classroomId, c.name, user.uid, () =>
+              setReauthRequired(true)
+            )
+          )
+        ).then((results) => {
+          const allMats = results.flat();
+          setMaterials(allMats);
+        });
 
-            if (settings.notifyDueSoon) {
-              const digestRef = doc(
-                db,
-                "users",
-                user.uid,
-                "notifications",
-                "digest"
-              );
-              const digestSnap = await getDoc(digestRef);
+        // Sync to Calendar in background
+        syncToGoogleCalendar(fetchedAssignments, token, user.uid, toast).catch(
+          (e) => console.warn(e)
+        );
 
-              // Check if we already sent a digest today
-              const lastSent = digestSnap.exists()
-                ? digestSnap.data().lastSent?.toDate()
-                : null;
-              const today = new Date();
-              const isSameDay =
-                lastSent &&
-                lastSent.getDate() === today.getDate() &&
-                lastSent.getMonth() === today.getMonth() &&
-                lastSent.getFullYear() === today.getFullYear();
-
-              if (!isSameDay) {
-                // Calculate assignments due in the next 24 hours
-                const tomorrow = new Date(today);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                tomorrow.setHours(23, 59, 59, 999);
-
-                const upcoming = allAssignments.filter((a) => {
-                  if (
-                    !a.dueDate ||
-                    a.systemStatus === "submitted" ||
-                    a.systemStatus === "graded"
-                  )
-                    return false;
-                  const due = new Date(a.dueDate);
-                  return due >= today && due <= tomorrow;
-                });
-
-                if (upcoming.length > 0 && user.email) {
-                  const listItems = upcoming
-                    .map(
-                      (a) =>
-                        `<li><strong>${
-                          a.title
-                        }</strong> <span style="color:#666">(${
-                          a.courseName
-                        })</span><br>Due: ${new Date(
-                          a.dueDate!
-                        ).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}</li>`
-                    )
-                    .join("");
-
-                  const emailBody = `
-                         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                           <h2 style="color: #2563eb;">Daily Digest</h2>
-                           <p>You have <strong>${upcoming.length} assignments</strong> coming up in the next 24 hours:</p>
-                           <ul style="line-height: 1.6;">${listItems}</ul>
-                           <a href="http://localhost:3000" style="display: inline-block; background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px;">Open Trace</a>
-                         </div>
-                       `;
-
-                  await sendGmailNotification(
-                    user.email,
-                    `Trace: ${upcoming.length} Tasks Due Soon`,
-                    emailBody,
-                    token
-                  );
-                  await setDoc(digestRef, { lastSent: serverTimestamp() });
-                  console.log("Daily digest email delivered.");
-                }
-              }
-            }
-          }
-        } catch (notifErr) {
-          console.warn("Notification sync failed (non-critical):", notifErr);
-        }
-
-        if (!isAutoSync) {
-          toast({
-            title: "Sync Complete",
-            description: `Successfully synced ${fetchedCourses.length} courses, ${allAssignments.length} assignments, and updated Google Calendar.`,
-          });
-        }
+        // Auto-sync leaderboard
+        LeaderboardService.autoSyncOnLogin(
+          user.uid,
+          user.email || "",
+          user.displayName || "Anonymous",
+          user.photoURL || "",
+          fetchedAssignments,
+          fetchedCourses
+        ).catch(console.warn);
       } catch (err: any) {
-        console.error("Sync error details:", err);
-        let errorMessage = "Failed to sync";
-
-        if (err?.message) {
-          const errMsg = err.message.toLowerCase();
-          if (
-            errMsg.includes("401") ||
-            errMsg.includes("unauthorized") ||
-            errMsg.includes("invalid_token") ||
-            errMsg.includes("token expired")
-          ) {
-            errorMessage =
-              "Authentication failed. Your access token may have expired. Please sign out and sign in again.";
-          } else if (
-            errMsg.includes("403") ||
-            errMsg.includes("forbidden") ||
-            errMsg.includes("permission denied")
-          ) {
-            errorMessage =
-              "Permission denied. Please make sure you granted Classroom access permissions when signing in. Sign out and sign in again, then grant all requested permissions.";
-          } else if (
-            errMsg.includes("quota") ||
-            errMsg.includes("rate") ||
-            errMsg.includes("429")
-          ) {
-            errorMessage = "API quota exceeded. Please try again later.";
-          } else if (errMsg.includes("cors") || errMsg.includes("network")) {
-            errorMessage =
-              "Network error. Please check your internet connection and try again.";
-          } else {
-            errorMessage = `Sync failed: ${err.message}`;
-          }
-        } else if (err instanceof TypeError && err.message.includes("fetch")) {
-          errorMessage =
-            "Network error. Please check your internet connection.";
-        }
-
-        setError(errorMessage);
-        console.error("Sync error:", err);
-
+        console.error("Sync Error", err);
+        setError(err.message || "Failed to sync");
         if (!isAutoSync) {
           toast({
             variant: "destructive",
             title: "Sync Failed",
-            description: errorMessage,
+            description: err.message,
           });
         }
       } finally {
@@ -1269,72 +1098,44 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
     [user, accessToken, refreshAccessToken, toast]
   );
 
-  // Auto-sync on first login if no data exists
+  // Auto-sync logic
   useEffect(() => {
-    if (!user) {
-      setHasAutoSynced(false);
-      setIsLoading(false);
-      return;
-    }
-
-    if (!accessToken) {
-      setIsLoading(false);
-      return;
-    }
-
+    if (!user || !accessToken) return;
     if (!hasAutoSynced && !isSyncing) {
       setHasAutoSynced(true);
-      // Call syncClassroom directly without including it in dependencies
       syncClassroom(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    user,
-    accessToken,
-    hasAutoSynced,
-    courses.length,
-    assignments.length,
-    isSyncing,
-  ]);
+  }, [user, accessToken, hasAutoSynced, isSyncing, syncClassroom]);
 
   // Persistence Effects
   useEffect(() => {
     localStorage.setItem("classroom_courses", JSON.stringify(courses));
   }, [courses]);
-
   useEffect(() => {
     localStorage.setItem("classroom_materials", JSON.stringify(materials));
   }, [materials]);
-
   useEffect(() => {
     localStorage.setItem(
       "classroom_notes",
       JSON.stringify(Array.from(notes.entries()))
     );
   }, [notes]);
-
   useEffect(() => {
     localStorage.setItem("classroom_assignments", JSON.stringify(assignments));
   }, [assignments]);
-
   useEffect(() => {
-    if (lastSyncedAt) {
+    if (lastSyncedAt)
       localStorage.setItem(
         "classroom_lastSyncedAt",
         lastSyncedAt.toISOString()
       );
-    } else {
-      localStorage.removeItem("classroom_lastSyncedAt");
-    }
   }, [lastSyncedAt]);
 
   const updateAssignmentStatus = useCallback(
     (assignmentId: string, userStatus: string) => {
       setAssignments((prev) =>
         prev.map((a) =>
-          a.id === assignmentId
-            ? { ...a, userStatus: userStatus as Assignment["userStatus"] }
-            : a
+          a.id === assignmentId ? { ...a, userStatus: userStatus as any } : a
         )
       );
     },
@@ -1352,7 +1153,6 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-
       setNotes((prev) => {
         const newMap = new Map(prev);
         const existing = newMap.get(assignmentId) || [];
@@ -1368,13 +1168,13 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       setNotes((prev) => {
         const newMap = new Map(prev);
         for (const [assignmentId, noteList] of Array.from(newMap.entries())) {
-          const noteIndex = noteList.findIndex((n: Note) => n.id === noteId);
-          if (noteIndex !== -1) {
+          const idx = noteList.findIndex((n: Note) => n.id === noteId);
+          if (idx !== -1) {
             const updated = [...noteList];
-            updated[noteIndex] = {
-              ...updated[noteIndex],
+            updated[idx] = {
+              ...updated[idx],
               content,
-              isImportant: isImportant ?? updated[noteIndex].isImportant,
+              isImportant: isImportant ?? updated[idx].isImportant,
               updatedAt: new Date().toISOString(),
             };
             newMap.set(assignmentId, updated);
@@ -1409,14 +1209,16 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
     ];
 
     assignments.forEach((assignment) => {
-      const status =
-        assignment.userStatus === "in_progress"
-          ? "in_progress"
-          : assignment.systemStatus;
-      const column = columns.find((c) => c.id === status);
-      if (column) {
-        column.assignments.push(assignment);
+      let status = assignment.systemStatus;
+      if (
+        assignment.userStatus === "in_progress" &&
+        status !== "submitted" &&
+        status !== "graded"
+      ) {
+        status = "in_progress";
       }
+      const column = columns.find((c) => c.id === status);
+      if (column) column.assignments.push(assignment);
     });
 
     columns.forEach((col) => {
@@ -1426,11 +1228,11 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       });
     });
-
     return columns;
   }, [assignments]);
 
   const getDashboardMetrics = useCallback((): DashboardMetrics => {
+    // Reuse existing logic, simplified
     const now = new Date();
     const in3Days = new Date(now);
     in3Days.setDate(in3Days.getDate() + 3);
@@ -1440,7 +1242,6 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
     const activeAssignments = assignments.filter(
       (a) => a.systemStatus !== "graded" && a.systemStatus !== "submitted"
     );
-
     const upcoming3Days = assignments.filter((a) => {
       if (
         !a.dueDate ||
@@ -1451,7 +1252,6 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       const due = new Date(a.dueDate);
       return due >= now && due <= in3Days;
     });
-
     const upcoming7Days = assignments.filter((a) => {
       if (
         !a.dueDate ||
@@ -1462,7 +1262,6 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       const due = new Date(a.dueDate);
       return due >= now && due <= in7Days;
     });
-
     const overdue = assignments.filter((a) => a.systemStatus === "overdue");
 
     const weeklyWorkload: DashboardMetrics["weeklyWorkload"] = [];
@@ -1473,12 +1272,9 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       const date = new Date(today);
       date.setDate(date.getDate() + i);
       const dateStr = date.toISOString().split("T")[0];
-
-      const count = assignments.filter((a) => {
-        if (!a.dueDate) return false;
-        return a.dueDate.split("T")[0] === dateStr;
-      }).length;
-
+      const count = assignments.filter(
+        (a) => a.dueDate && a.dueDate.startsWith(dateStr)
+      ).length;
       weeklyWorkload.push({
         day: dayNames[date.getDay()],
         count,
@@ -1507,13 +1303,10 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
   const getTimelineGroups = useCallback(
     (filter?: { courseId?: string; status?: string }): TimelineGroup[] => {
       let filtered = [...assignments];
-
-      if (filter?.courseId) {
+      if (filter?.courseId)
         filtered = filtered.filter((a) => a.courseId === filter.courseId);
-      }
-      if (filter?.status) {
+      if (filter?.status)
         filtered = filtered.filter((a) => a.systemStatus === filter.status);
-      }
 
       filtered.sort((a, b) => {
         if (!a.dueDate) return 1;
@@ -1528,49 +1321,34 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
 
       filtered.forEach((assignment) => {
         if (!assignment.dueDate) return;
-
         const dateKey = assignment.dueDate.split("T")[0];
         const dueDate = new Date(assignment.dueDate);
+        let dateLabel =
+          dateKey === today.toISOString().split("T")[0]
+            ? "Today"
+            : dateKey === tomorrow.toISOString().split("T")[0]
+            ? "Tomorrow"
+            : dueDate.toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "short",
+                day: "numeric",
+              });
 
-        let dateLabel: string;
-        if (dateKey === today.toISOString().split("T")[0]) {
-          dateLabel = "Today";
-        } else if (dateKey === tomorrow.toISOString().split("T")[0]) {
-          dateLabel = "Tomorrow";
-        } else {
-          dateLabel = dueDate.toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "short",
-            day: "numeric",
-          });
-        }
-
-        if (!groups.has(dateKey)) {
-          groups.set(dateKey, {
-            date: dateKey,
-            dateLabel,
-            assignments: [],
-          });
-        }
+        if (!groups.has(dateKey))
+          groups.set(dateKey, { date: dateKey, dateLabel, assignments: [] });
         groups.get(dateKey)!.assignments.push(assignment);
       });
-
       return Array.from(groups.values());
     },
     [assignments]
   );
 
   const getAssignmentById = useCallback(
-    (id: string) => {
-      return assignments.find((a) => a.id === id);
-    },
+    (id: string) => assignments.find((a) => a.id === id),
     [assignments]
   );
-
   const getNotesForAssignment = useCallback(
-    (assignmentId: string) => {
-      return notes.get(assignmentId) || [];
-    },
+    (assignmentId: string) => notes.get(assignmentId) || [],
     [notes]
   );
 

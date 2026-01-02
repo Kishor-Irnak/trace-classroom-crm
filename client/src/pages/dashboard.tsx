@@ -188,24 +188,29 @@ import { EnhancedLoadingScreen } from "@/components/enhanced-loading-screen";
 
 // --- Loading Components ---
 
+import { MetricSkeleton, AssignmentRowSkeleton } from "@/components/skeletons";
+
 function DashboardSkeleton() {
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
-          <Card key={i}>
-            <CardHeader className="pb-2">
-              <Skeleton className="h-4 w-20" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-9 w-12" />
-            </CardContent>
-          </Card>
+          <MetricSkeleton key={i} />
         ))}
       </div>
-      <div className="grid md:grid-cols-2 gap-6">
-        <Skeleton className="h-48" />
-        <Skeleton className="h-48" />
+      <div className="grid md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 space-y-6">
+          <Skeleton className="h-[300px] w-full rounded-xl" />
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-40" />
+            {[1, 2, 3].map((i) => (
+              <AssignmentRowSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+        <div className="space-y-6">
+          <Skeleton className="h-[400px] w-full rounded-xl" />
+        </div>
       </div>
     </div>
   );
@@ -576,6 +581,10 @@ export default function DashboardPage() {
   const { signOut } = useAuth();
   const [selectedAssignment, setSelectedAssignment] =
     useState<Assignment | null>(null);
+
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
 
   const metrics = getDashboardMetrics();
 

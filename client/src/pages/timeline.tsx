@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import {
   Calendar,
   Filter,
+  GanttChart,
   X,
   CalendarDays,
   MousePointer,
@@ -271,6 +272,10 @@ export default function TimelinePage() {
   const [compactView, setCompactView] = useState(false);
 
   const [emailEvents] = useState<Assignment[]>([]);
+
+  if (isLoading) {
+    return <TimelineSkeleton />;
+  }
 
   const filteredAssignments = useMemo(() => {
     let filtered = [...assignments, ...emailEvents];
@@ -1088,26 +1093,28 @@ export default function TimelinePage() {
         </div>
       )}
       <div className="flex flex-col h-full w-full bg-background overflow-hidden relative">
-        <div className="border-b px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-background/95 backdrop-blur z-20 shrink-0">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">Timeline</h1>
-            <div className="flex bg-muted p-1 rounded-lg shrink-0">
+        <div className="border-b px-4 py-3 md:px-6 md:py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-background/95 backdrop-blur z-20 shrink-0 transition-all">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <h1 className="text-2xl font-bold tracking-tight hidden md:block">
+              Timeline
+            </h1>
+            <div className="flex bg-muted p-1 rounded-lg shrink-0 w-full md:w-auto grid grid-cols-2 md:flex">
               <button
                 onClick={() => setCurrentView("timeline")}
                 className={cn(
-                  "px-3 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-2",
+                  "px-3 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-2",
                   currentView === "timeline"
                     ? "bg-background shadow-sm text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Filter className="h-3.5 w-3.5" />
+                <GanttChart className="h-3.5 w-3.5" />
                 Timeline
               </button>
               <button
                 onClick={() => setCurrentView("calendar")}
                 className={cn(
-                  "px-3 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-2",
+                  "px-3 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-2",
                   currentView === "calendar"
                     ? "bg-background shadow-sm text-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -1120,8 +1127,8 @@ export default function TimelinePage() {
           </div>
         </div>
 
-        <div className="px-6 py-2 border-b flex items-center gap-3 bg-muted/30 shrink-0 overflow-x-auto">
-          <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="px-4 md:px-6 py-2 border-b flex items-center gap-3 bg-muted/30 shrink-0 overflow-x-auto no-scrollbar">
+          <Filter className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
           <Select
             value={selectedCourse || "all"}
             onValueChange={(val) =>
@@ -1129,7 +1136,7 @@ export default function TimelinePage() {
             }
           >
             <SelectTrigger
-              className="w-[180px] sm:w-[240px]"
+              className="w-[140px] sm:w-[240px] h-8 text-xs"
               data-testid="select-course-filter"
             >
               <SelectValue placeholder="All Courses" />
@@ -1151,7 +1158,7 @@ export default function TimelinePage() {
             }
           >
             <SelectTrigger
-              className="w-[120px] sm:w-[140px]"
+              className="w-[110px] sm:w-[140px] h-8 text-xs"
               data-testid="select-status-filter"
             >
               <SelectValue placeholder="All Status" />
@@ -1171,15 +1178,15 @@ export default function TimelinePage() {
               variant="ghost"
               size="sm"
               onClick={clearFilters}
-              className="text-muted-foreground"
+              className="text-muted-foreground h-8 px-2"
               data-testid="button-clear-filters"
             >
-              <X className="h-3.5 w-3.5 mr-1" />
-              Clear filters
+              <X className="h-3.5 w-3.5 md:mr-1" />
+              <span className="hidden md:inline">Clear filters</span>
             </Button>
           )}
 
-          <div className="ml-auto">
+          <div className="ml-auto pl-2">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1187,10 +1194,13 @@ export default function TimelinePage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="gap-2 border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900 transition-all font-medium whitespace-nowrap"
+                      className="gap-2 border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900 transition-all font-medium whitespace-nowrap h-8"
                     >
                       <FcGoogle className="h-4 w-4" />
-                      Sync with Google Calendar
+                      <span className="hidden sm:inline">
+                        Sync with Google Calendar
+                      </span>
+                      <span className="sm:hidden">Sync</span>
                     </Button>
                   </Link>
                 </TooltipTrigger>

@@ -107,15 +107,9 @@ function AppContent() {
   const { isLoading: classroomLoading } = useClassroom();
 
   // Unified loading state check
-  // Shows loader if authenticating OR if user is a student and classroom data is syncing
-  if (authLoading || (role === "student" && classroomLoading)) {
-    return (
-      <EnhancedLoadingScreen
-        message={
-          authLoading ? "Authenticating..." : "Setting up your workspace..."
-        }
-      />
-    );
+  // Shows loader if authenticating. Classroom loading is handled by page-level skeletons.
+  if (authLoading) {
+    return <EnhancedLoadingScreen message="Authenticating..." />;
   }
 
   if (!user) {

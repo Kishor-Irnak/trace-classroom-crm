@@ -1,5 +1,6 @@
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { CacheService } from "./cache-service";
 
 // --- Types ---
 export interface CourseAttendanceConfig {
@@ -58,6 +59,8 @@ export const AttendanceService = {
       updatedAt: Date.now(),
     };
     await setDoc(doc(db, COLLECTION_NAME, courseId), fullConfig);
+    // Invalidate cache
+    CacheService.remove(`attn_config_${courseId}`);
   },
 
   /**
@@ -67,13 +70,19 @@ export const AttendanceService = {
     courseId: string
   ): Promise<CourseAttendanceConfig | null> {
     try {
+      const cacheKey = `attn_config_${courseId}`;
+      const cached = CacheService.get<CourseAttendanceConfig>(cacheKey);
+      if (cached) return cached;
+
       const docRef = doc(db, COLLECTION_NAME, courseId);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        return docSnap.data() as CourseAttendanceConfig;
+        const data = docSnap.data() as CourseAttendanceConfig;
+        CacheService.set(cacheKey, data, 60 * 60); // Cache for 1 hour
+        return data;
       } else {
-        return null;
+        return null; // Don't cache nulls (or maybe we should? for performance)
       }
     } catch (e) {
       console.error("Failed to fetch course config", e);
@@ -107,6 +116,12 @@ export const AttendanceService = {
   ): Promise<CourseAttendanceData> {
     if (!sheetId || !accessToken) {
       throw new Error("Missing credentials or sheet ID");
+    }
+
+    const cacheKey = `attn_data_${sheetId}_${studentEmail}`;
+    const cached = CacheService.get<CourseAttendanceData>(cacheKey);
+    if (cached) {
+      return cached;
     }
 
     // Convert column letter to index (A=0, B=1, C=2, etc.)
@@ -195,7 +210,7 @@ export const AttendanceService = {
 
     const percentage = total === 0 ? 0 : Math.round((attended / total) * 100);
 
-    return {
+    const result: CourseAttendanceData = {
       courseId: sheetId,
       stats: {
         totalClasses: total,
@@ -204,5 +219,11 @@ export const AttendanceService = {
       },
       history: history.reverse(), // Newest first
     };
+
+    // Helper to calculate expiry?
+    // Standard 30 min cache for attendance
+    CacheService.set(cacheKey, result, 60 * 30);
+
+    return result;
   },
 };

@@ -132,8 +132,26 @@ const getStats = (attended: number, total: number) => {
   return { percentage, status, color, progressColor };
 };
 
+// --- Loading Components ---
+function AttendanceSkeleton() {
+  return (
+    <div className="max-w-[1600px] mx-auto w-full p-6 space-y-8 animate-pulse">
+      <Skeleton className="h-48 w-full rounded-xl" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-64 rounded-xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AttendancePage() {
-  const { courses, error } = useClassroom();
+  const { courses, error, isLoading } = useClassroom();
+
+  if (isLoading) {
+    return <AttendanceSkeleton />;
+  }
 
   // Create a blocking state only if we have NO courses (no cache) AND a session error
   if (
