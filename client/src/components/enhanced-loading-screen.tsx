@@ -88,7 +88,7 @@ export function EnhancedLoadingScreen({
                 {message}
               </h2>
               <p className="text-xs text-muted-foreground font-mono uppercase tracking-widest">
-                Student Sphere Is Ready
+                Trace Is Ready
               </p>
             </div>
           </div>

@@ -92,7 +92,7 @@ async function syncToGoogleCalendar(
       summary: `[Trace] ${assignment.title}`,
       description: `Course: ${assignment.courseName}\n${
         assignment.description || ""
-      }\n\nSynced via Student Sphere`,
+      }\n\nSynced via Trace`,
       start: { date: dateStr },
       end: { date: dateStr }, // GCal single day all-day event: start=end is fine? No, usually end is next day for inclusive.
     };
@@ -1187,13 +1187,13 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
                            <h2 style="color: #2563eb;">Daily Digest</h2>
                            <p>You have <strong>${upcoming.length} assignments</strong> coming up in the next 24 hours:</p>
                            <ul style="line-height: 1.6;">${listItems}</ul>
-                           <a href="http://localhost:3000" style="display: inline-block; background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px;">Open Student Sphere</a>
+                           <a href="http://localhost:3000" style="display: inline-block; background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px;">Open Trace</a>
                          </div>
                        `;
 
                   await sendGmailNotification(
                     user.email,
-                    `Student Sphere: ${upcoming.length} Tasks Due Soon`,
+                    `Trace: ${upcoming.length} Tasks Due Soon`,
                     emailBody,
                     token
                   );
