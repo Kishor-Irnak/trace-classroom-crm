@@ -12,6 +12,7 @@ import {
   limit,
   serverTimestamp,
   getDoc,
+  where,
 } from "firebase/firestore";
 import {
   Select,
@@ -84,13 +85,8 @@ export default function LeaderboardPage() {
 
   // Fetch Leaderboard Data (Multi-source aggregation)
   useEffect(() => {
+    if (!user) return;
     setLoadingLeaderboard(true);
-
-    // We need to listen to 'all-courses' AND every specific course the user is enrolled in.
-    // This ensures we capture legacy data stored in specific course collections.
-    const uniqueSourceIds = Array.from(
-      new Set(["all-courses", ...courses.map((c) => c.id)])
-    );
 
     const unsubscribers: (() => void)[] = [];
     // Map to deduplicate students by ID. Key = userId
@@ -134,25 +130,11 @@ export default function LeaderboardPage() {
         // FILTER DECISION TREE
         let shouldShow = false;
 
-        // "Proven Classmate" means they definitely share a course/assignment with me.
-        // This is safe to infer "Same College" even without domain data.
-        const isProvenClassmate = hasCommonSubject || hasSharedAssignment;
-
         if (viewMode === "college") {
           // COLLEGE VIEW: Show ALL students from the same email domain
-          // This is for fun/entertainment, not academic fairness
           shouldShow = !!isSameDomain;
-
-          // Debug logging
-          if (student.id === user?.uid || isSameDomain) {
-            console.log(
-              `[College Filter] Student: ${student.displayName}, Domain: ${studentDomain}, User Domain: ${userDomain}, Match: ${isSameDomain}`
-            );
-          }
         } else {
           // CLASS VIEW (Default):
-          // 1. Strict: Same Domain AND Shared Subject
-          // 2. OR Strict Proxy: Legacy User WITH Shared Assignment
           const strictClassMatch = isSameDomain && hasCommonSubject;
           shouldShow = strictClassMatch || hasSharedAssignment;
         }
@@ -166,43 +148,87 @@ export default function LeaderboardPage() {
       students.sort((a, b) => b.totalXP - a.totalXP);
 
       setLeaderboardData(students);
-      setLoadingLeaderboard(false); // Only set false after first process
+      setLoadingLeaderboard(false);
     };
 
-    // Attach listeners
-    uniqueSourceIds.forEach((sourceId) => {
-      const studentsRef = collection(db, "leaderboards", sourceId, "students");
-      // Limit per collection to avoid massive reads, but high enough to be useful
-      const q = query(studentsRef, orderBy("totalXP", "desc"), limit(50));
+    // Helper to process individual docs
+    const processSnapshot = (snapshot: any) => {
+      snapshot.forEach((doc: any) => {
+        const data = doc.data();
+        const newStudent = {
+          id: doc.id,
+          displayName: data.displayName || data.name || "Anonymous",
+          photoUrl: data.photoUrl || data.avatar || "",
+          totalXP: data.totalXP || data.xp || 0,
+          processedAssignmentIds:
+            data.processedAssignmentIds || data.completedTasks || [],
+          email: data.email || "",
+          emailDomain:
+            data.emailDomain || (data.email ? data.email.split("@")[1] : ""),
+          enrolledCourseIds: data.enrolledCourseIds || data.subjects || [],
+          badges: data.badges || [],
+        } as LeaderboardStudent;
 
-      const unsub = onSnapshot(q, (snapshot) => {
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          // Merge strategy: If exists, keep the one with higher XP (or just overwrite? Overwrite is simpler usually)
-          // Let's optimize: Only overwrite if XP is higher or equal (latest info)
-          const newStudent = {
-            id: doc.id,
-            displayName: data.displayName || data.name || "Anonymous",
-            photoUrl: data.photoUrl || data.avatar || "",
-            totalXP: data.totalXP || data.xp || 0,
-            processedAssignmentIds:
-              data.processedAssignmentIds || data.completedTasks || [],
-            email: data.email || "",
-            emailDomain:
-              data.emailDomain || (data.email ? data.email.split("@")[1] : ""),
-            enrolledCourseIds: data.enrolledCourseIds || data.subjects || [],
-            badges: data.badges || [],
-          } as LeaderboardStudent;
+        const existing = studentMap.get(doc.id);
+        if (!existing || newStudent.totalXP >= existing.totalXP) {
+          studentMap.set(doc.id, newStudent);
+        }
+      });
+      updateLeaderboardState();
+    };
 
-          const existing = studentMap.get(doc.id);
-          if (!existing || newStudent.totalXP >= existing.totalXP) {
-            studentMap.set(doc.id, newStudent);
-          }
-        });
-        updateLeaderboardState();
+    // QUERY STRATEGY
+    const userDomain = user.email ? user.email.split("@")[1] : null;
+
+    if (viewMode === "college" && userDomain) {
+      // COLLEGE MODE: Dedicated query for domain
+      // Requires index on [emailDomain ASC, totalXP DESC]
+      const studentsRef = collection(
+        db,
+        "leaderboards",
+        "all-courses",
+        "students"
+      );
+      const q = query(
+        studentsRef,
+        where("emailDomain", "==", userDomain),
+        orderBy("totalXP", "desc"),
+        limit(50)
+      );
+
+      const unsub = onSnapshot(q, processSnapshot, (err) => {
+        console.warn(
+          "College query failed (likely missing index). Falling back to global list.",
+          err
+        );
+        // Fallback: Fetch global list and let client-side filter handle it
+        // This ensures at least something shows up if index is missing
+        const fallbackQ = query(
+          studentsRef,
+          orderBy("totalXP", "desc"),
+          limit(100)
+        );
+        onSnapshot(fallbackQ, processSnapshot);
       });
       unsubscribers.push(unsub);
-    });
+    } else {
+      // CLASS MODE (or fallback): Aggregate specific courses + global top
+      const uniqueSourceIds = Array.from(
+        new Set(["all-courses", ...courses.map((c) => c.id)])
+      );
+
+      uniqueSourceIds.forEach((sourceId) => {
+        const studentsRef = collection(
+          db,
+          "leaderboards",
+          sourceId,
+          "students"
+        );
+        const q = query(studentsRef, orderBy("totalXP", "desc"), limit(50));
+        const unsub = onSnapshot(q, processSnapshot);
+        unsubscribers.push(unsub);
+      });
+    }
 
     return () => {
       unsubscribers.forEach((fn) => fn());
