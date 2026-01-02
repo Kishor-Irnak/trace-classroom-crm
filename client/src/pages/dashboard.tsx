@@ -580,12 +580,43 @@ export default function DashboardPage() {
   const metrics = getDashboardMetrics();
 
   // Check if there's a token-related error
+  // If we have no data at all, we must block.
+  // If we have data, we just show a banner.
   if (error && error.toLowerCase().includes("session")) {
-    return <TokenRefreshPrompt />;
+    const hasData =
+      assignments.length > 0 || courses.length > 0 || metrics.upcoming7Days > 0;
+
+    if (!hasData) {
+      return <TokenRefreshPrompt />;
+    }
   }
 
   return (
     <>
+      {error && error.toLowerCase().includes("session") && (
+        <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-800 px-4 py-3">
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+              <AlertCircle className="h-4 w-4" />
+              <span>Sync is paused. Sign in to update your assignments.</span>
+            </div>
+            <Link href="/auth/refresh">
+              {/* We don't have a route, better to trigger a modal or just refresh page? 
+                  The TokenRefreshPrompt uses refreshAccessToken(). 
+                  Let's reuse the logic via a small button here.
+               */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"
+                onClick={() => window.location.reload()}
+              >
+                Reconnect
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
       <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
         {metrics.upcoming7Days > 0 && (
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-50 via-amber-50/80 to-orange-50/50 dark:from-amber-950/40 dark:via-amber-900/20 dark:to-orange-950/20 border border-amber-200/60 dark:border-amber-800/40 shadow-lg shadow-amber-100/50 dark:shadow-amber-950/20 animate-in slide-in-from-top-2">

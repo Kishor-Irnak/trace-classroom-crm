@@ -60,7 +60,15 @@ export default function LeaderboardPage() {
     courses,
     assignments,
     isLoading: isClassroomLoading,
+    error: classroomError,
   } = useClassroom();
+
+  if (classroomError && classroomError.toLowerCase().includes("session")) {
+    const hasData = courses.length > 0 || assignments.length > 0;
+    if (!hasData) {
+      return <TokenRefreshPrompt />;
+    }
+  }
 
   const [viewMode, setViewMode] = useState<"class" | "college">("class");
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardStudent[]>(
@@ -231,6 +239,33 @@ export default function LeaderboardPage() {
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground font-sans selection:bg-muted">
+      {classroomError && classroomError.toLowerCase().includes("session") && (
+        <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-800 px-4 py-3 shrink-0">
+          <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="h-4 w-4" />
+              <span>
+                Sync is paused. Cached data is shown. Sign in to update.
+              </span>
+            </div>
+            <a
+              href="/auth/refresh"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.reload();
+              }}
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"
+              >
+                Reconnect
+              </Button>
+            </a>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between p-4 sm:p-6 gap-4 sm:gap-0 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
         <div className="space-y-1">

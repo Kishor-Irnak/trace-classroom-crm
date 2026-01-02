@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
+import { TokenRefreshPrompt } from "@/components/token-refresh-prompt";
 
 // --- Helper Functions ---
 
@@ -132,7 +133,16 @@ const getStats = (attended: number, total: number) => {
 };
 
 export default function AttendancePage() {
-  const { courses } = useClassroom();
+  const { courses, error } = useClassroom();
+
+  // Create a blocking state only if we have NO courses (no cache) AND a session error
+  if (
+    error &&
+    error.toLowerCase().includes("session") &&
+    courses.length === 0
+  ) {
+    return <TokenRefreshPrompt />;
+  }
   const { accessToken, user } = useAuth();
   const { toast } = useToast();
 
@@ -385,6 +395,34 @@ export default function AttendancePage() {
           </Button>
         </div>
       </div>
+
+      {error && error.toLowerCase().includes("session") && (
+        <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-800 px-4 py-3 shrink-0">
+          <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="h-4 w-4" />
+              <span>
+                Sync is paused. Cached courses shown. Sign in to update.
+              </span>
+            </div>
+            <a
+              href="/auth/refresh"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.reload();
+              }}
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"
+              >
+                Reconnect
+              </Button>
+            </a>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="max-w-[1600px] mx-auto w-full p-6 space-y-8">

@@ -1048,37 +1048,88 @@ export default function TimelinePage() {
     );
   };
 
+  // Error handling logic
+  // If "session" error and NO data => blocking prompt
+  // If "session" error and HAS data => show banner + content
+  if (
+    useClassroom().error &&
+    useClassroom().error!.toLowerCase().includes("session")
+  ) {
+    const { assignments, courses } = useClassroom();
+    if (!assignments.length && !courses.length) {
+      return <TokenRefreshPrompt />;
+    }
+  }
+
+  const { error: classroomError } = useClassroom();
+
   return (
     <>
-      <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 sticky top-0 bg-background py-3 z-10 border-b px-4 sm:px-6">
-          <div className="flex items-center gap-2">
-            <Button
-              variant={currentView === "timeline" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setCurrentView("timeline")}
-              className="gap-2"
-            >
-              <Calendar size={14} />
-              Timeline
-            </Button>
-            <Button
-              variant={currentView === "calendar" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setCurrentView("calendar")}
-              className="gap-2"
-            >
-              <CalendarDays size={14} />
-              Calendar
-            </Button>
+      {classroomError && classroomError.toLowerCase().includes("session") && (
+        <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-800 px-4 py-3 shrink-0">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+              <AlertCircle className="h-4 w-4" />
+              <span>
+                Sync is paused. Cached data is shown. Sign in to update.
+              </span>
+            </div>
+            <Link href="/auth/refresh">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"
+                onClick={() => window.location.reload()}
+              >
+                Reconnect
+              </Button>
+            </Link>
           </div>
+        </div>
+      )}
+      <div className="flex flex-col h-full w-full bg-background overflow-hidden relative">
+        <div className="border-b px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-background/95 backdrop-blur z-20 shrink-0">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight">Timeline</h1>
+            <div className="flex bg-muted p-1 rounded-lg shrink-0">
+              <button
+                onClick={() => setCurrentView("timeline")}
+                className={cn(
+                  "px-3 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-2",
+                  currentView === "timeline"
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Filter className="h-3.5 w-3.5" />
+                Timeline
+              </button>
+              <button
+                onClick={() => setCurrentView("calendar")}
+                className={cn(
+                  "px-3 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-2",
+                  currentView === "calendar"
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                Calendar
+              </button>
+            </div>
+          </div>
+        </div>
 
+        <div className="px-6 py-2 border-b flex items-center gap-3 bg-muted/30 shrink-0 overflow-x-auto">
+          <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
           <Select
             value={selectedCourse || "all"}
-            onValueChange={(v) => setSelectedCourse(v === "all" ? null : v)}
+            onValueChange={(val) =>
+              setSelectedCourse(val === "all" ? null : val)
+            }
           >
             <SelectTrigger
-              className="w-[140px] sm:w-[180px]"
+              className="w-[180px] sm:w-[240px]"
               data-testid="select-course-filter"
             >
               <SelectValue placeholder="All Courses" />
@@ -1095,7 +1146,9 @@ export default function TimelinePage() {
 
           <Select
             value={selectedStatus || "all"}
-            onValueChange={(v) => setSelectedStatus(v === "all" ? null : v)}
+            onValueChange={(val) =>
+              setSelectedStatus(val === "all" ? null : val)
+            }
           >
             <SelectTrigger
               className="w-[120px] sm:w-[140px]"
@@ -1153,7 +1206,7 @@ export default function TimelinePage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden h-full">
           {currentView === "timeline" ? <TimelineView /> : <CalendarView />}
         </div>
       </div>

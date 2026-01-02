@@ -201,11 +201,20 @@ export default function PipelinePage() {
     notes,
     assignments,
     syncClassroom,
+    error,
   } = useClassroom();
   const { signOut } = useAuth();
   const [selectedAssignment, setSelectedAssignment] =
     useState<Assignment | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Check if there's a token-related error
+  if (error && error.toLowerCase().includes("session")) {
+    const hasData = assignments.length > 0;
+    if (!hasData) {
+      return <TokenRefreshPrompt />;
+    }
+  }
 
   // Drag scroll functionality (from timeline)
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -298,6 +307,33 @@ export default function PipelinePage() {
 
   return (
     <>
+      {error && error.toLowerCase().includes("session") && (
+        <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-800 px-4 py-3 shrink-0">
+          <div className="flex items-center justify-between gap-4 max-w-full">
+            <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+              <AlertCircle className="h-4 w-4" />
+              <span>
+                Sync is paused. Cached data is shown. Sign in to update.
+              </span>
+            </div>
+            <a
+              href="/auth/refresh"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.reload();
+              }}
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"
+              >
+                Reconnect
+              </Button>
+            </a>
+          </div>
+        </div>
+      )}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
