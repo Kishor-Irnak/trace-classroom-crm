@@ -163,7 +163,7 @@ export default function AttendancePage() {
           }
 
           const config = await AttendanceService.getCourseConfig(c.id);
-          console.log(`[DEBUG] Course ${c.name} (${c.id}): Config =`, config);
+          // console.log(`[DEBUG] Course ${c.name} (${c.id}): Config =`, config);
 
           if (!config) {
             return { courseId: c.id, state: "no-config" } as EnrichedCourseData;

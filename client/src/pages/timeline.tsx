@@ -666,7 +666,7 @@ export default function TimelinePage() {
         </div>
 
         {/* Scroll Down Indicator - Shows when there are tasks below */}
-        {hasVerticalScroll && !isAtBottom && (
+        {hasVerticalScroll && !isAtBottom && filteredAssignments.length > 0 && (
           <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 animate-bounce pointer-events-none">
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full shadow-lg px-3 py-2 flex items-center gap-2">
               <ArrowDown

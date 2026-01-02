@@ -186,6 +186,8 @@ interface GoogleCoursework {
   alternateLink?: string;
   state?: string;
   workType?: string;
+  creationTime?: string;
+  updateTime?: string;
 }
 
 interface GoogleStudentSubmission {
@@ -264,6 +266,7 @@ interface ClassroomContextType {
   lastSyncedAt: Date | null;
   error: string | null;
   materials: NoteMaterial[];
+  reauthRequired: boolean;
   syncClassroom: (isAutoSync?: boolean) => Promise<void>;
   updateAssignmentStatus: (assignmentId: string, userStatus: string) => void;
   addNote: (
@@ -308,7 +311,7 @@ export async function fetchAllPages<T>(
       ? `${baseUrl}${separator}pageToken=${pageToken}`
       : baseUrl;
 
-    console.log(`Fetching: ${url.substring(0, 100)}...`);
+    // console.log(`Fetching: ${url.substring(0, 100)}...`);
 
     const response = await fetch(url, {
       headers: {
@@ -524,24 +527,51 @@ async function fetchCoursework(
 }
 
 // Fetch course materials (notes/PDFs) for a course
+// Fetch course materials (notes/PDFs) for a course
 async function fetchCourseMaterials(
   accessToken: string,
   courseId: string,
   courseName: string,
-  userId: string
+  userId: string,
+  onPermissionError?: () => void
 ): Promise<NoteMaterial[]> {
-  const baseUrl = `https://classroom.googleapis.com/v1/courses/${courseId}/courseWorkMaterials?courseWorkMaterialStates=PUBLISHED`;
+  const materialsUrl = `https://classroom.googleapis.com/v1/courses/${courseId}/courseWorkMaterials?courseWorkMaterialStates=PUBLISHED`;
+  const announcementsUrl = `https://classroom.googleapis.com/v1/courses/${courseId}/announcements?announcementStates=PUBLISHED`;
 
   try {
-    const googleMaterials = await fetchAllPages<GoogleCourseMaterial>(
-      accessToken,
-      baseUrl,
-      (data: GoogleCourseMaterialResponse) => data.courseWorkMaterial || [],
-      (data: GoogleCourseMaterialResponse) => data.nextPageToken
-    );
+    const [googleMaterials, googleAnnouncements] = await Promise.all([
+      fetchAllPages<GoogleCourseMaterial>(
+        accessToken,
+        materialsUrl,
+        (data: GoogleCourseMaterialResponse) => data.courseWorkMaterial || [],
+        (data: GoogleCourseMaterialResponse) => data.nextPageToken
+      ).catch((err) => {
+        console.warn(
+          `Failed to fetch courseWorkMaterials for ${courseId}:`,
+          err
+        );
+        return [];
+      }),
+      fetchAllPages<any>(
+        accessToken,
+        announcementsUrl,
+        (data: any) => data.announcements || [],
+        (data: any) => data.nextPageToken
+      ).catch((err) => {
+        if (
+          err.message?.includes("insufficient authentication scopes") ||
+          err.message?.includes("403")
+        ) {
+          onPermissionError?.();
+        }
+        console.warn(`Failed to fetch announcements for ${courseId}:`, err);
+        return [];
+      }),
+    ]);
 
     const now = new Date().toISOString();
-    return googleMaterials.map((gm) => ({
+
+    const mappedMaterials = googleMaterials.map((gm) => ({
       id: `mat-${gm.id}`,
       uniqueId: `${courseId}-${gm.id}`,
       userId,
@@ -554,6 +584,33 @@ async function fetchCourseMaterials(
       createdAt: gm.updateTime || now,
       lastSyncedAt: now,
     }));
+
+    const mappedAnnouncements = googleAnnouncements
+      .filter((a) => a.materials && a.materials.length > 0)
+      .map((a) => {
+        // Use text as title, truncated
+        const text = a.text || "Announcement Material";
+        const title =
+          text.split("\n")[0].length > 60
+            ? text.split("\n")[0].substring(0, 57) + "..."
+            : text.split("\n")[0];
+
+        return {
+          id: `ann-${a.id}`,
+          uniqueId: `${courseId}-ann-${a.id}`,
+          userId,
+          courseId,
+          courseName,
+          title: title,
+          description: a.text || null,
+          alternateLink: a.alternateLink || null,
+          materials: a.materials || null,
+          createdAt: a.updateTime || now,
+          lastSyncedAt: now,
+        };
+      });
+
+    return [...mappedMaterials, ...mappedAnnouncements];
   } catch (err) {
     console.warn(`Failed to fetch materials for course ${courseId}:`, err);
     return [];
@@ -866,34 +923,58 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
 }
 
 export function ClassroomProvider({ children }: { children: ReactNode }) {
-  const { user, accessToken, refreshAccessToken } = useAuth();
+  const {
+    user,
+    accessToken,
+    refreshAccessToken,
+    loading: authLoading,
+  } = useAuth();
+
+  // Clear data on logout
+  useEffect(() => {
+    if (!authLoading && !user) {
+      setCourses([]);
+      setAssignments([]);
+      setMaterials([]);
+      setNotes(new Map());
+      setLastSyncedAt(null);
+      setHasAutoSynced(false);
+
+      localStorage.removeItem("classroom_courses");
+      localStorage.removeItem("classroom_assignments");
+      localStorage.removeItem("classroom_materials");
+      localStorage.removeItem("classroom_notes");
+      localStorage.removeItem("classroom_lastSyncedAt");
+    }
+  }, [authLoading, user]);
   const [courses, setCourses] = useState<Course[]>(() => {
-    const saved = sessionStorage.getItem("classroom_courses");
+    const saved = localStorage.getItem("classroom_courses");
     return saved ? JSON.parse(saved) : [];
   });
   const [assignments, setAssignments] = useState<Assignment[]>(() => {
-    const saved = sessionStorage.getItem("classroom_assignments");
+    const saved = localStorage.getItem("classroom_assignments");
     return saved ? JSON.parse(saved) : [];
   });
   const [materials, setMaterials] = useState<NoteMaterial[]>(() => {
-    const saved = sessionStorage.getItem("classroom_materials");
+    const saved = localStorage.getItem("classroom_materials");
     return saved ? JSON.parse(saved) : [];
   });
   const [notes, setNotes] = useState<Map<string, Note[]>>(() => {
-    const saved = sessionStorage.getItem("classroom_notes");
+    const saved = localStorage.getItem("classroom_notes");
     return saved ? new Map(JSON.parse(saved)) : new Map();
   });
   const [isLoading, setIsLoading] = useState(() => {
     // If we have cached data, start with loading false
-    return !sessionStorage.getItem("classroom_courses");
+    return !localStorage.getItem("classroom_courses");
   });
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(() => {
-    const saved = sessionStorage.getItem("classroom_lastSyncedAt");
+    const saved = localStorage.getItem("classroom_lastSyncedAt");
     return saved ? new Date(saved) : null;
   });
   const [error, setError] = useState<string | null>(null);
   const [hasAutoSynced, setHasAutoSynced] = useState(false);
+  const [reauthRequired, setReauthRequired] = useState(false);
   const { toast } = useToast();
 
   const syncClassroom = useCallback(
@@ -917,7 +998,7 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
             // Get the newly refreshed token
             // Note: We need to wait a moment for the state to update
             await new Promise((resolve) => setTimeout(resolve, 500));
-            const newToken = sessionStorage.getItem("google_access_token");
+            const newToken = localStorage.getItem("google_access_token");
 
             if (newToken) {
               token = newToken;
@@ -953,7 +1034,7 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
 
         // Fetch courses
         const fetchedCourses = await fetchCourses(token, user.uid);
-        console.log(`Fetched ${fetchedCourses.length} courses`);
+        // console.log(`Fetched ${fetchedCourses.length} courses`);
 
         if (fetchedCourses.length === 0) {
           setError(
@@ -972,19 +1053,20 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         const allMaterials: NoteMaterial[] = [];
         for (const course of fetchedCourses) {
           try {
-            console.log(`Fetching data for course: ${course.name}`);
+            // console.log(`Fetching data for course: ${course.name}`);
             const [courseAssignments, courseMaterials] = await Promise.all([
               fetchCoursework(token, course.classroomId, course.name, user.uid),
               fetchCourseMaterials(
                 token,
                 course.classroomId,
                 course.name,
-                user.uid
+                user.uid,
+                () => setReauthRequired(true)
               ),
             ]);
-            console.log(
-              `Found ${courseAssignments.length} assignments and ${courseMaterials.length} materials for ${course.name}`
-            );
+            // console.log(
+            //   `Found ${courseAssignments.length} assignments and ${courseMaterials.length} materials for ${course.name}`
+            // );
             allAssignments.push(...courseAssignments);
             allMaterials.push(...courseMaterials);
           } catch (err) {
@@ -1217,35 +1299,32 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
 
   // Persistence Effects
   useEffect(() => {
-    sessionStorage.setItem("classroom_courses", JSON.stringify(courses));
+    localStorage.setItem("classroom_courses", JSON.stringify(courses));
   }, [courses]);
 
   useEffect(() => {
-    sessionStorage.setItem("classroom_materials", JSON.stringify(materials));
+    localStorage.setItem("classroom_materials", JSON.stringify(materials));
   }, [materials]);
 
   useEffect(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       "classroom_notes",
       JSON.stringify(Array.from(notes.entries()))
     );
   }, [notes]);
 
   useEffect(() => {
-    sessionStorage.setItem(
-      "classroom_assignments",
-      JSON.stringify(assignments)
-    );
+    localStorage.setItem("classroom_assignments", JSON.stringify(assignments));
   }, [assignments]);
 
   useEffect(() => {
     if (lastSyncedAt) {
-      sessionStorage.setItem(
+      localStorage.setItem(
         "classroom_lastSyncedAt",
         lastSyncedAt.toISOString()
       );
     } else {
-      sessionStorage.removeItem("classroom_lastSyncedAt");
+      localStorage.removeItem("classroom_lastSyncedAt");
     }
   }, [lastSyncedAt]);
 
@@ -1516,6 +1595,7 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         getAssignmentById,
         getNotesForAssignment,
         materials,
+        reauthRequired,
       }}
     >
       {children}

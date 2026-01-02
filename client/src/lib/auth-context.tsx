@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [accessToken, setAccessToken] = useState<string | null>(() => {
-    return sessionStorage.getItem("google_access_token");
+    return localStorage.getItem("google_access_token");
   });
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<"student" | "teacher" | "no_access" | null>(
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRole(null);
         setLoading(false);
         setAccessToken(null);
-        sessionStorage.removeItem("google_access_token");
+        localStorage.removeItem("google_access_token");
       }
       // If user exists, we wait for role detection which happens via effect below or explicit call
     });
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user || !accessToken) {
         // If we have user but no access token (e.g. reload), try to get it
         if (user && !accessToken) {
-          const storedToken = sessionStorage.getItem("google_access_token");
+          const storedToken = localStorage.getItem("google_access_token");
           if (storedToken) {
             setAccessToken(storedToken);
             return; // Let the next render trigger this effect with token
@@ -150,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ) as OAuthCredential;
       if (credential?.accessToken) {
         setAccessToken(credential.accessToken);
-        sessionStorage.setItem("google_access_token", credential.accessToken);
+        localStorage.setItem("google_access_token", credential.accessToken);
       }
     } catch (err: unknown) {
       const errorMessage =
@@ -218,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (credential?.accessToken) {
         setAccessToken(credential.accessToken);
-        sessionStorage.setItem("google_access_token", credential.accessToken);
+        localStorage.setItem("google_access_token", credential.accessToken);
       }
 
       // If we got a refresh token directly (happens sometimes with offline param)
@@ -279,7 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (credential?.accessToken) {
         setAccessToken(credential.accessToken);
-        sessionStorage.setItem("google_access_token", credential.accessToken);
+        localStorage.setItem("google_access_token", credential.accessToken);
       }
 
       if (user && tokenResponse?.oauthRefreshToken) {
@@ -327,6 +327,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly"
       );
       provider.addScope(
+        "https://www.googleapis.com/auth/classroom.announcements.readonly"
+      );
+      provider.addScope(
         "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly"
       );
 
@@ -341,7 +344,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (credential?.accessToken) {
         setAccessToken(credential.accessToken);
-        sessionStorage.setItem("google_access_token", credential.accessToken);
+        localStorage.setItem("google_access_token", credential.accessToken);
         console.log("Access token refreshed successfully");
         return true;
       }
@@ -361,7 +364,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await firebaseSignOut(auth);
       setAccessToken(null);
       setRole(null);
-      sessionStorage.removeItem("google_access_token");
+      localStorage.removeItem("google_access_token");
       localStorage.removeItem("user_role");
     } catch (err: unknown) {
       const errorMessage =

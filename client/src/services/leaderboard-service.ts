@@ -128,7 +128,7 @@ export class LeaderboardService {
         { merge: true }
       );
 
-      console.log(`✅ Leaderboard synced for ${displayName}: ${totalXP} XP`);
+      // console.log(`✅ Leaderboard synced for ${displayName}: ${totalXP} XP`);
     } catch (error) {
       console.error("❌ Failed to sync leaderboard:", error);
       throw error;
@@ -178,15 +178,15 @@ export class LeaderboardService {
       const currentDoc = await getDoc(userRef);
 
       if (!currentDoc.exists()) {
-        console.log("📝 New user - no previous leaderboard data");
+        // console.log("📝 New user - no previous leaderboard data");
         return false; // New user, no change
       }
 
       const storedCourseIds = currentDoc.data().enrolledCourseIds || [];
 
-      console.log("🔍 Checking for semester change:");
-      console.log("  Current courses:", currentCourseIds);
-      console.log("  Stored courses:", storedCourseIds);
+      // console.log("🔍 Checking for semester change:");
+      // console.log("  Current courses:", currentCourseIds);
+      // console.log("  Stored courses:", storedCourseIds);
 
       // Check if course sets are different
       const currentSet = new Set(currentCourseIds);
@@ -218,7 +218,7 @@ export class LeaderboardService {
         }
       }
 
-      console.log("  ℹ️ No semester change detected");
+      // console.log("  ℹ️ No semester change detected");
       return false;
     } catch (error) {
       console.error("❌ Failed to check course changes:", error);

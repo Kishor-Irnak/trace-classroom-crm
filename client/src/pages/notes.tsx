@@ -23,8 +23,14 @@ import { TokenRefreshPrompt } from "@/components/token-refresh-prompt";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function NotesPage() {
-  const { courses, materials, isLoading, isSyncing, syncClassroom } =
-    useClassroom();
+  const {
+    courses,
+    materials,
+    isLoading,
+    isSyncing,
+    syncClassroom,
+    reauthRequired,
+  } = useClassroom();
   const { signOut } = useAuth();
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -73,6 +79,14 @@ export default function NotesPage() {
 
   if (isLoading && courses.length === 0) {
     return <NotesSkeleton />;
+  }
+
+  if (reauthRequired) {
+    return (
+      <div className="h-full flex items-center justify-center p-4">
+        <TokenRefreshPrompt />
+      </div>
+    );
   }
 
   return (
