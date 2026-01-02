@@ -893,7 +893,7 @@ export default function SettingsPage() {
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={signOut}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90 border-0 border-none shadow-none ring-0 focus:ring-0 outline-none"
                       >
                         Sign Out
                       </AlertDialogAction>

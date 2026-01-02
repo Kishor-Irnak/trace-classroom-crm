@@ -111,7 +111,10 @@ function OverallAttendanceCard({
   }, [courses, user, accessToken]);
 
   return (
-    <Card data-testid="card-attendance-overall">
+    <Card
+      data-testid="card-attendance-overall"
+      className="flex flex-col h-full"
+    >
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Overall Attendance
@@ -162,7 +165,7 @@ function OverallAttendanceCard({
               <p className="text-sm font-medium text-muted-foreground">
                 No Attendance Yet
               </p>
-              <p className="text-xs text-muted-foreground/70 leading-relaxed">
+              <p className="text-[10px] sm:text-xs text-muted-foreground/70 leading-relaxed">
                 Ask your teacher to login to Trace to track real-time attendance
               </p>
             </div>
@@ -511,44 +514,59 @@ function ClassActivityCard({
   }, [user, courses, assignments]);
 
   return (
-    <Card data-testid="card-class-rank">
+    <Card data-testid="card-class-rank" className="flex flex-col h-full">
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Class Ranking
         </CardTitle>
         <Trophy className="h-5 w-5 text-amber-500" />
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 flex flex-col justify-between">
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-8 w-16" />
             <Skeleton className="h-3 w-24" />
           </div>
         ) : rankData ? (
-          <div>
-            <div className="text-3xl font-semibold font-mono tracking-tight flex items-baseline gap-2">
-              #{rankData.rank}
-              <span className="text-base text-muted-foreground font-normal">
-                / {rankData.total}
-              </span>
+          <>
+            <div>
+              <div className="text-3xl font-semibold font-mono tracking-tight flex items-baseline gap-2">
+                #{rankData.rank}
+                <span className="text-base text-muted-foreground font-normal">
+                  / {rankData.total}
+                </span>
+              </div>
+              <div className="mt-1 flex flex-col gap-0.5">
+                <p className="text-xs font-medium bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
+                  Top{" "}
+                  {100 - rankData.percentile < 1
+                    ? 1
+                    : 100 - rankData.percentile}
+                  % of class
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {rankData.xp.toLocaleString()} Total XP
+                </p>
+              </div>
             </div>
-            <div className="mt-1 flex flex-col gap-0.5">
-              <p className="text-xs font-medium bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
-                Top{" "}
-                {100 - rankData.percentile < 1 ? 1 : 100 - rankData.percentile}%
-                of class
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                {rankData.xp.toLocaleString()} Total XP
-              </p>
+            <div className="pt-4 mt-auto">
+              <Link href="/leaderboard">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs w-full"
+                >
+                  View Leaderboard
+                </Button>
+              </Link>
             </div>
-          </div>
+          </>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 justify-between flex-1">
             <span className="text-lg font-medium text-muted-foreground">
               Unranked
             </span>
-            <Link href="/leaderboard">
+            <Link href="/leaderboard" className="mt-auto">
               <Button
                 variant="outline"
                 size="sm"
@@ -696,10 +714,18 @@ export default function DashboardPage() {
             value={metrics.totalActive}
             icon={CheckCircle}
           />
-          <ClassActivityCard courses={courses} assignments={assignments} />
-          <OverallAttendanceCard courses={courses} />
-          <DashboardBadgesCard />
-          <StreakCard />
+          <div className="col-span-2 sm:col-span-1 h-full">
+            <ClassActivityCard courses={courses} assignments={assignments} />
+          </div>
+          <div className="col-span-2 sm:col-span-1 h-full">
+            <OverallAttendanceCard courses={courses} />
+          </div>
+          <div className="col-span-2 sm:col-span-1 h-full">
+            <DashboardBadgesCard />
+          </div>
+          <div className="col-span-2 sm:col-span-1 h-full">
+            <StreakCard />
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">

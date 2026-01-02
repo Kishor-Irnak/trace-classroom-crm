@@ -155,33 +155,6 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
           <Settings className="w-4 h-4 mr-3" />
           Settings
         </Link>
-
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <button className="w-full flex items-center px-3 py-2 text-sm font-medium text-destructive rounded-md hover:bg-destructive/10 transition-colors">
-              <LogOut className="w-4 h-4 mr-3" />
-              Sign Out
-            </button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will sign you out of your account. You will need to sign in
-                again to access your data.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={signOut}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Sign Out
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </div>
   );

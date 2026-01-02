@@ -114,6 +114,17 @@ export function DashboardBadgesCard() {
               </div>
               <BadgeList badges={badges} limit={3} size="md" className="mt-2" />
             </div>
+            <div className="pt-2 mt-auto">
+              <Link href="/settings?tab=badges">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs w-full"
+                >
+                  View All Badges
+                </Button>
+              </Link>
+            </div>
           </div>
         ) : nextBadge ? (
           <div className="flex flex-col gap-3 justify-between h-full">
@@ -159,12 +170,34 @@ export function DashboardBadgesCard() {
                 </div>
               </div>
             </div>
+            <div className="pt-2 mt-auto">
+              <Link href="/settings?tab=badges">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs w-full"
+                >
+                  View All Badges
+                </Button>
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2 justify-between h-full">
             <span className="text-sm text-muted-foreground">
               No badges earned yet.
             </span>
+            <div className="pt-2 mt-auto">
+              <Link href="/settings?tab=badges">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs w-full"
+                >
+                  View All Badges
+                </Button>
+              </Link>
+            </div>
           </div>
         )}
       </CardContent>
