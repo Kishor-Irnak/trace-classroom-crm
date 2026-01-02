@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -23,7 +23,7 @@ import { AssignmentDetail } from "@/components/assignment-detail";
 import { useClassroom } from "@/lib/classroom-context";
 import type { Assignment, AssignmentStatus } from "@shared/schema";
 import { cn } from "@/lib/utils";
-import { Lightbulb, Loader2, AlertCircle } from "lucide-react"; // Added Icons
+import { Lightbulb, Loader2, AlertCircle, MousePointer } from "lucide-react"; // Added Icons
 import { useAuth } from "@/lib/auth-context";
 import { TokenRefreshPrompt } from "@/components/token-refresh-prompt";
 
@@ -207,6 +207,11 @@ export default function PipelinePage() {
     useState<Assignment | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // Drag scroll functionality (from timeline)
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, left: 0 });
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -250,9 +255,46 @@ export default function PipelinePage() {
     }
   };
 
-  if (assignments.length === 0) {
-    return <TokenRefreshPrompt />;
-  }
+  // Drag scroll handlers (from timeline)
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 2 && scrollContainerRef.current) {
+      e.preventDefault();
+      setIsDragging(true);
+      dragStart.current = {
+        x: e.pageX,
+        left: scrollContainerRef.current.scrollLeft,
+      };
+    }
+  };
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging || !scrollContainerRef.current) return;
+      e.preventDefault();
+      const x = e.pageX;
+      const walk = (x - dragStart.current.x) * 1.5;
+      scrollContainerRef.current.scrollLeft = dragStart.current.left - walk;
+    },
+    [isDragging]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    } else {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   return (
     <>
@@ -262,17 +304,37 @@ export default function PipelinePage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 h-full overflow-x-auto p-6">
-          {columns.map((column) => (
-            <PipelineColumn
-              key={column.id}
-              id={column.id}
-              title={column.title}
-              assignments={column.assignments}
-              onCardClick={setSelectedAssignment}
-              notes={notes}
-            />
-          ))}
+        <div className="relative h-full flex flex-col">
+          <div
+            ref={scrollContainerRef}
+            className={cn(
+              "flex gap-4 flex-1 overflow-x-auto p-6 pb-0 select-none",
+              isDragging ? "cursor-grabbing" : "cursor-grab"
+            )}
+            onMouseDown={handleMouseDown}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            {columns.map((column) => (
+              <PipelineColumn
+                key={column.id}
+                id={column.id}
+                title={column.title}
+                assignments={column.assignments}
+                onCardClick={setSelectedAssignment}
+                notes={notes}
+              />
+            ))}
+          </div>
+
+          {/* Tip UI (exact copy from timeline) */}
+          <div className="flex-none p-2 border-t bg-background/70 backdrop-blur-sm flex items-center justify-center text-xs text-muted-foreground font-medium z-30 relative">
+            <MousePointer size={14} className="mr-2" />
+            Tip: Hold{" "}
+            <kbd className="mx-1 px-1 py-0.5 rounded-md bg-muted border text-foreground font-bold text-[10px]">
+              Right Click
+            </kbd>{" "}
+            to drag timeline
+          </div>
         </div>
 
         <DragOverlay>

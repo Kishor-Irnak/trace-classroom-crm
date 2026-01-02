@@ -75,10 +75,6 @@ export default function NotesPage() {
     return <NotesSkeleton />;
   }
 
-  if (courses.length === 0) {
-    return <TokenRefreshPrompt />;
-  }
-
   return (
     <div className="flex h-full overflow-hidden bg-background">
       {/* Sidebar: Course List */}

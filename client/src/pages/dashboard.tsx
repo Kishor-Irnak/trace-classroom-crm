@@ -579,12 +579,8 @@ export default function DashboardPage() {
 
   const metrics = getDashboardMetrics();
 
-  // Check if there's a token-related error or no data
+  // Check if there's a token-related error
   if (error && error.toLowerCase().includes("session")) {
-    return <TokenRefreshPrompt />;
-  }
-
-  if (assignments.length === 0) {
     return <TokenRefreshPrompt />;
   }
 

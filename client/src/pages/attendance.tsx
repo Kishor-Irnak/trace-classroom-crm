@@ -141,6 +141,10 @@ export default function AttendancePage() {
     Record<string, EnrichedCourseData>
   >({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [unlockingCourseId, setUnlockingCourseId] = useState<string | null>(
+    null
+  );
+  const [unlockKey, setUnlockKey] = useState("");
 
   // Calculate current academic year
   const academicYear = useMemo(() => getCurrentAcademicYear(), []);
@@ -243,10 +247,6 @@ export default function AttendancePage() {
     );
 
     if (isValid) {
-      // UPDATED: Persist to localStorage
-      const storageKey = `unlocked_${user.uid}_${unlockingCourseId}`;
-      localStorage.setItem(storageKey, "true");
-
       setUnlockingCourseId(null);
       setUnlockKey("");
       toast({

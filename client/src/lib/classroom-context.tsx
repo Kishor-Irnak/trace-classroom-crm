@@ -19,6 +19,7 @@ import { useAuth } from "./auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "./firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { LeaderboardService } from "@/services/leaderboard-service";
 
 // Helper to send email via Gmail API
 async function sendGmailNotification(
@@ -1002,6 +1003,22 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         setAssignments(allAssignments);
         setMaterials(allMaterials);
         setLastSyncedAt(new Date());
+
+        // Auto-sync leaderboard data (runs in background)
+        try {
+          await LeaderboardService.autoSyncOnLogin(
+            user.uid,
+            user.email || "",
+            user.displayName || "Anonymous",
+            user.photoURL || "",
+            allAssignments,
+            fetchedCourses
+          );
+          console.log("✅ Leaderboard auto-synced successfully");
+        } catch (leaderboardErr) {
+          console.error("❌ Leaderboard sync failed:", leaderboardErr);
+          // Don't block the user experience if leaderboard sync fails
+        }
 
         // Stop blocking loading screen here so user can interact with the app
         // while Calendar sync happens in background

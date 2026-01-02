@@ -270,39 +270,7 @@ export default function TimelinePage() {
   const [zoomLevel, setZoomLevel] = useState(1); // 0.5 to 2
   const [compactView, setCompactView] = useState(false);
 
-  const [emailEvents, setEmailEvents] = useState<Assignment[]>([]);
-
-  useEffect(() => {
-    if (!user) return;
-    try {
-      const key = `trace_email_events_${user.uid}`;
-      const events = JSON.parse(localStorage.getItem(key) || "[]");
-      // Map to Assignment shape
-      const mapped = events.map((e: any) => ({
-        id: e.id,
-        uniqueId: e.id,
-        userId: user.uid,
-        courseId: "system",
-        courseName: "System",
-        classroomId: "system",
-        title: e.title,
-        description: e.body,
-        dueDate: e.timestamp,
-        dueTime: null,
-        maxPoints: null,
-        systemStatus: "submitted", // Visual hack: 'submitted' = purple
-        userStatus: null,
-        submissionId: null,
-        submittedAt: null,
-        gradedAt: null,
-        grade: null,
-        alternateLink: null,
-        createdAt: e.timestamp,
-        lastSyncedAt: e.timestamp,
-      }));
-      setEmailEvents(mapped);
-    } catch (e) {}
-  }, [user]);
+  const [emailEvents] = useState<Assignment[]>([]);
 
   const filteredAssignments = useMemo(() => {
     let filtered = [...assignments, ...emailEvents];
@@ -321,12 +289,6 @@ export default function TimelinePage() {
   };
 
   const hasFilters = selectedCourse || selectedStatus;
-
-  // UPDATED: Now returns EnhancedLoadingScreen
-
-  if (assignments.length === 0) {
-    return <TokenRefreshPrompt />;
-  }
 
   // Timeline View Component
   const TimelineView = () => {

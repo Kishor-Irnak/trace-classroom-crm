@@ -29,11 +29,11 @@ import {
   Crown,
   Loader2,
   Scan,
-  AlertCircle,
   Info,
   X,
   Sparkles,
   AlertTriangle,
+  Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -69,11 +69,6 @@ export default function LeaderboardPage() {
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [showHelp, setShowHelp] = useState(true);
   const [showCollegeWarning, setShowCollegeWarning] = useState(true);
-
-  // Historical Sync States
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
-  const [scanStatus, setScanStatus] = useState("Initializing...");
 
   // Set default course to "all-courses" or first course
   // No longer need default course selection effect since we default to 'class' view
@@ -206,134 +201,33 @@ export default function LeaderboardPage() {
     };
   }, [viewMode, user, courses, assignments]); // Re-run if viewMode changes or user data loads
 
-  const syncHistoricalData = async () => {
-    if (!user) return;
-
-    setIsScanning(true);
-    setScanProgress(5);
-    setScanStatus("Fetching historical classroom data...");
-
-    // 1. Identify Assignments to Process (Always All Courses for leaderboard aggregate)
-    const relevantAssignments = assignments;
-
-    setScanProgress(20);
-    setScanStatus(`Scanning ${relevantAssignments.length} past assignments...`);
-
-    // 2. Fetch current User DB State to prevent double counting (Conceptually)
-    // In this implementation, we re-calculate Total XP from the Source of Truth (Classroom API)
-    // effectively ensuring no doubles and handling grade corrections automatically.
-
-    let calculatedXP = 0;
-    const processedIds: string[] = [];
-
-    // Animation delay helper
-    const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
-    // 3. Iterate and Calculate
-    let processedCount = 0;
-    const completedAssignments: any[] = []; // Store for badge calc
-
-    // Process in chunks for visual effect if list is short, or just loop
-    for (const assignment of relevantAssignments) {
-      processedCount++;
-      // Update progress occasionally
-      if (processedCount % 5 === 0) {
-        setScanProgress(
-          20 + (processedCount / relevantAssignments.length) * 60
-        );
-        await delay(10); // Small delay for UI smoothness
-      }
-
-      const isCompleted =
-        assignment.systemStatus === "submitted" ||
-        assignment.systemStatus === "graded";
-
-      if (isCompleted) {
-        // Base XP
-        calculatedXP += 100;
-
-        // Bonus XP
-        if (assignment.submittedAt && assignment.dueDate) {
-          const submittedTime = new Date(assignment.submittedAt).getTime();
-          const dueTime = new Date(assignment.dueDate).getTime();
-          const hoursDiff = (dueTime - submittedTime) / (1000 * 60 * 60);
-
-          if (hoursDiff > 48) {
-            calculatedXP += 50;
-          }
-        }
-
-        processedIds.push(assignment.id);
-        completedAssignments.push(assignment);
-      }
-    }
-
-    setScanProgress(90);
-    setScanStatus("Syncing to leaderboard...");
-
-    // 4. Update Firestore
-    try {
-      const userRef = doc(
-        db,
-        "leaderboards",
-        "all-courses",
-        "students",
-        user.uid
-      );
-
-      // Fetch existing badges to preserve history
-      const currentDoc = await getDoc(userRef);
-      const currentBadges = new Set(
-        currentDoc.exists() ? currentDoc.data().badges || [] : []
-      );
-
-      // Award productivity badges based on submission count
-      const submissionCount = processedIds.length;
-      if (submissionCount >= 10) currentBadges.add("10-submissions");
-      if (submissionCount >= 25) currentBadges.add("25-submissions");
-      if (submissionCount >= 50) currentBadges.add("50-submissions");
-
-      // Data Preparation: derive domain and subject list
-      const email = user.email || "";
-      const emailDomain = email.includes("@") ? email.split("@")[1] : "";
-      const enrolledCourseIds = courses.map((c) => c.id);
-
-      await setDoc(
-        userRef,
-        {
-          displayName: user.displayName || "Anonymous",
-          photoUrl: user.photoURL || "",
-          email: email, // Stored for future logic
-          emailDomain: emailDomain, // Stored to avoid repetitive splitting
-          enrolledCourseIds: enrolledCourseIds, // Stored for subject matching
-          totalXP: calculatedXP,
-          processedAssignmentIds: processedIds,
-          lastSyncedAt: serverTimestamp(),
-          badges: Array.from(currentBadges),
-        },
-        { merge: true }
-      );
-
-      setScanProgress(100);
-      setScanStatus("Synchronization Complete!");
-      await delay(500);
-    } catch (err) {
-      console.error("Sync Failed", err);
-      setScanStatus("Sync Failed. Please try again.");
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
   const selectedTitle = viewMode === "class" ? "My Class" : "My College";
 
   const myEntry = leaderboardData.find((s) => s.id === user?.uid);
   const myXP = myEntry?.totalXP || 0;
-  const hasData = !!myEntry && myXP > 0;
+  const hasData = !!myEntry;
 
-  if (!isClassroomLoading && courses.length === 0) {
-    return <TokenRefreshPrompt />;
-  }
+  // Smart leaderboard logic
+  const studentsWithXP = leaderboardData.filter((s) => s.totalXP > 0);
+  const studentsWithZeroXP = leaderboardData.filter((s) => s.totalXP === 0);
+  const allHaveZeroXP =
+    leaderboardData.length > 0 && studentsWithXP.length === 0;
+
+  // Sort students with 0 XP by lastSyncedAt (oldest first, newest last)
+  const sortedZeroXPStudents = [...studentsWithZeroXP].sort((a, b) => {
+    const getTime = (t: any) => {
+      if (!t) return 0;
+      if (typeof t.toMillis === "function") return t.toMillis();
+      if (typeof t === "number") return t;
+      if (t instanceof Date) return t.getTime();
+      if (typeof t === "string") return new Date(t).getTime();
+      return 0;
+    };
+    return getTime(a.lastSyncedAt) - getTime(b.lastSyncedAt);
+  });
+
+  // Combine: students with XP (sorted by XP) + students with 0 XP (sorted by join time)
+  const smartSortedData = [...studentsWithXP, ...sortedZeroXPStudents];
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground font-sans selection:bg-muted">
@@ -375,7 +269,7 @@ export default function LeaderboardPage() {
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
         <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
           {/* XP Rules Note */}
-          {showHelp && (
+          {showHelp && viewMode === "class" && (
             <div className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-primary/5 to-transparent rounded-xl border border-primary/10 p-4 sm:p-5 flex flex-col sm:flex-row gap-3 sm:gap-5 text-sm animate-in fade-in slide-in-from-top-2 shadow-sm">
               <div className="absolute top-0 right-0 p-2 sm:p-3">
                 <Button
@@ -441,7 +335,7 @@ export default function LeaderboardPage() {
                 </Button>
               </div>
               <div className="bg-background/60 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl h-fit w-fit border border-amber-500/30 shadow-sm shrink-0 sm:mt-1 ring-4 ring-amber-500/10">
-                <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-500" />
+                <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 dark:text-amber-500" />
               </div>
 
               <div className="space-y-2 pt-0.5 pr-4 sm:pr-8">
@@ -464,38 +358,21 @@ export default function LeaderboardPage() {
             </div>
           )}
 
-          {/* Action Section: Sync Button (Only if no data or requested) */}
-          {(!hasData && !loadingLeaderboard) || isScanning ? (
+          {/* Auto-sync message - only show if no data yet */}
+          {!hasData && !loadingLeaderboard ? (
             <div className="bg-muted/30 border border-border border-dashed rounded-xl p-6 sm:p-8 text-center animate-in fade-in slide-in-from-bottom-2">
-              {isScanning ? (
-                <div className="max-w-md mx-auto space-y-4">
-                  <div className="flex items-center justify-between text-xs font-mono uppercase text-muted-foreground">
-                    <span>{scanStatus}</span>
-                    <span>{Math.round(scanProgress)}%</span>
-                  </div>
-                  <Progress value={scanProgress} className="h-2" />
+              <div className="flex flex-col items-center gap-4">
+                <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 text-primary animate-spin" />
                 </div>
-              ) : (
-                <div className="flex flex-col items-center gap-4">
-                  <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
-                    <Scan className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-lg font-medium">No Score Detected</h3>
-                    <p className="text-sm text-muted-foreground max-w-[280px] sm:max-w-sm mx-auto">
-                      Calculate your XP based on all your past submitted
-                      assignments to join the leaderboard.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={syncHistoricalData}
-                    size="lg"
-                    className="mt-2 font-semibold w-full sm:w-auto"
-                  >
-                    Calculate My Archive Score
-                  </Button>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-medium">Syncing Your Progress</h3>
+                  <p className="text-sm text-muted-foreground max-w-[280px] sm:max-w-sm mx-auto">
+                    Your leaderboard data is automatically syncing. Complete
+                    some assignments to start earning XP!
+                  </p>
                 </div>
-              )}
+              </div>
             </div>
           ) : null}
 
@@ -509,16 +386,91 @@ export default function LeaderboardPage() {
                 />
               ))}
             </div>
-          ) : leaderboardData.length === 0 && !isScanning ? (
+          ) : leaderboardData.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10">
               <p className="text-muted-foreground text-sm">
                 Waiting for players...
               </p>
             </div>
+          ) : allHaveZeroXP ? (
+            // Case 1: Everyone has 0 XP - Show simple list with note
+            <div className="space-y-6">
+              <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl p-4 flex items-start gap-3">
+                <Lightbulb className="h-5 w-5 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                    Be the first to climb the leaderboard!
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Submit your first assignment to earn 100 XP and claim the #1
+                    spot. The competition starts now!
+                  </p>
+                </div>
+              </div>
+
+              {/* Simple list - no podium */}
+              <div className="flex flex-col space-y-2">
+                {smartSortedData.map((student, index) => {
+                  const isMe = student.id === user?.uid;
+
+                  return (
+                    <div
+                      key={student.id}
+                      className={cn(
+                        "flex items-center p-3 sm:p-4 rounded-xl border transition-all duration-200",
+                        isMe
+                          ? "bg-primary/5 border-primary/20 shadow-sm"
+                          : "bg-card border-border hover:bg-muted/30"
+                      )}
+                    >
+                      {/* Avatar + Name */}
+                      <div className="flex items-center flex-1 gap-3 sm:gap-4 overflow-hidden">
+                        <Avatar
+                          className={cn(
+                            "h-10 w-10 border flex-shrink-0",
+                            isMe ? "border-primary/20" : "border-border"
+                          )}
+                        >
+                          <AvatarImage src={student.photoUrl} />
+                          <AvatarFallback className="text-xs bg-muted text-muted-foreground">
+                            {student.displayName?.[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col min-w-0">
+                          <span
+                            className={cn(
+                              "text-sm font-medium truncate",
+                              isMe ? "text-primary" : "text-foreground"
+                            )}
+                          >
+                            {student.displayName}
+                            {isMe && (
+                              <span className="text-muted-foreground text-xs font-normal ml-2">
+                                (You)
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            Ready to start
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* XP */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-muted-foreground">
+                          0 XP
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           ) : (
             <div className="space-y-6 sm:space-y-8">
               {/* Top 3 Podium */}
-              {leaderboardData.length > 0 && (
+              {smartSortedData.length > 0 && (
                 <div
                   className={cn(
                     "flex justify-center items-end gap-2 sm:gap-8 pb-4 px-0 sm:px-2 transition-all duration-500 ease-in-out",
@@ -527,13 +479,13 @@ export default function LeaderboardPage() {
                 >
                   {/* Rank 2 */}
                   <div className="flex flex-col items-center gap-2 order-1 w-1/3 sm:w-32 max-w-[100px]">
-                    {leaderboardData[1] ? (
+                    {smartSortedData[1] && smartSortedData[1].totalXP > 0 ? (
                       <>
                         <div className="relative">
                           <Avatar className="h-14 w-14 sm:h-20 sm:w-20 border-4 border-background ring-2 ring-zinc-300 shadow-xl">
-                            <AvatarImage src={leaderboardData[1].photoUrl} />
+                            <AvatarImage src={smartSortedData[1].photoUrl} />
                             <AvatarFallback className="text-lg bg-zinc-100 text-zinc-500">
-                              {leaderboardData[1].displayName?.[0]?.toUpperCase()}
+                              {smartSortedData[1].displayName?.[0]?.toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-zinc-500 text-white text-[10px] sm:text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full border-2 border-background shadow-sm">
@@ -542,20 +494,29 @@ export default function LeaderboardPage() {
                         </div>
                         <div className="text-center mt-1.5 sm:mt-2 space-y-0.5 w-full">
                           <p className="font-semibold text-xs sm:text-sm truncate w-full px-1">
-                            {leaderboardData[1].displayName}
+                            {smartSortedData[1].displayName}
                           </p>
                           <p className="text-[10px] sm:text-xs text-primary font-bold">
-                            {leaderboardData[1].totalXP.toLocaleString()} XP
+                            {smartSortedData[1].totalXP.toLocaleString()} XP
                           </p>
                           <div className="min-h-[24px] flex items-center justify-center pt-1">
                             <BadgeList
-                              badges={leaderboardData[1].badges || []}
+                              badges={smartSortedData[1].badges || []}
                               limit={2}
                               size="sm"
                             />
                           </div>
                         </div>
                       </>
+                    ) : studentsWithXP.length === 1 ? (
+                      <div className="text-center space-y-2">
+                        <div className="h-14 w-14 sm:h-20 sm:w-20 mx-auto rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center">
+                          <span className="text-2xl">🥈</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground px-2">
+                          Submit 1 assignment to claim 2nd place!
+                        </p>
+                      </div>
                     ) : (
                       <div className="w-full" />
                     )}
@@ -568,9 +529,9 @@ export default function LeaderboardPage() {
                         <Crown className="fill-yellow-400 text-yellow-500 h-6 w-6 sm:h-8 sm:w-8 drop-shadow-sm" />
                       </div>
                       <Avatar className="h-20 w-20 sm:h-28 sm:w-28 border-4 border-background ring-4 ring-yellow-400 shadow-2xl">
-                        <AvatarImage src={leaderboardData[0].photoUrl} />
+                        <AvatarImage src={smartSortedData[0].photoUrl} />
                         <AvatarFallback className="text-2xl bg-yellow-50 text-yellow-600">
-                          {leaderboardData[0].displayName?.[0]?.toUpperCase()}
+                          {smartSortedData[0].displayName?.[0]?.toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-950 text-xs sm:text-sm font-bold w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-full border-2 border-background shadow-sm">
@@ -579,14 +540,14 @@ export default function LeaderboardPage() {
                     </div>
                     <div className="text-center mt-2 sm:mt-3 space-y-0.5 w-full">
                       <p className="font-bold text-sm sm:text-base truncate w-full px-1">
-                        {leaderboardData[0].displayName}
+                        {smartSortedData[0].displayName}
                       </p>
                       <p className="text-xs sm:text-sm text-primary font-black">
-                        {leaderboardData[0].totalXP.toLocaleString()} XP
+                        {smartSortedData[0].totalXP.toLocaleString()} XP
                       </p>
                       <div className="min-h-[28px] flex items-center justify-center pt-1">
                         <BadgeList
-                          badges={leaderboardData[0].badges || []}
+                          badges={smartSortedData[0].badges || []}
                           limit={3}
                           size="sm"
                         />
@@ -596,13 +557,13 @@ export default function LeaderboardPage() {
 
                   {/* Rank 3 */}
                   <div className="flex flex-col items-center gap-2 order-3 w-1/3 sm:w-32 max-w-[100px]">
-                    {leaderboardData[2] ? (
+                    {smartSortedData[2] && smartSortedData[2].totalXP > 0 ? (
                       <>
                         <div className="relative">
                           <Avatar className="h-14 w-14 sm:h-20 sm:w-20 border-4 border-background ring-2 ring-amber-700/50 shadow-xl">
-                            <AvatarImage src={leaderboardData[2].photoUrl} />
+                            <AvatarImage src={smartSortedData[2].photoUrl} />
                             <AvatarFallback className="text-lg bg-amber-50 text-amber-700">
-                              {leaderboardData[2].displayName?.[0]?.toUpperCase()}
+                              {smartSortedData[2].displayName?.[0]?.toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-amber-700 text-amber-50 text-[10px] sm:text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full border-2 border-background shadow-sm">
@@ -611,20 +572,29 @@ export default function LeaderboardPage() {
                         </div>
                         <div className="text-center mt-1.5 sm:mt-2 space-y-0.5 w-full">
                           <p className="font-semibold text-xs sm:text-sm truncate w-full px-1">
-                            {leaderboardData[2].displayName}
+                            {smartSortedData[2].displayName}
                           </p>
                           <p className="text-[10px] sm:text-xs text-primary font-bold">
-                            {leaderboardData[2].totalXP.toLocaleString()} XP
+                            {smartSortedData[2].totalXP.toLocaleString()} XP
                           </p>
                           <div className="min-h-[24px] flex items-center justify-center pt-1">
                             <BadgeList
-                              badges={leaderboardData[2].badges || []}
+                              badges={smartSortedData[2].badges || []}
                               limit={2}
                               size="sm"
                             />
                           </div>
                         </div>
                       </>
+                    ) : studentsWithXP.length >= 1 ? (
+                      <div className="text-center space-y-2">
+                        <div className="h-14 w-14 sm:h-20 sm:w-20 mx-auto rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center">
+                          <span className="text-2xl">🥉</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground px-2">
+                          Spot open for 3rd place!
+                        </p>
+                      </div>
                     ) : (
                       <div className="w-full" />
                     )}
@@ -634,82 +604,84 @@ export default function LeaderboardPage() {
 
               {/* Rest of the List */}
               <div className="flex flex-col space-y-2">
-                {leaderboardData.slice(3).map((student, index) => {
-                  const isMe = student.id === user?.uid;
-                  const rank = index + 4;
+                {smartSortedData
+                  .slice(Math.min(3, studentsWithXP.length))
+                  .map((student, index) => {
+                    const isMe = student.id === user?.uid;
+                    const rank = Math.min(3, studentsWithXP.length) + index + 1;
 
-                  return (
-                    <div
-                      key={student.id}
-                      className={cn(
-                        "flex items-center p-3 sm:p-4 rounded-xl border transition-all duration-200 group",
-                        isMe
-                          ? "bg-primary/5 border-primary/20 shadow-sm"
-                          : "bg-card border-border hover:bg-muted/30 hover:border-border"
-                      )}
-                    >
-                      {/* Rank */}
-                      <div className="w-8 sm:w-12 flex-shrink-0 flex items-center justify-center">
-                        <span className="text-muted-foreground font-mono text-xs sm:text-sm font-medium">
-                          #{rank}
-                        </span>
-                      </div>
+                    return (
+                      <div
+                        key={student.id}
+                        className={cn(
+                          "flex items-center p-3 sm:p-4 rounded-xl border transition-all duration-200 group",
+                          isMe
+                            ? "bg-primary/5 border-primary/20 shadow-sm"
+                            : "bg-card border-border hover:bg-muted/30 hover:border-border"
+                        )}
+                      >
+                        {/* Rank */}
+                        <div className="w-8 sm:w-12 flex-shrink-0 flex items-center justify-center">
+                          <span className="text-muted-foreground font-mono text-xs sm:text-sm font-medium">
+                            {student.totalXP > 0 ? `#${rank}` : "-"}
+                          </span>
+                        </div>
 
-                      {/* Avatar + Name */}
-                      <div className="flex items-center flex-1 gap-3 sm:gap-4 overflow-hidden">
-                        <Avatar
-                          className={cn(
-                            "h-8 w-8 sm:h-10 sm:w-10 border flex-shrink-0",
-                            isMe ? "border-primary/20" : "border-border"
-                          )}
-                        >
-                          <AvatarImage src={student.photoUrl} />
-                          <AvatarFallback className="text-[10px] sm:text-xs bg-muted text-muted-foreground">
-                            {student.displayName?.[0]?.toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col min-w-0">
-                          <div className="flex items-center gap-1.5 sm:gap-2">
-                            <span
-                              className={cn(
-                                "text-xs sm:text-sm font-medium truncate",
-                                isMe ? "text-primary" : "text-foreground"
-                              )}
-                            >
-                              {student.displayName}{" "}
-                              {isMe && (
-                                <span className="text-muted-foreground text-[10px] sm:text-xs font-normal ml-0.5 sm:ml-2">
-                                  (You)
-                                </span>
-                              )}
+                        {/* Avatar + Name */}
+                        <div className="flex items-center flex-1 gap-3 sm:gap-4 overflow-hidden">
+                          <Avatar
+                            className={cn(
+                              "h-8 w-8 sm:h-10 sm:w-10 border flex-shrink-0",
+                              isMe ? "border-primary/20" : "border-border"
+                            )}
+                          >
+                            <AvatarImage src={student.photoUrl} />
+                            <AvatarFallback className="text-[10px] sm:text-xs bg-muted text-muted-foreground">
+                              {student.displayName?.[0]?.toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col min-w-0">
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                              <span
+                                className={cn(
+                                  "text-xs sm:text-sm font-medium truncate",
+                                  isMe ? "text-primary" : "text-foreground"
+                                )}
+                              >
+                                {student.displayName}{" "}
+                                {isMe && (
+                                  <span className="text-muted-foreground text-[10px] sm:text-xs font-normal ml-0.5 sm:ml-2">
+                                    (You)
+                                  </span>
+                                )}
+                              </span>
+                              {/* Badges Display */}
+                              <BadgeList
+                                badges={student.badges || []}
+                                limit={3}
+                                size="md"
+                                className="scale-100" // Reset scale
+                              />
+                            </div>
+                            <span className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                              {student.processedAssignmentIds.length}{" "}
+                              <span className="hidden sm:inline">missions</span>
                             </span>
-                            {/* Badges Display */}
-                            <BadgeList
-                              badges={student.badges || []}
-                              limit={3}
-                              size="md"
-                              className="scale-100" // Reset scale
-                            />
                           </div>
-                          <span className="text-[10px] sm:text-xs text-muted-foreground truncate">
-                            {student.processedAssignmentIds.length}{" "}
-                            <span className="hidden sm:inline">missions</span>
+                        </div>
+
+                        {/* XP */}
+                        <div className="text-right pl-2 sm:px-4 flex-shrink-0">
+                          <span className="text-sm sm:text-lg font-mono font-medium text-foreground tracking-tight">
+                            {student.totalXP.toLocaleString()}
+                          </span>
+                          <span className="text-[10px] sm:text-xs text-muted-foreground ml-0.5 sm:ml-1">
+                            XP
                           </span>
                         </div>
                       </div>
-
-                      {/* XP */}
-                      <div className="text-right pl-2 sm:px-4 flex-shrink-0">
-                        <span className="text-sm sm:text-lg font-mono font-medium text-foreground tracking-tight">
-                          {student.totalXP.toLocaleString()}
-                        </span>
-                        <span className="text-[10px] sm:text-xs text-muted-foreground ml-0.5 sm:ml-1">
-                          XP
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             </div>
           )}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Switch, Route, Router } from "wouter";
+import { Switch, Route, Router, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -57,7 +57,16 @@ function AuthenticatedApp() {
           <AppHeader onMobileMenuClick={() => setMobileMenuOpen(true)} />
           <div className="flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth">
             <Switch>
-              <Route path="/" component={PipelinePage} />
+              <Route path="/pipeline" component={PipelinePage} />
+              <Route path="/">
+                {() => {
+                  const [, setLocation] = useLocation();
+                  useEffect(() => {
+                    setLocation("/dashboard");
+                  }, [setLocation]);
+                  return null;
+                }}
+              </Route>
               <Route path="/leaderboard" component={LeaderboardPage} />
               <Route path="/timeline" component={TimelinePage} />
               <Route path="/dashboard" component={DashboardPage} />

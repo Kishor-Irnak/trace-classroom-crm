@@ -100,21 +100,6 @@ export default function NotificationsPage() {
           title: "Email alerts enabled",
           description: "Trace can now send you academic reminders.",
         });
-
-        // Log the event for the Timeline
-        if (user?.uid) {
-          const newEvent = {
-            id: `email-${Date.now()}`,
-            title: "Assignment due reminder email sent",
-            body: "This is a test alert to confirm your notifications are working.",
-            timestamp: new Date().toISOString(),
-            type: "email",
-          };
-
-          const key = `trace_email_events_${user.uid}`;
-          const existing = JSON.parse(localStorage.getItem(key) || "[]");
-          localStorage.setItem(key, JSON.stringify([...existing, newEvent]));
-        }
       } else {
         toast({
           title: "Connection failed",
