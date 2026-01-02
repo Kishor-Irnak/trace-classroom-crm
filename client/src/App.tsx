@@ -38,12 +38,7 @@ import TermsOfServicePage from "@/pages/terms-of-service";
 
 function AuthenticatedApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { isLoading } = useClassroom();
   const basePath = getBasePath();
-
-  if (isLoading) {
-    return <EnhancedLoadingScreen message="Setting up your workspace..." />;
-  }
 
   return (
     <Router base={basePath}>
@@ -109,9 +104,18 @@ function AppContent() {
   }
 
   const { user, loading: authLoading, role } = useAuth();
+  const { isLoading: classroomLoading } = useClassroom();
 
-  if (authLoading) {
-    return <EnhancedLoadingScreen message="Authenticating..." />;
+  // Unified loading state check
+  // Shows loader if authenticating OR if user is a student and classroom data is syncing
+  if (authLoading || (role === "student" && classroomLoading)) {
+    return (
+      <EnhancedLoadingScreen
+        message={
+          authLoading ? "Authenticating..." : "Setting up your workspace..."
+        }
+      />
+    );
   }
 
   if (!user) {
@@ -130,11 +134,7 @@ function AppContent() {
   }
 
   // Default to Student UI
-  return (
-    <ClassroomProvider>
-      <AuthenticatedApp />
-    </ClassroomProvider>
-  );
+  return <AuthenticatedApp />;
 }
 
 function App() {
@@ -142,10 +142,12 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <AppContent />
-          </TooltipProvider>
+          <ClassroomProvider>
+            <TooltipProvider>
+              <Toaster />
+              <AppContent />
+            </TooltipProvider>
+          </ClassroomProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
