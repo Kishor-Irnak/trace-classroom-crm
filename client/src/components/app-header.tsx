@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { HeaderNotifications } from "@/components/header-notifications";
 
 interface AppHeaderProps {
   onMobileMenuClick: () => void;
@@ -60,7 +61,8 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
         </div>
       </div>
 
-      <div className="flex items-center ml-4">
+      <div className="flex items-center ml-4 gap-2">
+        <HeaderNotifications />
         <Button
           variant="ghost"
           size="icon"

@@ -1,5 +1,12 @@
 import { useState, useEffect } from "react";
-import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  onSnapshot,
+  addDoc,
+  collection,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Link } from "wouter";
 import {
@@ -533,6 +540,33 @@ export default function SettingsPage() {
           },
           { merge: true }
         );
+
+        // Define new badges locally to track strictly what was added in this run
+        // We can infer it by checking difference, but simpler to track inline above.
+        // Actually, let's just re-run the logic cleanly or track in a Set.
+
+        const addedBadges: string[] = [];
+        const originalBadges = new Set(data.badges || []);
+        currentBadges.forEach((b) => {
+          if (!originalBadges.has(b as string)) addedBadges.push(b as string);
+        });
+
+        // Log activities
+        const { BADGES } = await import("@/lib/badges"); // Dynamic import to avoid top-level cycle if any
+
+        for (const badgeId of addedBadges) {
+          await addDoc(collection(db, "activities"), {
+            userId: user.uid,
+            userName: user.displayName || "User",
+            userAvatar: user.photoURL,
+            type: "badge_earned",
+            content: `${user.displayName || "User"} earned the '${
+              BADGES[badgeId]?.label || "New Badge"
+            }' badge!`,
+            courseId: "all-courses",
+            createdAt: new Date().toISOString(),
+          });
+        }
       }
     };
 

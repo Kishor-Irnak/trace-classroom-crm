@@ -9,6 +9,7 @@ import {
   where,
   getDocs,
   deleteDoc,
+  addDoc,
 } from "firebase/firestore";
 import type { Assignment, Course } from "@shared/schema";
 
@@ -127,6 +128,25 @@ export class LeaderboardService {
         },
         { merge: true }
       );
+
+      // Log activities for new badges
+      const newBadges = badges.filter((b) => !existingBadges.includes(b));
+      if (newBadges.length > 0) {
+        const { BADGES } = await import("@/lib/badges");
+        for (const badgeId of newBadges) {
+          await addDoc(collection(db, "activities"), {
+            userId: userId,
+            userName: displayName || "Anonymous",
+            userAvatar: photoURL || null,
+            type: "badge_earned",
+            content: `${displayName || "Anonymous"} earned the '${
+              BADGES[badgeId]?.label || "New Badge"
+            }' badge!`,
+            courseId: "all-courses",
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
 
       // console.log(`✅ Leaderboard synced for ${displayName}: ${totalXP} XP`);
     } catch (error) {

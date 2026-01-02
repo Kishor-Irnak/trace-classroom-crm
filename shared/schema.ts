@@ -135,3 +135,16 @@ export const noteMaterialSchema = z.object({
 });
 
 export type NoteMaterial = z.infer<typeof noteMaterialSchema>;
+
+export const activitySchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  userName: z.string(),
+  userAvatar: z.string().nullable(),
+  type: z.enum(["badge_earned", "assignment_completed", "streak_milestone"]),
+  content: z.string(),
+  courseId: z.string(),
+  createdAt: z.string(),
+});
+
+export type Activity = z.infer<typeof activitySchema>;
