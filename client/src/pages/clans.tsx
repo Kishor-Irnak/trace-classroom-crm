@@ -672,8 +672,9 @@ export default function ClansPage() {
         {currentView === "leaderboard" ? (
           // LEADERBOARD VIEW INLINE
           <div className="max-w-5xl mx-auto w-full space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-4">
+            {/* Header + Filter + Search */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Trophy className="h-5 w-5 text-yellow-500" />
                   Top Study Squads
@@ -682,47 +683,45 @@ export default function ClansPage() {
                   Competed based on Total XP.
                 </p>
               </div>
-              {/* Search / Quick Join */}
-              {!myClan && (
-                <div className="flex gap-2 items-start justify-end">
-                  <div className="w-full max-w-sm flex gap-2">
+
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <Select
+                  value={viewMode}
+                  onValueChange={(value: "class" | "college") =>
+                    setViewMode(value)
+                  }
+                >
+                  <SelectTrigger className="w-[140px] h-9">
+                    <SelectValue placeholder="Select View" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="class">My Class</SelectItem>
+                    <SelectItem value="college">This College</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {!myClan && (
+                  <div className="flex gap-2">
                     <Input
-                      placeholder="Enter Clan ID..."
+                      placeholder="Enter ID..."
                       value={joinCode}
                       onChange={(e) => setJoinCode(e.target.value)}
-                      className="bg-background"
+                      className="bg-background w-32 h-9"
                     />
                     <Button
-                      onClick={() => handleJoinClan()}
-                      disabled={isJoining}
+                      size="sm"
+                      onClick={() => handleJoinClan(joinCode)}
+                      disabled={isJoining || !joinCode}
                     >
                       {isJoining ? (
-                        <Loader2 className="animate-spin h-4 w-4" />
+                        <Loader2 className="animate-spin h-3 w-3" />
                       ) : (
                         "Join"
                       )}
                     </Button>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Filter & Options */}
-            <div className="flex items-center justify-between">
-              <Select
-                value={viewMode}
-                onValueChange={(value: "class" | "college") =>
-                  setViewMode(value)
-                }
-              >
-                <SelectTrigger className="w-[180px] h-9">
-                  <SelectValue placeholder="Select View" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="class">My Class</SelectItem>
-                  <SelectItem value="college">This College</SelectItem>
-                </SelectContent>
-              </Select>
+                )}
+              </div>
             </div>
 
             {viewMode === "college" && showCollegeWarning && (
@@ -763,16 +762,22 @@ export default function ClansPage() {
                     key={clan.id}
                     onClick={() => handleClanClick(clan)}
                     className={cn(
-                      "flex items-center justify-between p-4 border rounded-xl transition-all cursor-pointer",
+                      "relative flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-xl transition-all cursor-pointer gap-4 md:gap-0",
                       isMyClan
                         ? "bg-primary/5 border-primary/20"
                         : "bg-card hover:border-primary/50"
                     )}
                   >
-                    <div className="flex items-center gap-4">
+                    {/* Member Count - Top Right */}
+                    <div className="absolute top-3 right-3 flex items-center text-xs text-muted-foreground gap-1 bg-background/50 backdrop-blur-sm p-1.5 rounded-md border shadow-sm z-10">
+                      <Users className="h-3 w-3" />
+                      {clan.members.length}/5
+                    </div>
+
+                    <div className="flex items-center gap-4 md:flex-1">
                       <div
                         className={cn(
-                          "h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm",
+                          "h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0",
                           i < 3
                             ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-500"
                             : "bg-muted text-muted-foreground"
@@ -780,40 +785,45 @@ export default function ClansPage() {
                       >
                         {i + 1}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <h4 className="font-bold flex items-center gap-2">
                           <div
                             className={cn(
-                              "p-2 rounded-lg mr-2 md:mr-3 shadow-sm text-white",
+                              "p-2 rounded-lg mr-2 shadow-sm text-white shrink-0",
                               iconDef.gradient || "bg-primary"
                             )}
                           >
                             <ClanIcon className="h-4 w-4" />
                           </div>
-                          {clan.name}
+                          <span className="truncate">{clan.name}</span>
                           {isMyClan && (
-                            <Badge variant="secondary" className="text-[10px]">
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] shrink-0"
+                            >
                               Your Clan
                             </Badge>
                           )}
                         </h4>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground truncate max-w-[200px] md:max-w-md">
                           {clan.description}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 md:gap-4">
-                      <div className="flex -space-x-2 mr-1 md:mr-2">
+                    {/* Stats (Avatars + XP) - Centered on desktop (via margins or flex) */}
+                    {/* Added md:mx-auto to center it and md:mr-16 to avoid overlapping absolute count */}
+                    <div className="flex items-center gap-4 mt-2 md:mt-0 md:mx-auto md:mr-20">
+                      <div className="flex -space-x-3">
                         {members.slice(0, 5).map((m) => (
                           <div key={m.uid} className="relative group/avatar">
-                            <Avatar className="h-5 w-5 md:h-6 md:w-6 border-2 border-background ring-1 ring-border cursor-help">
+                            <Avatar className="h-8 w-8 md:h-10 md:w-10 border-2 border-background ring-1 ring-border cursor-help transition-transform hover:scale-110 hover:z-20">
                               <AvatarImage src={m.photoUrl} />
-                              <AvatarFallback className="text-[6px] md:text-[8px]">
+                              <AvatarFallback className="text-[10px] md:text-xs">
                                 {m.displayName[0]}
                               </AvatarFallback>
                             </Avatar>
-                            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-popover text-popover-foreground text-[10px] rounded shadow-sm opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-md opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                               {m.displayName}
                             </div>
                           </div>
@@ -821,13 +831,12 @@ export default function ClansPage() {
                       </div>
 
                       <div className="text-right">
-                        <div className="text-xs md:text-sm font-bold">
-                          {clan.totalXP.toLocaleString()} XP
+                        <div className="text-sm md:text-base font-bold text-foreground/80">
+                          {clan.totalXP.toLocaleString()}{" "}
+                          <span className="text-xs font-normal text-muted-foreground">
+                            XP
+                          </span>
                         </div>
-                      </div>
-                      <div className="flex items-center text-xs text-muted-foreground gap-1 w-12 justify-end">
-                        <Users className="h-3 w-3" />
-                        {clan.members.length}/5
                       </div>
                     </div>
                   </div>
