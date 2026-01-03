@@ -11,6 +11,7 @@ import {
   Sun,
   Trophy,
   UserCheck, // Added
+  Swords, // Added
 } from "lucide-react";
 import { useTheme } from "@/lib/theme-context";
 import {
@@ -33,6 +34,7 @@ const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/pipeline", label: "Pipeline", icon: LayoutGrid },
   { path: "/leaderboard", label: "Leaderboard", icon: Trophy },
+  { path: "/clans", label: "Clans", icon: Swords }, // Added
   { path: "/timeline", label: "Timeline", icon: Calendar },
   { path: "/attendance", label: "Attendance", icon: UserCheck }, // Added
   { path: "/notes", label: "Notes", icon: FileText },

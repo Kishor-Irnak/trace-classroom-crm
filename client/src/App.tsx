@@ -19,6 +19,7 @@ import NotificationsPage from "@/pages/notifications";
 import IntegrationsPage from "@/pages/integrations";
 import LeaderboardPage from "@/pages/leaderboard";
 import AttendancePage from "@/pages/attendance"; // Added
+import ClansPage from "@/pages/clans"; // Added
 import NotFound from "@/pages/not-found";
 import { StreakTracker } from "@/lib/streak-tracker";
 
@@ -63,6 +64,7 @@ function AuthenticatedApp() {
                 }}
               </Route>
               <Route path="/leaderboard" component={LeaderboardPage} />
+              <Route path="/clans" component={ClansPage} />
               <Route path="/timeline" component={TimelinePage} />
               <Route path="/dashboard" component={DashboardPage} />
               <Route path="/notes" component={NotesPage} />
