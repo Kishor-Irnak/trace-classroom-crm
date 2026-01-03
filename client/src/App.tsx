@@ -86,6 +86,9 @@ function AuthenticatedApp() {
 }
 
 function AppContent() {
+  const { user, loading: authLoading, role } = useAuth();
+  const { isLoading: classroomLoading } = useClassroom();
+
   // Public route check - must be accessible without auth
   if (
     window.location.pathname === "/privacy-policy" ||
@@ -102,9 +105,6 @@ function AppContent() {
   ) {
     return <TermsOfServicePage />;
   }
-
-  const { user, loading: authLoading, role } = useAuth();
-  const { isLoading: classroomLoading } = useClassroom();
 
   // Unified loading state check
   // Shows loader if authenticating. Classroom loading is handled by page-level skeletons.
