@@ -866,7 +866,7 @@ export default function ClansPage() {
                       <div className="flex -space-x-3">
                         {members.slice(0, 5).map((m) => (
                           <div key={m.uid} className="relative group/avatar">
-                            <Avatar className="h-8 w-8 md:h-10 md:w-10 border-2 border-background ring-1 ring-border cursor-help transition-transform hover:scale-110 hover:z-20">
+                            <Avatar className="h-8 w-8 md:h-10 md:w-10 border-2 border-background ring-1 ring-border transition-transform hover:scale-110 hover:z-20">
                               <AvatarImage src={m.photoUrl} />
                               <AvatarFallback className="text-[10px] md:text-xs">
                                 {m.displayName[0]}
