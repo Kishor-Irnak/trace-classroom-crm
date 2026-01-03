@@ -617,7 +617,7 @@ export default function ClansPage() {
                         <h4 className="font-bold flex items-center gap-2">
                           <div
                             className={cn(
-                              "p-2 rounded-lg mr-3 shadow-sm text-white",
+                              "p-2 rounded-lg mr-2 md:mr-3 shadow-sm text-white",
                               iconDef.gradient || "bg-primary"
                             )}
                           >
@@ -636,9 +636,9 @@ export default function ClansPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-6">
-                      <div className="text-right hidden sm:block">
-                        <div className="text-sm font-bold">
+                    <div className="flex items-center gap-2 md:gap-4">
+                      <div className="text-right">
+                        <div className="text-xs md:text-sm font-bold">
                           {clan.totalXP.toLocaleString()} XP
                         </div>
                       </div>
@@ -646,21 +646,6 @@ export default function ClansPage() {
                         <Users className="h-3 w-3" />
                         {clan.members.length}/5
                       </div>
-
-                      {!myClan ? (
-                        <Button
-                          size="sm"
-                          variant={isFull ? "outline" : "default"}
-                          disabled={isFull || isJoining}
-                          onClick={() => handleJoinClan(clan.id)}
-                        >
-                          {isFull ? "Full" : "Join"}
-                        </Button>
-                      ) : (
-                        <Button size="sm" variant="ghost" disabled>
-                          {isMyClan ? "Joined" : "View"}
-                        </Button>
-                      )}
                     </div>
                   </div>
                 );
@@ -805,7 +790,7 @@ export default function ClansPage() {
                   return (
                     <>
                       <div
-                        className={`relative rounded-xl overflow-hidden ${bannerGradient} p-8 text-white shadow-lg`}
+                        className={`relative rounded-xl overflow-hidden ${bannerGradient} p-4 md:p-8 text-white shadow-lg`}
                       >
                         <div className="absolute top-0 right-0 p-4 opacity-20">
                           <BannerIcon className="h-32 w-32" />
@@ -914,7 +899,7 @@ export default function ClansPage() {
                                   </Dialog>
                                 )}
                               </div>
-                              <h2 className="text-3xl font-black tracking-tight">
+                              <h2 className="text-xl md:text-3xl font-black tracking-tight">
                                 {myClan.name}
                               </h2>
                               <p className="text-blue-100 italic max-w-lg">
@@ -950,7 +935,7 @@ export default function ClansPage() {
                             )}
                           </div>
 
-                          <div className="absolute bottom-0 right-0 text-right p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10">
+                          <div className="absolute bottom-0 right-0 text-right p-3 md:p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 origin-bottom-right transform scale-75 md:scale-100">
                             <div className="text-3xl font-mono font-bold tracking-tighter">
                               {myClan.totalXP.toLocaleString()}
                             </div>
