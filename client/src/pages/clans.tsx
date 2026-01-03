@@ -995,7 +995,7 @@ export default function ClansPage() {
                                 <div className="h-8 w-8 bg-white/20 rounded flex items-center justify-center backdrop-blur-sm">
                                   {getClanIcon(myClan.tag)}
                                 </div>
-                                {myClan.leaderId === user?.uid && (
+                                {myClan.leaderId === user?.uid ? (
                                   <Dialog
                                     open={isEditDialogOpen}
                                     onOpenChange={setIsEditDialogOpen}
@@ -1070,6 +1070,22 @@ export default function ClansPage() {
                                             maxLength={20}
                                           />
                                         </div>
+                                        <div className="pt-4 border-t mt-4">
+                                          <h4 className="text-xs font-semibold text-destructive mb-3 uppercase tracking-wide">
+                                            Danger Zone
+                                          </h4>
+                                          <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            className="w-full"
+                                            onClick={handleLeaveClan}
+                                          >
+                                            <LogOut className="h-4 w-4 mr-2" />
+                                            {myClan.members.length === 1
+                                              ? "Disband Squad"
+                                              : "Leave Squad"}
+                                          </Button>
+                                        </div>
                                       </div>
                                       <DialogFooter>
                                         <Button
@@ -1089,6 +1105,16 @@ export default function ClansPage() {
                                       </DialogFooter>
                                     </DialogContent>
                                   </Dialog>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleLeaveClan}
+                                    className="h-6 w-6 text-white/50 hover:text-red-300 hover:bg-red-500/20 transition-all rounded-full"
+                                    title="Leave Squad"
+                                  >
+                                    <LogOut className="h-4 w-4" />
+                                  </Button>
                                 )}
                               </div>
                               <h2 className="text-xl md:text-3xl font-black tracking-tight">
@@ -1138,118 +1164,207 @@ export default function ClansPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Card className="md:col-span-2 border shadow-sm">
-                          <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                              <Users className="h-5 w-5" />
-                              Squad Members
-                            </CardTitle>
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Squad Members Card */}
+                        <Card className="lg:col-span-2 overflow-hidden">
+                          <CardHeader className="pb-3 bg-gradient-to-br from-background to-muted/20">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                <Users className="h-4 w-4 text-primary" />
+                                Squad Members
+                              </CardTitle>
+                              <Badge
+                                variant="outline"
+                                className="text-xs font-mono tabular-nums"
+                              >
+                                {membersData.length}/5
+                              </Badge>
+                            </div>
                           </CardHeader>
-                          <CardContent>
-                            <div className="space-y-4">
-                              {membersData.map((m, i) => (
-                                <div
-                                  key={m.uid}
-                                  className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div className="font-mono text-muted-foreground w-6 text-center text-sm font-bold">
-                                      {i + 1}
-                                    </div>
+
+                          <CardContent className="space-y-3 pt-4">
+                            {membersData.map((m, i) => (
+                              <div
+                                key={m.uid}
+                                className="group/member flex items-center justify-between p-3 rounded-lg border bg-card/50 hover:bg-muted/50 hover:border-border transition-all"
+                              >
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  {/* Rank Number */}
+                                  <div
+                                    className={cn(
+                                      "font-mono text-center text-sm font-bold w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors",
+                                      i === 0
+                                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-500"
+                                        : "bg-muted text-muted-foreground"
+                                    )}
+                                  >
+                                    {i + 1}
+                                  </div>
+
+                                  {/* Avatar */}
+                                  <div className="relative shrink-0">
                                     <Avatar className="h-9 w-9 border">
-                                      <AvatarImage src={m.photoUrl} />
-                                      <AvatarFallback>
+                                      <AvatarImage
+                                        src={m.photoUrl}
+                                        className="object-cover"
+                                      />
+                                      <AvatarFallback className="text-xs">
                                         {m.displayName[0]}
                                       </AvatarFallback>
                                     </Avatar>
-                                    <div>
-                                      <div className="font-medium flex items-center gap-2 text-sm">
+                                    {m.role === "leader" && (
+                                      <div className="absolute -top-0.5 -right-0.5 p-0.5 bg-amber-500 rounded-full">
+                                        <Crown className="h-2.5 w-2.5 text-white fill-white" />
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Member Info */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium flex items-center gap-2 text-sm truncate">
+                                      <span className="truncate">
                                         {m.displayName}
-                                        {m.role === "leader" && (
-                                          <Crown className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                                        )}
-                                      </div>
-                                      <div className="text-xs text-muted-foreground capitalize">
-                                        {m.role}
-                                      </div>
+                                      </span>
+                                      {m.role === "leader" && (
+                                        <Badge
+                                          variant="secondary"
+                                          className="text-[10px] px-1 py-0 shrink-0"
+                                        >
+                                          Leader
+                                        </Badge>
+                                      )}
                                     </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="font-bold text-sm font-mono">
-                                      {m.currentXP.toLocaleString()} XP
+                                    <div className="text-xs text-muted-foreground capitalize">
+                                      {m.role}
                                     </div>
                                   </div>
                                 </div>
-                              ))}
-                              {membersData.length < 5 && (
-                                <div
-                                  className="border-dashed border-2 rounded-lg p-4 flex flex-col items-center justify-center text-muted-foreground gap-2 hover:bg-muted/50 transition-colors cursor-pointer group"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(myClan.id);
-                                    toast({
-                                      title: "Copied!",
-                                      description:
-                                        "Share this ID with a friend.",
-                                    });
-                                  }}
-                                >
-                                  <UserPlus className="h-6 w-6 opacity-30 group-hover:opacity-100 transition-opacity" />
-                                  <span className="text-sm font-medium">
-                                    Invite a Friend ({5 - membersData.length}{" "}
-                                    slots left)
-                                  </span>
+
+                                {/* XP */}
+                                <div className="text-right shrink-0">
+                                  <div className="font-bold text-sm font-mono tabular-nums">
+                                    {m.currentXP.toLocaleString()}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                                    XP
+                                  </div>
                                 </div>
-                              )}
-                            </div>
+                              </div>
+                            ))}
+
+                            {/* Invite Card */}
+                            {membersData.length < 5 && (
+                              <div
+                                className="border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center text-muted-foreground gap-2 hover:bg-muted/50 hover:border-primary/50 transition-all cursor-pointer"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(myClan.id);
+                                  toast({
+                                    title: "Copied!",
+                                    description: "Share this ID with a friend.",
+                                  });
+                                }}
+                              >
+                                <UserPlus className="h-5 w-5 text-primary" />
+                                <span className="text-sm font-medium">
+                                  Invite a Friend
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {5 - membersData.length}{" "}
+                                  {5 - membersData.length === 1
+                                    ? "slot"
+                                    : "slots"}{" "}
+                                  remaining
+                                </span>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
 
+                        {/* Weekly Stats Card - Enhanced */}
                         <div className="space-y-6">
-                          <Card>
-                            <CardHeader className="pb-2">
-                              <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                          <Card className="border-2 shadow-xl hover:shadow-2xl transition-all duration-300 group/stats overflow-hidden relative">
+                            {/* Gradient overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-blue-500/5 opacity-0 group-hover/stats:opacity-100 transition-opacity duration-500 pointer-events-none" />
+
+                            <CardHeader className="pb-3 relative z-10">
+                              <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                                <div className="h-1 w-1 rounded-full bg-primary animate-pulse" />
                                 Weekly Stats
                               </CardTitle>
                             </CardHeader>
-                            <CardContent>
-                              <div className="space-y-4">
-                                <div>
-                                  <div className="text-2xl font-bold flex items-center gap-2">
-                                    <CalendarCheck className="h-5 w-5 text-green-500" />
-                                    -- %
+
+                            <CardContent className="space-y-4 pt-4">
+                              {/* Attendance Stat */}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-2 rounded-lg bg-emerald-500/10">
+                                    <CalendarCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                                   </div>
-                                  <p className="text-xs text-muted-foreground mt-1">
+                                  <div className="text-xs text-muted-foreground uppercase tracking-wide">
                                     Avg. Attendance
-                                  </p>
-                                </div>
-                                <div className="h-px bg-border" />
-                                <div>
-                                  <div className="text-2xl font-bold flex items-center gap-2">
-                                    <School className="h-5 w-5 text-blue-500" />
-                                    #
-                                    {topClans.findIndex(
-                                      (c) => c.id === myClan.id
-                                    ) + 1}
                                   </div>
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    Class Rank
-                                  </p>
+                                </div>
+                                <div className="text-3xl font-semibold font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
+                                  -- %
                                 </div>
                               </div>
+
+                              <div className="h-px bg-border" />
+
+                              {/* Class Rank Stat */}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-2 rounded-lg bg-primary/10">
+                                    <School className="h-4 w-4 text-primary" />
+                                  </div>
+                                  <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                                    Class Rank
+                                  </div>
+                                </div>
+                                <div className="text-3xl font-semibold font-mono tracking-tight">
+                                  #
+                                  {topClans.findIndex(
+                                    (c) => c.id === myClan.id
+                                  ) + 1}
+                                </div>
+                              </div>
+
+                              <div className="h-px bg-border" />
+
+                              {/* Quick Action */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full h-8 text-xs"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(myClan.id);
+                                  toast({
+                                    title: "Copied!",
+                                    description: "Clan ID copied to clipboard.",
+                                  });
+                                }}
+                              >
+                                <Copy className="h-3 w-3 mr-2" />
+                                Copy Clan ID
+                              </Button>
                             </CardContent>
                           </Card>
-
-                          <Button
-                            variant="ghost"
-                            className="w-full text-red-500 hover:text-red-700 hover:bg-red-50"
-                            onClick={handleLeaveClan}
-                          >
-                            <LogOut className="h-4 w-4 mr-2" />
-                            Leave Squad
-                          </Button>
                         </div>
                       </div>
+
+                      {/* CSS Animation */}
+                      <style>{`
+                        @keyframes fadeInUp {
+                          from {
+                            opacity: 0;
+                            transform: translateY(10px);
+                          }
+                          to {
+                            opacity: 1;
+                            transform: translateY(0);
+                          }
+                        }
+                      `}</style>
                     </>
                   );
                 })()}
