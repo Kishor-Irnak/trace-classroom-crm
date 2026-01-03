@@ -223,16 +223,23 @@ export default function ClansPage() {
         return;
       }
       const q = query(
-        collection(db, "leaderboards"),
+        collection(db, "leaderboards", "all-courses", "students"),
         where("uid", "in", memberIds)
       );
       const snapshot = await getDocs(q);
+      console.log("Fetched member snapshot, docs count:", snapshot.docs.length);
       const members = snapshot.docs.map((doc) => {
         const data = doc.data();
+        console.log("Member data:", data.displayName, {
+          uid: data.uid,
+          photoUrl: data.photoUrl,
+          photoURL: data.photoURL,
+          allData: data,
+        });
         return {
           uid: data.uid,
           displayName: data.displayName || "Unknown",
-          photoUrl: data.photoURL || "",
+          photoUrl: data.photoUrl || data.photoURL || "",
           currentXP: data.currentXP || 0,
           role: "member",
         } as ClanMember;
@@ -317,13 +324,24 @@ export default function ClansPage() {
 
       if (studentSnap.exists()) {
         const data = studentSnap.data();
+        console.log("Student data for", memberId, {
+          displayName: data.displayName,
+          photoUrl: data.photoUrl,
+          photoURL: data.photoURL,
+          avatar: data.avatar,
+        });
         memberXP = data.totalXP || data.xp || 0;
         memberName = data.displayName || data.name || "Unknown";
-        memberPhoto = data.photoUrl || data.avatar || "";
+        memberPhoto = data.photoUrl || data.photoURL || data.avatar || "";
       } else {
+        console.log("Student snap does NOT exist for", memberId);
         if (memberId === user?.uid) {
           memberName = user?.displayName || "Me";
           memberPhoto = user?.photoURL || "";
+          console.log("Using current user fallback:", {
+            memberName,
+            memberPhoto,
+          });
         }
       }
 
@@ -338,6 +356,14 @@ export default function ClansPage() {
     }
 
     details.sort((a, b) => b.currentXP - a.currentXP);
+    console.log(
+      "About to setMembersData with details:",
+      details.map((d) => ({
+        name: d.displayName,
+        photoUrl: d.photoUrl,
+        hasPhoto: !!d.photoUrl,
+      }))
+    );
     setMembersData(details);
 
     const clanRef = doc(db, "study_squads", clanId);
@@ -370,32 +396,48 @@ export default function ClansPage() {
 
       await Promise.all(
         chunks.map(async (chunkIds) => {
-          const qMembers = query(
-            collection(db, "leaderboards", "all-courses", "students"),
-            where("uid", "in", chunkIds)
+          // Instead of querying by uid field, fetch documents directly by ID
+          const docPromises = chunkIds.map((uid) =>
+            getDoc(doc(db, "leaderboards", "all-courses", "students", uid))
           );
-          const snap = await getDocs(qMembers);
-          snap.forEach((doc) => {
-            const d = doc.data();
-            memberDetailsMap[d.uid] = {
-              uid: d.uid,
-              displayName: d.displayName || "Unknown",
-              photoUrl: d.photoURL || "",
-              currentXP: d.totalXP || d.currentXP || 0,
-              role: "member",
-            } as ClanMember;
+          const snapshots = await Promise.all(docPromises);
+
+          snapshots.forEach((snap) => {
+            if (snap.exists()) {
+              const d = snap.data();
+              memberDetailsMap[snap.id] = {
+                uid: snap.id,
+                displayName: d.displayName || "Unknown",
+                photoUrl: d.photoUrl || d.photoURL || "",
+                currentXP: d.totalXP || d.currentXP || 0,
+                role: "member",
+              } as ClanMember;
+            }
           });
         })
       );
 
       // Now build the map keyed by Clan ID
       const profilesByClan: Record<string, ClanMember[]> = {};
+      console.log(
+        "Building profilesByClan, memberDetailsMap has",
+        Object.keys(memberDetailsMap).length,
+        "members"
+      );
       clans.forEach((clan) => {
+        console.log(
+          "Processing clan",
+          clan.name,
+          "with member IDs:",
+          clan.members
+        );
         profilesByClan[clan.id] = clan.members
           .map((mid) => {
             let profile = memberDetailsMap[mid];
+            console.log("Looking up member", mid, "found:", !!profile);
             // Fallback for current user if their leaderboard doc isn't found/indexed yet
             if (!profile && mid === user?.uid) {
+              console.log("Using current user fallback for", mid);
               profile = {
                 uid: user.uid,
                 displayName: user.displayName || "Me",
@@ -407,6 +449,13 @@ export default function ClansPage() {
             return profile;
           })
           .filter(Boolean);
+        console.log(
+          "Clan",
+          clan.name,
+          "has",
+          profilesByClan[clan.id].length,
+          "profiles"
+        );
         profilesByClan[clan.id].sort((a, b) => b.currentXP - a.currentXP);
       });
 
@@ -1178,6 +1227,17 @@ export default function ClansPage() {
                           </CardHeader>
 
                           <CardContent className="space-y-3 pt-4">
+                            {(() => {
+                              console.log(
+                                "Rendering Squad Members, membersData:",
+                                membersData.map((m) => ({
+                                  name: m.displayName,
+                                  photoUrl: m.photoUrl,
+                                  role: m.role,
+                                }))
+                              );
+                              return null;
+                            })()}
                             {membersData.map((m, i) => (
                               <div
                                 key={m.uid}
@@ -1202,6 +1262,15 @@ export default function ClansPage() {
                                       <AvatarImage
                                         src={m.photoUrl}
                                         className="object-cover"
+                                        onError={(e) => {
+                                          console.error(
+                                            "Failed to load avatar for",
+                                            m.displayName,
+                                            "URL:",
+                                            m.photoUrl,
+                                            e
+                                          );
+                                        }}
                                       />
                                       <AvatarFallback className="text-xs">
                                         {m.displayName[0]}
