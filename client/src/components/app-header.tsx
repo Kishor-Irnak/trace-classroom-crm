@@ -1,4 +1,4 @@
-import { RefreshCw, Menu, GraduationCap } from "lucide-react";
+import { RefreshCw, Menu, GraduationCap, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useClassroom } from "@/lib/classroom-context";
 import { useLocation } from "wouter";
@@ -7,6 +7,12 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { HeaderNotifications } from "@/components/header-notifications";
 import { useAuth } from "@/lib/auth-context";
 import { Badge } from "@/components/ui/badge";
+import { useState, useEffect } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface AppHeaderProps {
   onMobileMenuClick: () => void;
@@ -17,6 +23,29 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
   const [location] = useLocation();
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  const [showDocsTooltip, setShowDocsTooltip] = useState(false);
+
+  // Check if user is first-time (hasn't seen docs tooltip)
+  useEffect(() => {
+    if (user) {
+      const hasSeenDocs = localStorage.getItem("trace_docs_seen");
+      if (!hasSeenDocs) {
+        setShowDocsTooltip(true);
+        // Auto-hide tooltip after 10 seconds
+        const timer = setTimeout(() => {
+          setShowDocsTooltip(false);
+          localStorage.setItem("trace_docs_seen", "true");
+        }, 10000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user]);
+
+  const handleDocsClick = () => {
+    setShowDocsTooltip(false);
+    localStorage.setItem("trace_docs_seen", "true");
+    window.location.href = "/docs";
+  };
 
   // Extract domain from user email
   const userDomain = user?.email?.split("@")[1] || "";
@@ -84,6 +113,26 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
 
       <div className="flex items-center ml-4 gap-2">
         <HeaderNotifications />
+
+        {/* Docs Info Button with First-Time Tooltip */}
+        <Tooltip open={showDocsTooltip}>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleDocsClick}
+              title="Documentation"
+            >
+              <Info className="w-5 h-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs">
+            <p className="text-sm">
+              New to Trace? Check out our documentation to learn all features!
+            </p>
+          </TooltipContent>
+        </Tooltip>
+
         <Button
           variant="ghost"
           size="icon"

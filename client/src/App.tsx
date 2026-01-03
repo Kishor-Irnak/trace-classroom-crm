@@ -36,6 +36,7 @@ import TeacherPage from "@/pages/teacher-dashboard";
 import NoClassroomAccessPage from "@/pages/no-classroom-access";
 import PrivacyPolicyPage from "@/pages/privacy-policy";
 import TermsOfServicePage from "@/pages/terms-of-service";
+import DocsPage from "@/pages/docs";
 
 function AuthenticatedApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -106,6 +107,14 @@ function AppContent() {
     window.location.pathname.endsWith("/terms-of-service")
   ) {
     return <TermsOfServicePage />;
+  }
+
+  if (
+    window.location.pathname === "/docs" ||
+    window.location.pathname === "/docs/" ||
+    window.location.pathname.endsWith("/docs")
+  ) {
+    return <DocsPage />;
   }
 
   // Unified loading state check
