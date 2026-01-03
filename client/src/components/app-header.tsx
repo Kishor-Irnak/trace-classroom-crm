@@ -73,9 +73,9 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
 
         {/* College Domain Badge - Desktop only */}
         {!isMobile && isCollegeDomain && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
-            <GraduationCap className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-primary">
+          <div className="flex items-center gap-1.5">
+            <GraduationCap className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground font-medium">
               {userDomain}
             </span>
           </div>
