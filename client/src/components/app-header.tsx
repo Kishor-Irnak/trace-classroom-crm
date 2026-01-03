@@ -1,12 +1,12 @@
-import { Search, RefreshCw, Menu } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { RefreshCw, Menu, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useClassroom } from "@/lib/classroom-context";
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { HeaderNotifications } from "@/components/header-notifications";
+import { useAuth } from "@/lib/auth-context";
+import { Badge } from "@/components/ui/badge";
 
 interface AppHeaderProps {
   onMobileMenuClick: () => void;
@@ -15,8 +15,33 @@ interface AppHeaderProps {
 export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
   const { syncClassroom, isSyncing } = useClassroom();
   const [location] = useLocation();
-  const [searchQuery, setSearchQuery] = useState("");
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+
+  // Extract domain from user email
+  const userDomain = user?.email?.split("@")[1] || "";
+
+  // List of generic/non-college domains to exclude
+  const genericDomains = [
+    "gmail.com",
+    "yahoo.com",
+    "outlook.com",
+    "hotmail.com",
+    "live.com",
+    "aol.com",
+    "icloud.com",
+    "protonmail.com",
+    "mail.com",
+    "zoho.com",
+    "yandex.com",
+  ];
+
+  // Check if domain is a college domain (not in generic list and not a .com)
+  const isCollegeDomain =
+    userDomain &&
+    !genericDomains.includes(userDomain.toLowerCase()) &&
+    !userDomain.endsWith(".com") &&
+    userDomain.includes(".");
 
   // Get current view name for mobile
   const viewNames: Record<string, string> = {
@@ -46,19 +71,15 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
         {/* Mobile view title */}
         <span className="md:hidden font-medium text-lg">{currentViewName}</span>
 
-        {/* Search - Desktop only */}
-        <div className="relative w-full max-w-md hidden md:block">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-muted-foreground" />
+        {/* College Domain Badge - Desktop only */}
+        {!isMobile && isCollegeDomain && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+            <GraduationCap className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium text-primary">
+              {userDomain}
+            </span>
           </div>
-          <Input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-muted/50 border-muted focus:bg-background"
-            placeholder="Search assignments..."
-          />
-        </div>
+        )}
       </div>
 
       <div className="flex items-center ml-4 gap-2">
