@@ -59,6 +59,8 @@ import {
   Rocket,
   Ghost,
   Gem,
+  CalendarCheck,
+  School,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -585,6 +587,10 @@ export default function ClansPage() {
               {topClans.map((clan, i) => {
                 const isMyClan = myClan?.id === clan.id;
                 const isFull = clan.members.length >= 5;
+                const iconDef =
+                  CLAN_ICONS.find((icon) => icon.id === clan.tag) ||
+                  CLAN_ICONS[0];
+                const ClanIcon = iconDef.icon;
 
                 return (
                   <div
@@ -609,8 +615,13 @@ export default function ClansPage() {
                       </div>
                       <div>
                         <h4 className="font-bold flex items-center gap-2">
-                          <div className="bg-muted p-1 rounded text-muted-foreground mr-1">
-                            {getClanIcon(clan.tag)}
+                          <div
+                            className={cn(
+                              "p-2 rounded-lg mr-3 shadow-sm text-white",
+                              iconDef.gradient || "bg-primary"
+                            )}
+                          >
+                            <ClanIcon className="h-4 w-4" />
                           </div>
                           {clan.name}
                           {isMyClan && (
@@ -910,20 +921,13 @@ export default function ClansPage() {
                                 {myClan.description}
                               </p>
                             </div>
-                            <div className="text-left md:text-right bg-white/10 p-4 rounded-lg backdrop-blur-sm border border-white/10">
-                              <div className="text-3xl font-mono font-bold tracking-tighter">
-                                {myClan.totalXP.toLocaleString()}
-                              </div>
-                              <div className="text-xs text-blue-200 font-medium tracking-widest uppercase">
-                                Total XP
-                              </div>
-                            </div>
                           </div>
 
                           <div className="flex gap-3 mt-8">
                             <Button
                               size="sm"
-                              variant="secondary"
+                              variant="outline"
+                              className="text-white border-white/40 hover:bg-white/10 hover:text-white"
                               onClick={() => {
                                 navigator.clipboard.writeText(myClan.id);
                                 toast({
@@ -944,6 +948,15 @@ export default function ClansPage() {
                                 Leader
                               </Badge>
                             )}
+                          </div>
+
+                          <div className="absolute bottom-0 right-0 text-right p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10">
+                            <div className="text-3xl font-mono font-bold tracking-tighter">
+                              {myClan.totalXP.toLocaleString()}
+                            </div>
+                            <div className="text-xs text-blue-200 font-medium tracking-widest uppercase">
+                              Total XP
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1026,7 +1039,7 @@ export default function ClansPage() {
                               <div className="space-y-4">
                                 <div>
                                   <div className="text-2xl font-bold flex items-center gap-2">
-                                    <Target className="h-5 w-5 text-green-500" />
+                                    <CalendarCheck className="h-5 w-5 text-green-500" />
                                     -- %
                                   </div>
                                   <p className="text-xs text-muted-foreground mt-1">
@@ -1036,13 +1049,14 @@ export default function ClansPage() {
                                 <div className="h-px bg-border" />
                                 <div>
                                   <div className="text-2xl font-bold flex items-center gap-2">
-                                    <Globe className="h-5 w-5 text-blue-500" />#
+                                    <School className="h-5 w-5 text-blue-500" />
+                                    #
                                     {topClans.findIndex(
                                       (c) => c.id === myClan.id
                                     ) + 1}
                                   </div>
                                   <p className="text-xs text-muted-foreground mt-1">
-                                    Global Rank
+                                    Class Rank
                                   </p>
                                 </div>
                               </div>
