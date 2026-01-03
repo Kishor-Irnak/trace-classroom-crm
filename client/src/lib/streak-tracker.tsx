@@ -42,8 +42,8 @@ export function StreakTracker() {
             lastLoginTimestamp
           );
 
-          if (daysDiff === 0) {
-            // Already logged in today, do nothing
+          if (daysDiff <= 0) {
+            // Already logged in today or future date detected, do nothing
             return;
           } else if (daysDiff === 1) {
             // Consecutive day
