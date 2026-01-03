@@ -1071,9 +1071,6 @@ export default function ClansPage() {
                                           />
                                         </div>
                                         <div className="pt-4 border-t mt-4">
-                                          <h4 className="text-xs font-semibold text-destructive mb-3 uppercase tracking-wide">
-                                            Danger Zone
-                                          </h4>
                                           <Button
                                             variant="destructive"
                                             size="sm"
@@ -1081,9 +1078,7 @@ export default function ClansPage() {
                                             onClick={handleLeaveClan}
                                           >
                                             <LogOut className="h-4 w-4 mr-2" />
-                                            {myClan.members.length === 1
-                                              ? "Disband Squad"
-                                              : "Leave Squad"}
+                                            Leave Clan
                                           </Button>
                                         </div>
                                       </div>
