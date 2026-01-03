@@ -61,7 +61,16 @@ import {
   Gem,
   CalendarCheck,
   School,
+  AlertTriangle,
+  Lightbulb,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const CLAN_ICONS = [
@@ -189,6 +198,60 @@ export default function ClansPage() {
   const [editDesc, setEditDesc] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+
+  // Leaderboard Filtering
+  const [viewMode, setViewMode] = useState<"class" | "college">("class");
+  const [showCollegeWarning, setShowCollegeWarning] = useState(true);
+
+  // View Clan Details
+  const [selectedClan, setSelectedClan] = useState<Clan | null>(null);
+  const [selectedClanMembers, setSelectedClanMembers] = useState<ClanMember[]>(
+    []
+  );
+  const [viewClanDialogOpen, setViewClanDialogOpen] = useState(false);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  const fetchClanMembersDetails = async (memberIds: string[]) => {
+    setLoadingMembers(true);
+    try {
+      if (memberIds.length === 0) {
+        setSelectedClanMembers([]);
+        setLoadingMembers(false);
+        return;
+      }
+      const q = query(
+        collection(db, "leaderboards"),
+        where("uid", "in", memberIds)
+      );
+      const snapshot = await getDocs(q);
+      const members = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          uid: data.uid,
+          displayName: data.displayName || "Unknown",
+          photoUrl: data.photoURL || "",
+          currentXP: data.currentXP || 0,
+          role: "member",
+        } as ClanMember;
+      });
+      members.sort((a, b) => b.currentXP - a.currentXP);
+      setSelectedClanMembers(members);
+    } catch (error) {
+      console.error("Error fetching members:", error);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  const handleClanClick = (clan: Clan) => {
+    if (myClan && clan.id === myClan.id) {
+      setCurrentView("my-clan");
+    } else {
+      setSelectedClan(clan);
+      setViewClanDialogOpen(true);
+      fetchClanMembersDetails(clan.members);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -583,6 +646,47 @@ export default function ClansPage() {
               )}
             </div>
 
+            {/* Filter & Options */}
+            <div className="flex items-center justify-between">
+              <Select
+                value={viewMode}
+                onValueChange={(value: "class" | "college") =>
+                  setViewMode(value)
+                }
+              >
+                <SelectTrigger className="w-[180px] h-9">
+                  <SelectValue placeholder="Select View" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="class">My Class</SelectItem>
+                  <SelectItem value="college">This College</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {viewMode === "college" && showCollegeWarning && (
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 flex gap-3 text-yellow-600 dark:text-yellow-400 text-sm animate-in fade-in slide-in-from-top-2">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <div className="space-y-1">
+                  <div className="flex items-start justify-between">
+                    <p className="font-medium">Entertainment Purpose Only</p>
+                    <button
+                      onClick={() => setShowCollegeWarning(false)}
+                      className="text-yellow-600/50 hover:text-yellow-600"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs opacity-90 leading-relaxed">
+                    This leaderboard includes all squads from your college. Note
+                    that students in different years or branches may have
+                    different workloads and assignment counts, so this
+                    comparison is not academically fair. It's just for fun!
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3">
               {topClans.map((clan, i) => {
                 const isMyClan = myClan?.id === clan.id;
@@ -595,8 +699,9 @@ export default function ClansPage() {
                 return (
                   <div
                     key={clan.id}
+                    onClick={() => handleClanClick(clan)}
                     className={cn(
-                      "flex items-center justify-between p-4 border rounded-xl transition-all",
+                      "flex items-center justify-between p-4 border rounded-xl transition-all cursor-pointer",
                       isMyClan
                         ? "bg-primary/5 border-primary/20"
                         : "bg-card hover:border-primary/50"
@@ -1066,6 +1171,99 @@ export default function ClansPage() {
           </>
         )}
       </div>
+      {/* View Clan Details Dialog */}
+      <Dialog open={viewClanDialogOpen} onOpenChange={setViewClanDialogOpen}>
+        <DialogContent className="max-w-md">
+          {selectedClan && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  {(() => {
+                    const iconDef =
+                      CLAN_ICONS.find((i) => i.id === selectedClan.tag) ||
+                      CLAN_ICONS[0];
+                    const Icon = iconDef.icon;
+                    return (
+                      <>
+                        <div
+                          className={cn(
+                            "p-2 rounded-lg text-white",
+                            iconDef.gradient || "bg-primary"
+                          )}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span>{selectedClan.name}</span>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {selectedClan.totalXP.toLocaleString()} XP
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedClan.description}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="py-4 space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground uppercase flex items-center justify-between">
+                  <span>Squad Members</span>
+                  <span className="text-xs">
+                    {selectedClan.members.length}/5
+                  </span>
+                </h4>
+
+                {loadingMembers ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedClanMembers.map((member, i) => (
+                      <div
+                        key={member.uid}
+                        className="flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-muted-foreground w-4 text-center">
+                            {i + 1}
+                          </span>
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={member.photoUrl} />
+                            <AvatarFallback>
+                              {member.displayName[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium leading-none flex items-center gap-1">
+                              {member.displayName}
+                              {member.uid === selectedClan.leaderId && (
+                                <Crown className="h-3 w-3 text-yellow-500" />
+                              )}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              Level {Math.floor(member.currentXP / 1000) + 1}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-sm font-bold">
+                          {member.currentXP.toLocaleString()}{" "}
+                          <span className="text-xs font-normal text-muted-foreground">
+                            XP
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
