@@ -210,6 +210,9 @@ export default function ClansPage() {
   );
   const [viewClanDialogOpen, setViewClanDialogOpen] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [clanMemberProfiles, setClanMemberProfiles] = useState<
+    Record<string, ClanMember[]>
+  >({});
 
   const fetchClanMembersDetails = async (memberIds: string[]) => {
     setLoadingMembers(true);
@@ -350,6 +353,64 @@ export default function ClansPage() {
         (d) => ({ id: d.id, ...d.data() } as Clan)
       );
       setTopClans(clans);
+
+      // Collect all member IDs
+      const allMemberIds = new Set<string>();
+      clans.forEach((c) => c.members.forEach((m) => allMemberIds.add(m)));
+      const uniqueIds = Array.from(allMemberIds);
+
+      if (uniqueIds.length === 0) return;
+
+      // Fetch member details in chunks
+      const memberDetailsMap: Record<string, ClanMember> = {};
+      const chunks = [];
+      for (let i = 0; i < uniqueIds.length; i += 10) {
+        chunks.push(uniqueIds.slice(i, i + 10));
+      }
+
+      await Promise.all(
+        chunks.map(async (chunkIds) => {
+          const qMembers = query(
+            collection(db, "leaderboards", "all-courses", "students"),
+            where("uid", "in", chunkIds)
+          );
+          const snap = await getDocs(qMembers);
+          snap.forEach((doc) => {
+            const d = doc.data();
+            memberDetailsMap[d.uid] = {
+              uid: d.uid,
+              displayName: d.displayName || "Unknown",
+              photoUrl: d.photoURL || "",
+              currentXP: d.totalXP || d.currentXP || 0,
+              role: "member",
+            } as ClanMember;
+          });
+        })
+      );
+
+      // Now build the map keyed by Clan ID
+      const profilesByClan: Record<string, ClanMember[]> = {};
+      clans.forEach((clan) => {
+        profilesByClan[clan.id] = clan.members
+          .map((mid) => {
+            let profile = memberDetailsMap[mid];
+            // Fallback for current user if their leaderboard doc isn't found/indexed yet
+            if (!profile && mid === user?.uid) {
+              profile = {
+                uid: user.uid,
+                displayName: user.displayName || "Me",
+                photoUrl: user.photoURL || "",
+                currentXP: 0,
+                role: "member",
+              } as ClanMember;
+            }
+            return profile;
+          })
+          .filter(Boolean);
+        profilesByClan[clan.id].sort((a, b) => b.currentXP - a.currentXP);
+      });
+
+      setClanMemberProfiles(profilesByClan);
     } catch (error) {
       console.error("Error fetching top clans:", error);
     }
@@ -691,6 +752,7 @@ export default function ClansPage() {
               {topClans.map((clan, i) => {
                 const isMyClan = myClan?.id === clan.id;
                 const isFull = clan.members.length >= 5;
+                const members = clanMemberProfiles[clan.id] || [];
                 const iconDef =
                   CLAN_ICONS.find((icon) => icon.id === clan.tag) ||
                   CLAN_ICONS[0];
@@ -742,6 +804,22 @@ export default function ClansPage() {
                     </div>
 
                     <div className="flex items-center gap-2 md:gap-4">
+                      <div className="flex -space-x-2 mr-1 md:mr-2">
+                        {members.slice(0, 5).map((m) => (
+                          <div key={m.uid} className="relative group/avatar">
+                            <Avatar className="h-5 w-5 md:h-6 md:w-6 border-2 border-background ring-1 ring-border cursor-help">
+                              <AvatarImage src={m.photoUrl} />
+                              <AvatarFallback className="text-[6px] md:text-[8px]">
+                                {m.displayName[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-popover text-popover-foreground text-[10px] rounded shadow-sm opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                              {m.displayName}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
                       <div className="text-right">
                         <div className="text-xs md:text-sm font-bold">
                           {clan.totalXP.toLocaleString()} XP
