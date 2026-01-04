@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -47,6 +48,7 @@ import {
   Copy,
   UserPlus,
   Loader2,
+  Send,
   Target,
   Globe,
   Settings,
@@ -160,17 +162,22 @@ interface Clan {
   createdAt: any;
 }
 
-interface ClanMember {
+export interface ClanMember {
   uid: string;
   displayName: string;
   photoUrl: string;
   currentXP: number;
   role: "leader" | "member";
+  emailDomain?: string;
+  enrolledCourseIds?: string[];
 }
+
+import { useClassroom } from "@/lib/classroom-context";
 
 export default function ClansPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { courses } = useClassroom();
 
   const [currentView, setCurrentView] = useState<"leaderboard" | "my-clan">(
     "leaderboard"
@@ -203,6 +210,59 @@ export default function ClansPage() {
   const [viewMode, setViewMode] = useState<"class" | "college">("class");
   const [showCollegeWarning, setShowCollegeWarning] = useState(true);
 
+  // Filtered Clans Logic
+  const [filteredClans, setFilteredClans] = useState<Clan[]>([]);
+  const [clanMemberProfiles, setClanMemberProfiles] = useState<
+    Record<string, ClanMember[]>
+  >({});
+
+  useEffect(() => {
+    if (!user || topClans.length === 0) {
+      setFilteredClans([]);
+      return;
+    }
+
+    const userDomain = user.email ? user.email.split("@")[1] : null;
+    // user enrolled courses
+    const userCourseIds = courses.map((c) => c.id);
+
+    const filtered = topClans.filter((clan) => {
+      // Always show user's own clan if it's in the list
+      if (clan.members.includes(user.uid)) return true;
+
+      // Find leader profile
+      const members = clanMemberProfiles[clan.id] || [];
+      // Use leaderId to find leader, or fallback to first member
+      // Since we populate 'role' in fetchTopClans, we can use that too
+      const leader =
+        members.find((m) => m.uid === clan.leaderId) ||
+        members.find((m) => m.role === "leader") ||
+        members[0];
+
+      if (!leader) return false;
+
+      // Logic from Leaderboard.tsx
+      const leaderDomain = leader.emailDomain;
+      // If leader profile missing emailDomain (legacy?), fallback to false or lenient?
+      // Leaderboard logic: userDomain && studentDomain && userDomain === studentDomain
+      const isSameDomain =
+        userDomain && leaderDomain && userDomain === leaderDomain;
+
+      if (viewMode === "college") {
+        return !!isSameDomain;
+      } else {
+        // Class View: same domain + shared course
+        const leaderCourses = leader.enrolledCourseIds || [];
+        const hasCommonSubject = userCourseIds.some((id) =>
+          leaderCourses.includes(id)
+        );
+        return isSameDomain && hasCommonSubject;
+      }
+    });
+
+    setFilteredClans(filtered);
+  }, [topClans, viewMode, user, courses, clanMemberProfiles]);
+
   // View Clan Details
   const [selectedClan, setSelectedClan] = useState<Clan | null>(null);
   const [selectedClanMembers, setSelectedClanMembers] = useState<ClanMember[]>(
@@ -210,11 +270,11 @@ export default function ClansPage() {
   );
   const [viewClanDialogOpen, setViewClanDialogOpen] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(false);
-  const [clanMemberProfiles, setClanMemberProfiles] = useState<
-    Record<string, ClanMember[]>
-  >({});
 
-  const fetchClanMembersDetails = async (memberIds: string[]) => {
+  const fetchClanMembersDetails = async (
+    memberIds: string[],
+    leaderId?: string
+  ) => {
     setLoadingMembers(true);
     try {
       if (memberIds.length === 0) {
@@ -222,28 +282,61 @@ export default function ClansPage() {
         setLoadingMembers(false);
         return;
       }
-      const q = query(
-        collection(db, "leaderboards", "all-courses", "students"),
-        where("uid", "in", memberIds)
-      );
-      const snapshot = await getDocs(q);
-      console.log("Fetched member snapshot, docs count:", snapshot.docs.length);
-      const members = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        console.log("Member data:", data.displayName, {
-          uid: data.uid,
-          photoUrl: data.photoUrl,
-          photoURL: data.photoURL,
-          allData: data,
-        });
-        return {
-          uid: data.uid,
-          displayName: data.displayName || "Unknown",
-          photoUrl: data.photoUrl || data.photoURL || "",
-          currentXP: data.currentXP || 0,
-          role: "member",
-        } as ClanMember;
+
+      const memberPromises = memberIds.map(async (memberId) => {
+        try {
+          const studentRef = doc(
+            db,
+            "leaderboards",
+            "all-courses",
+            "students",
+            memberId
+          );
+          const studentSnap = await getDoc(studentRef);
+
+          if (studentSnap.exists()) {
+            const data = studentSnap.data();
+            return {
+              uid: memberId,
+              displayName: data.displayName || data.name || "Unknown",
+              photoUrl: data.photoUrl || data.photoURL || data.avatar || "",
+              currentXP: data.totalXP || data.xp || data.currentXP || 0,
+              role: memberId === leaderId ? "leader" : "member",
+            } as ClanMember;
+          } else {
+            // Check if it's the current user (fallback)
+            if (user && memberId === user.uid) {
+              return {
+                uid: memberId,
+                displayName: user.displayName || "Me",
+                photoUrl: user.photoURL || "",
+                currentXP: 0,
+                role: memberId === leaderId ? "leader" : "member",
+              } as ClanMember;
+            }
+
+            // Fallback for missing data
+            return {
+              uid: memberId,
+              displayName: "Unknown Member",
+              photoUrl: "",
+              currentXP: 0,
+              role: memberId === leaderId ? "leader" : "member",
+            } as ClanMember;
+          }
+        } catch (err) {
+          console.error(`Error fetching member ${memberId}:`, err);
+          return {
+            uid: memberId,
+            displayName: "Error Loading",
+            photoUrl: "",
+            currentXP: 0,
+            role: "member",
+          } as ClanMember;
+        }
       });
+
+      const members = await Promise.all(memberPromises);
       members.sort((a, b) => b.currentXP - a.currentXP);
       setSelectedClanMembers(members);
     } catch (error) {
@@ -259,7 +352,7 @@ export default function ClansPage() {
     } else {
       setSelectedClan(clan);
       setViewClanDialogOpen(true);
-      fetchClanMembersDetails(clan.members);
+      fetchClanMembersDetails(clan.members, clan.leaderId);
     }
   };
 
@@ -373,7 +466,7 @@ export default function ClansPage() {
   const fetchTopClans = async () => {
     try {
       const clansRef = collection(db, "study_squads");
-      const q = query(clansRef, orderBy("totalXP", "desc"), limit(20));
+      const q = query(clansRef, orderBy("totalXP", "desc"), limit(50));
       const snapshot = await getDocs(q);
       const clans = snapshot.docs.map(
         (d) => ({ id: d.id, ...d.data() } as Clan)
@@ -411,6 +504,10 @@ export default function ClansPage() {
                 photoUrl: d.photoUrl || d.photoURL || "",
                 currentXP: d.totalXP || d.currentXP || 0,
                 role: "member",
+                emailDomain:
+                  d.emailDomain ||
+                  (d.email ? d.email.split("@")[1] : undefined),
+                enrolledCourseIds: d.enrolledCourseIds || d.subjects || [],
               } as ClanMember;
             }
           });
@@ -437,6 +534,8 @@ export default function ClansPage() {
             console.log("Looking up member", mid, "found:", !!profile);
             // Fallback for current user if their leaderboard doc isn't found/indexed yet
             if (!profile && mid === user?.uid) {
+              const uDomain = user.email ? user.email.split("@")[1] : undefined;
+              const uCourses = courses.map((c) => c.id);
               console.log("Using current user fallback for", mid);
               profile = {
                 uid: user.uid,
@@ -444,6 +543,8 @@ export default function ClansPage() {
                 photoUrl: user.photoURL || "",
                 currentXP: 0,
                 role: "member",
+                emailDomain: uDomain,
+                enrolledCourseIds: uCourses,
               } as ClanMember;
             }
             return profile;
@@ -552,6 +653,55 @@ export default function ClansPage() {
         return;
       }
 
+      // Fair Play Check: User can only join their own class's clan
+      const leaderRef = doc(
+        db,
+        "leaderboards",
+        "all-courses",
+        "students",
+        data.leaderId
+      );
+      const leaderSnap = await getDoc(leaderRef);
+      let isAllowed = false;
+
+      if (leaderSnap.exists()) {
+        const leaderData = leaderSnap.data();
+        const leaderDomain =
+          leaderData.emailDomain ||
+          (leaderData.email ? leaderData.email.split("@")[1] : null);
+        const leaderCourses =
+          leaderData.enrolledCourseIds || leaderData.subjects || [];
+
+        const userDomain = user!.email ? user!.email.split("@")[1] : null;
+        const userCourseIds = courses.map((c) => c.id);
+
+        const isSameDomain =
+          userDomain && leaderDomain && userDomain === leaderDomain;
+        const hasCommonSubject = userCourseIds.some((id) =>
+          leaderCourses.includes(id)
+        );
+
+        // Strict Class Logic
+        if (isSameDomain && hasCommonSubject) {
+          isAllowed = true;
+        }
+      } else {
+        // Leader profile not found? Maybe implicit allow or strict deny?
+        // Strict deny for fair play, but maybe leader is me (implying I'm restoring connection)?
+        // If I am joining, I am not the leader (leader is data.leaderId).
+        console.log("Leader profile not found during join check.");
+      }
+
+      if (!isAllowed) {
+        toast({
+          title: "Restricted",
+          description:
+            "For fair play, you can only join squads from your own class.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       await updateDoc(clanRef, {
         members: arrayUnion(user!.uid),
       });
@@ -568,6 +718,118 @@ export default function ClansPage() {
       });
     } finally {
       setIsJoining(false);
+    }
+  };
+
+  const handleRequestJoin = async () => {
+    if (!selectedClan || !user) return;
+
+    // Check if user is already in a clan
+    if (myClan) {
+      toast({
+        title: "Already in a Squad",
+        description:
+          "You must leave your current squad before joining another.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if clan is full
+    if (selectedClan.members.length >= 5) {
+      toast({
+        title: "Squad Full",
+        description: "This squad already has 5 members.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Fair Play Check
+    const leaderRef = doc(
+      db,
+      "leaderboards",
+      "all-courses",
+      "students",
+      selectedClan.leaderId
+    );
+    const leaderSnap = await getDoc(leaderRef);
+    let isAllowed = false;
+
+    if (leaderSnap.exists()) {
+      const leaderData = leaderSnap.data();
+      const leaderDomain =
+        leaderData.emailDomain ||
+        (leaderData.email ? leaderData.email.split("@")[1] : null);
+      const leaderCourses =
+        leaderData.enrolledCourseIds || leaderData.subjects || [];
+
+      const userDomain = user.email ? user.email.split("@")[1] : null;
+      const userCourseIds = courses.map((c) => c.id);
+
+      const isSameDomain =
+        userDomain && leaderDomain && userDomain === leaderDomain;
+      const hasCommonSubject = userCourseIds.some((id) =>
+        leaderCourses.includes(id)
+      );
+
+      if (isSameDomain && hasCommonSubject) {
+        isAllowed = true;
+      }
+    }
+
+    if (!isAllowed) {
+      toast({
+        title: "Restricted",
+        description:
+          "For fair play, you can only join squads from your own class.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Check if request already exists
+      const requestsRef = collection(db, "clan_requests");
+      const q = query(
+        requestsRef,
+        where("clanId", "==", selectedClan.id),
+        where("requesterId", "==", user.uid),
+        where("status", "==", "pending")
+      );
+      const querySnapshot = await getDocs(q);
+
+      if (!querySnapshot.empty) {
+        toast({
+          title: "Request Pending",
+          description: "You have already sent a request to this squad.",
+        });
+        return;
+      }
+
+      await addDoc(collection(db, "clan_requests"), {
+        clanId: selectedClan.id,
+        clanName: selectedClan.name,
+        leaderId: selectedClan.leaderId,
+        requesterId: user.uid,
+        requesterName: user.displayName,
+        requesterAvatar: user.photoURL,
+        status: "pending",
+        createdAt: serverTimestamp(),
+      });
+
+      toast({
+        title: "Request Sent",
+        description: `Your request to join ${selectedClan.name} has been sent.`,
+      });
+      setViewClanDialogOpen(false);
+    } catch (error) {
+      console.error("Error sending request:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send request.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -797,7 +1059,7 @@ export default function ClansPage() {
             )}
 
             <div className="space-y-3">
-              {topClans.map((clan, i) => {
+              {filteredClans.map((clan, i) => {
                 const isMyClan = myClan?.id === clan.id;
                 const isFull = clan.members.length >= 5;
                 const members = clanMemberProfiles[clan.id] || [];
@@ -891,7 +1153,7 @@ export default function ClansPage() {
                   </div>
                 );
               })}
-              {topClans.length === 0 && (
+              {filteredClans.length === 0 && (
                 <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
                   No active clans found. Be the first to create one!
                 </div>
@@ -1387,7 +1649,7 @@ export default function ClansPage() {
                                 </div>
                                 <div className="text-3xl font-semibold font-mono tracking-tight">
                                   #
-                                  {topClans.findIndex(
+                                  {filteredClans.findIndex(
                                     (c) => c.id === myClan.id
                                   ) + 1}
                                 </div>
@@ -1526,6 +1788,21 @@ export default function ClansPage() {
                   </div>
                 )}
               </div>
+
+              {!myClan &&
+                selectedClan.members.length < 5 &&
+                !selectedClan.members.includes(user!.uid) && (
+                  <DialogFooter className="flex-col sm:justify-between gap-2 border-t pt-4">
+                    <div className="text-xs text-muted-foreground italic flex-1 flex items-center"></div>
+                    <Button
+                      className="w-full sm:w-auto"
+                      onClick={handleRequestJoin}
+                    >
+                      <Send className="w-4 h-4 mr-2" />
+                      Request to Join
+                    </Button>
+                  </DialogFooter>
+                )}
             </>
           )}
         </DialogContent>

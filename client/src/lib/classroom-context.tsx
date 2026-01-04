@@ -1021,11 +1021,28 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
 
       try {
         // P0: Fetch Courses (Critical)
-        // If we have cache, UI is already showing it. Use service to refresh.
-        const fetchedCourses = await GoogleClassroomService.fetchCourses(
-          token,
-          user.uid
-        );
+        let fetchedCourses;
+        try {
+          fetchedCourses = await GoogleClassroomService.fetchCourses(
+            token,
+            user.uid
+          );
+        } catch (err: any) {
+          if (err.message && err.message.includes("401")) {
+            console.log("Sync 401. Session expired.");
+            setError(
+              "Your session has expired. Please sign out and sign in again."
+            );
+            toast({
+              variant: "destructive",
+              title: "Session Expired",
+              description: "Please sign out and sign in again to continue.",
+            });
+            throw new Error("Session expired");
+          } else {
+            throw err;
+          }
+        }
 
         // Update state immediately if changed
         setCourses((prev) => {

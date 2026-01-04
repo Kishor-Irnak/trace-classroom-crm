@@ -87,6 +87,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         );
 
+        if (teacherRes.status === 401) {
+          console.log("Token expired (401). User needs to re-authenticate.");
+          setError("Session expired. Please sign in again.");
+          setRole(null);
+          setLoading(false);
+          localStorage.removeItem("google_access_token");
+          return;
+        }
+
         let isTeacher = false;
         if (teacherRes.ok) {
           const teacherData = await teacherRes.json();
