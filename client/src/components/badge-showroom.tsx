@@ -44,6 +44,19 @@ export function BadgeShowroom({
               {categoryBadges.map((badge) => {
                 const isEarned = earnedSet.has(badge.id);
 
+                // Check if progress has started to highlight the badge
+                let hasStarted = false;
+                if (!isEarned) {
+                  if (category.id === "consistency") {
+                    // Consistency badges default to showing 1/Target, so always "started"
+                    hasStarted = true;
+                  } else if (category.id === "productivity") {
+                    hasStarted = (submissionCount || 0) > 0;
+                  } else if (category.id === "reliability") {
+                    hasStarted = (attendanceStats?.total || 0) > 0;
+                  }
+                }
+
                 return (
                   <div
                     key={badge.id}
@@ -51,7 +64,9 @@ export function BadgeShowroom({
                       "relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-200",
                       isEarned
                         ? "bg-gradient-to-br from-card to-card/50 border-border shadow-md hover:shadow-lg"
-                        : "bg-muted/30 border-dashed border-border/50 opacity-60 grayscale"
+                        : hasStarted
+                        ? "bg-muted/40 border-dashed border-border/60" // Started: Full opacity/color
+                        : "bg-muted/30 border-dashed border-border/50 opacity-60 grayscale" // Not started: Dimmed
                     )}
                   >
                     {/* Icon Container */}

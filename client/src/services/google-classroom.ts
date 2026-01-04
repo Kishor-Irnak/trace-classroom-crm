@@ -13,9 +13,9 @@ interface GoogleStudentSubmission {
     | "SUBMITTED";
   assignedGrade?: number;
   alternateLink?: string;
-  turnInTime?: string;
   updateTime?: string;
-  late?: boolean;
+  // Note: turnInTime and late fields don't exist at the top level
+  // They may be in submissionHistory if needed in the future
 }
 
 export const GoogleClassroomService = {
@@ -75,25 +75,63 @@ export const GoogleClassroomService = {
       courses.map(async (course) => {
         const cacheKey = `assignments_${course.id}`;
         const cached = CacheService.get<Assignment[]>(cacheKey);
-        if (cached) return cached;
+        if (cached) {
+          console.log(
+            `[CACHE HIT] Using cached assignments for ${course.name}`
+          );
+          return cached;
+        }
+
+        console.log(`[CACHE MISS] Fetching fresh data for ${course.name}`);
 
         // Fetch CourseWork AND Submissions in parallel for this course
         // URL: courseWork/-/studentSubmissions gets ALL submissions for the course
         const courseworkUrl = `https://classroom.googleapis.com/v1/courses/${course.id}/courseWork?courseWorkStates=PUBLISHED&fields=courseWork(id,title,description,dueDate,dueTime,maxPoints,alternateLink,workType,creationTime,updateTime)`;
-        const submissionsUrl = `https://classroom.googleapis.com/v1/courses/${course.id}/courseWork/-/studentSubmissions?userId=me&fields=studentSubmissions(id,courseWorkId,state,assignedGrade,turnInTime,updateTime,late)`;
+        // Note: turnInTime and late fields don't exist in studentSubmissions - they're in submissionHistory
+        const submissionsUrl = `https://classroom.googleapis.com/v1/courses/${course.id}/courseWork/-/studentSubmissions?userId=me&fields=studentSubmissions(id,courseWorkId,state,assignedGrade,updateTime)`;
 
         const [cwRes, subRes] = await Promise.all([
           fetch(courseworkUrl, {
             headers: { Authorization: `Bearer ${accessToken}` },
-          }).then((r) => (r.ok ? r.json() : { courseWork: [] })),
+          }).then((r) => {
+            if (!r.ok)
+              console.error(
+                `Coursework fetch failed: ${r.status} ${r.statusText}`
+              );
+            return r.ok ? r.json() : { courseWork: [] };
+          }),
           fetch(submissionsUrl, {
             headers: { Authorization: `Bearer ${accessToken}` },
-          }).then((r) => (r.ok ? r.json() : { studentSubmissions: [] })),
+          }).then(async (r) => {
+            if (!r.ok) {
+              console.error(
+                `⚠️ Submissions fetch failed: ${r.status} ${r.statusText}`
+              );
+              console.error(
+                `⚠️ This usually means missing OAuth scope: classroom.student-submissions.me.readonly`
+              );
+              console.error(
+                `⚠️ Please sign out and sign in again to grant permissions`
+              );
+              const errorText = await r.text();
+              console.error(`⚠️ Error response:`, errorText);
+              return { studentSubmissions: [] };
+            }
+            return r.json();
+          }),
         ]);
 
         const work = cwRes.courseWork || [];
         const submissions: GoogleStudentSubmission[] =
           subRes.studentSubmissions || [];
+
+        console.log(`[API DATA] Course: ${course.name}`);
+        console.log(`  - Coursework items: ${work.length}`);
+        console.log(`  - Submissions: ${submissions.length}`);
+        console.log(
+          `  - Submission states:`,
+          submissions.map((s) => ({ id: s.courseWorkId, state: s.state }))
+        );
 
         const mapped: Assignment[] = work
           .filter(
@@ -107,7 +145,7 @@ export const GoogleClassroomService = {
             return mapToAssignment(w, course, sub);
           });
 
-        CacheService.set(cacheKey, mapped, 60 * 60);
+        CacheService.set(cacheKey, mapped, 5 * 60); // 5 minutes cache for faster submission updates
         return mapped;
       })
     );
@@ -179,17 +217,33 @@ function mapToAssignment(
   let gradedAt = null;
 
   if (submission) {
-    if (submission.state === "TURNED_IN") {
+    // Debug: Log submission state to help diagnose issues
+    console.log(`Assignment "${gc.title}" submission state:`, submission.state);
+
+    // Handle submitted states (both TURNED_IN and SUBMITTED)
+    if (submission.state === "TURNED_IN" || submission.state === "SUBMITTED") {
       userStatus = "submitted";
       systemStatus = "submitted";
-      submittedAt = submission.turnInTime || submission.updateTime;
-    } else if (submission.state === "RETURNED") {
+      submittedAt = submission.updateTime; // Use updateTime as submission timestamp
+    }
+    // Handle returned/graded state
+    else if (submission.state === "RETURNED") {
       userStatus = "graded";
       systemStatus = "graded";
       grade = submission.assignedGrade;
-      // gradedAt = submission.updateTime; // Type conflict in schema? usually okay
+      submittedAt = submission.updateTime; // Use updateTime as submission timestamp
+      gradedAt = submission.updateTime;
     }
-    // If late?
+    // Handle reclaimed (student took back their submission)
+    else if (submission.state === "reclaimed_by_student") {
+      userStatus = "backlog";
+      systemStatus = "backlog";
+    }
+    // NEW or CREATED means work in progress
+    else if (submission.state === "NEW" || submission.state === "CREATED") {
+      userStatus = "backlog";
+      systemStatus = "backlog";
+    }
   }
 
   if (dueDate && new Date(dueDate) < now && systemStatus === "backlog") {

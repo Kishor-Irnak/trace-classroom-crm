@@ -1019,6 +1019,12 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       setIsSyncing(true);
       setError(null);
 
+      // Clear assignment caches to force fresh data
+      if (!isAutoSync) {
+        // Only clear on manual sync to avoid excessive API calls
+        CacheService.clearPattern("assignments_");
+      }
+
       try {
         // P0: Fetch Courses (Critical)
         let fetchedCourses;
@@ -1123,6 +1129,18 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
       syncClassroom(true);
     }
   }, [user, accessToken, hasAutoSynced, isSyncing, syncClassroom]);
+
+  // Periodic auto-sync every 10 minutes to detect submission changes
+  useEffect(() => {
+    if (!user || !accessToken) return;
+
+    const intervalId = setInterval(() => {
+      console.log("Running periodic sync to check for submission updates...");
+      syncClassroom(true); // Auto-sync silently
+    }, 10 * 60 * 1000); // 10 minutes
+
+    return () => clearInterval(intervalId);
+  }, [user, accessToken, syncClassroom]);
 
   // Persistence Effects
   useEffect(() => {

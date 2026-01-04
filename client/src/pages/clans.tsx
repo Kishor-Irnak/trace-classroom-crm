@@ -16,6 +16,7 @@ import {
   arrayUnion,
   arrayRemove,
   deleteDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import {
   Card,
@@ -36,6 +37,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -65,7 +76,16 @@ import {
   School,
   AlertTriangle,
   Lightbulb,
+  MoreVertical,
+  UserMinus,
+  Info,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -73,6 +93,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 
 const CLAN_ICONS = [
@@ -206,6 +235,18 @@ export default function ClansPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
+  // Transfer Leadership Dialog
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  const [selectedNewLeader, setSelectedNewLeader] = useState<string>("");
+
+  // Confirmation Dialogs
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
   // Leaderboard Filtering
   const [viewMode, setViewMode] = useState<"class" | "college">("class");
   const [showCollegeWarning, setShowCollegeWarning] = useState(true);
@@ -215,6 +256,11 @@ export default function ClansPage() {
   const [clanMemberProfiles, setClanMemberProfiles] = useState<
     Record<string, ClanMember[]>
   >({});
+
+  // Track pending requests
+  const [pendingRequests, setPendingRequests] = useState<Set<string>>(
+    new Set()
+  );
 
   useEffect(() => {
     if (!user || topClans.length === 0) {
@@ -358,8 +404,61 @@ export default function ClansPage() {
 
   useEffect(() => {
     if (!user) return;
-    fetchUserClan();
+    // fetchUserClan is now handled by real-time listener below
     fetchTopClans();
+  }, [user]);
+
+  // Fetch pending requests for current user
+  useEffect(() => {
+    if (!user) return;
+
+    const requestsRef = collection(db, "clan_requests");
+    const q = query(
+      requestsRef,
+      where("requesterId", "==", user.uid),
+      where("status", "==", "pending")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const clanIds = new Set(snapshot.docs.map((doc) => doc.data().clanId));
+      setPendingRequests(clanIds);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Real-time listener for user's clan
+  useEffect(() => {
+    if (!user) return;
+
+    const clansRef = collection(db, "study_squads");
+    const q = query(clansRef, where("members", "array-contains", user.uid));
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      if (!snapshot.empty) {
+        const clanDoc = snapshot.docs[0];
+        const clanData = { id: clanDoc.id, ...clanDoc.data() } as Clan;
+        setMyClan(clanData);
+
+        // Pre-fill edit form
+        setEditName(clanData.name);
+        setEditTag(clanData.tag);
+        setEditDesc(clanData.description);
+
+        // Fetch member details
+        await fetchMembersDetails(
+          clanData.members,
+          clanData.leaderId,
+          clanDoc.id
+        );
+      } else {
+        setMyClan(null);
+        setMembersData([]);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [user]);
 
   const fetchUserClan = async () => {
@@ -807,6 +906,13 @@ export default function ClansPage() {
         return;
       }
 
+      console.log(
+        "Creating request with leaderId:",
+        selectedClan.leaderId,
+        "for clan:",
+        selectedClan.name
+      );
+
       await addDoc(collection(db, "clan_requests"), {
         clanId: selectedClan.id,
         clanName: selectedClan.name,
@@ -817,6 +923,9 @@ export default function ClansPage() {
         status: "pending",
         createdAt: serverTimestamp(),
       });
+
+      // Add to pending requests
+      setPendingRequests((prev) => new Set(prev).add(selectedClan.id));
 
       toast({
         title: "Request Sent",
@@ -833,61 +942,170 @@ export default function ClansPage() {
     }
   };
 
-  const handleLeaveClan = async () => {
+  const handleLeaveClan = () => {
+    setShowLeaveConfirm(true);
+  };
+
+  const confirmLeaveClan = async () => {
     if (!myClan) return;
-    if (
-      confirm(
-        "Are you sure you want to leave this clan? " +
-          (myClan.members.length === 1
-            ? "Since you are the last member, the clan will be deleted."
-            : "")
-      )
-    ) {
-      try {
-        const clanRef = doc(db, "study_squads", myClan.id);
 
-        if (myClan.members.length <= 1) {
-          // User is the last member (or something weird happened), delete the clan
-          await deleteDoc(clanRef);
-          toast({
-            title: "Squad Disbanded",
-            description: "The squad has been deleted.",
-          });
-        } else {
-          // There are other members
-          const updates: any = {
-            members: arrayRemove(user!.uid),
-          };
+    try {
+      const clanRef = doc(db, "study_squads", myClan.id);
 
-          // If I was the leader, assign the next senior member (first in array) as leader
-          if (myClan.leaderId === user!.uid) {
-            const remainingMembers = myClan.members.filter(
-              (id) => id !== user!.uid
-            );
-            if (remainingMembers.length > 0) {
-              updates.leaderId = remainingMembers[0];
-            }
+      if (myClan.members.length <= 1) {
+        // User is the last member (or something weird happened), delete the clan
+        await deleteDoc(clanRef);
+        toast({
+          title: "Squad Disbanded",
+          description: "The squad has been deleted.",
+        });
+      } else {
+        // There are other members
+        const updates: any = {
+          members: arrayRemove(user!.uid),
+        };
+
+        // If I was the leader, assign the next senior member (first in array) as leader
+        if (myClan.leaderId === user!.uid) {
+          const remainingMembers = myClan.members.filter(
+            (id) => id !== user!.uid
+          );
+          if (remainingMembers.length > 0) {
+            updates.leaderId = remainingMembers[0];
           }
-
-          await updateDoc(clanRef, updates);
-          toast({
-            title: "Left Squad",
-            description: "You have left the squad.",
-          });
         }
 
-        setMyClan(null);
-        setMembersData([]);
-        setCurrentView("leaderboard");
-        fetchTopClans(); // Refresh leaderboard to remove the deleted clan or update counts
-      } catch (error) {
-        console.error(error);
+        await updateDoc(clanRef, updates);
         toast({
-          title: "Error",
-          description: "Failed to leave squad.",
-          variant: "destructive",
+          title: "Left Squad",
+          description: "You have left the squad.",
         });
       }
+
+      setShowLeaveConfirm(false);
+      setMyClan(null);
+      setMembersData([]);
+      setCurrentView("leaderboard");
+      fetchTopClans(); // Refresh leaderboard to remove the deleted clan or update counts
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: "Failed to leave squad.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRemoveMember = (memberId: string, memberName: string) => {
+    if (!myClan || myClan.leaderId !== user!.uid) {
+      toast({
+        title: "Permission Denied",
+        description: "Only the leader can remove members.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (memberId === user!.uid) {
+      toast({
+        title: "Cannot Remove Yourself",
+        description: "Use 'Leave Squad' or transfer leadership first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setMemberToRemove({ id: memberId, name: memberName });
+    setShowRemoveConfirm(true);
+  };
+
+  const confirmRemoveMember = async () => {
+    if (!myClan || !memberToRemove) return;
+
+    try {
+      const clanRef = doc(db, "study_squads", myClan.id);
+      await updateDoc(clanRef, {
+        members: arrayRemove(memberToRemove.id),
+      });
+
+      toast({
+        title: "Member Removed",
+        description: `${memberToRemove.name} has been removed from the squad.`,
+      });
+
+      setShowRemoveConfirm(false);
+      setMemberToRemove(null);
+      // Real-time listener will update automatically
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: "Failed to remove member.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleTransferLeadership = async (
+    newLeaderId: string,
+    newLeaderName: string
+  ) => {
+    if (!myClan || myClan.leaderId !== user!.uid) {
+      toast({
+        title: "Permission Denied",
+        description: "Only the current leader can transfer leadership.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newLeaderId === user!.uid) {
+      toast({
+        title: "Already Leader",
+        description: "You are already the leader.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const clanRef = doc(db, "study_squads", myClan.id);
+      await updateDoc(clanRef, {
+        leaderId: newLeaderId,
+      });
+
+      toast({
+        title: "Leadership Transferred",
+        description: `${newLeaderName} is now the squad leader.`,
+      });
+
+      setIsTransferDialogOpen(false);
+      setSelectedNewLeader("");
+      // Real-time listener will update automatically
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: "Failed to transfer leadership.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const confirmTransferLeadership = () => {
+    if (!selectedNewLeader) {
+      toast({
+        title: "No Member Selected",
+        description: "Please select a member to transfer leadership to.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newLeader = membersData.find((m) => m.uid === selectedNewLeader);
+    if (newLeader) {
+      handleTransferLeadership(newLeader.uid, newLeader.displayName);
     }
   };
 
@@ -912,6 +1130,7 @@ export default function ClansPage() {
         description: "Your clan settings have been saved.",
       });
       setIsEditDialogOpen(false);
+      // Real-time listener will update automatically
     } catch (error) {
       console.error(error);
       toast({
@@ -940,728 +1159,584 @@ export default function ClansPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden relative">
-      <div className="border-b px-4 py-3 md:px-6 md:py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-background/95 backdrop-blur z-20 shrink-0 transition-all">
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <h1 className="text-2xl font-bold tracking-tight hidden md:block">
-            Clans
-          </h1>
-          {/* Toggle Switch */}
-          <div className="flex bg-muted p-1 rounded-lg shrink-0 w-full md:w-auto grid grid-cols-2 md:flex">
-            <button
-              onClick={() => setCurrentView("leaderboard")}
-              className={cn(
-                "px-3 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-2",
-                currentView === "leaderboard"
-                  ? "bg-background shadow-sm text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Globe className="h-3.5 w-3.5" />
-              Leaderboard
-            </button>
-            <button
-              onClick={() => setCurrentView("my-clan")}
-              className={cn(
-                "px-3 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-2",
-                currentView === "my-clan"
-                  ? "bg-background shadow-sm text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Swords className="h-3.5 w-3.5" />
-              My Squad
-              {myClan && (
-                <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary/50" />
-              )}
-            </button>
+    <TooltipProvider delayDuration={300}>
+      <div className="flex flex-col h-full bg-background overflow-hidden relative">
+        <div className="border-b px-4 py-3 md:px-6 md:py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-background/95 backdrop-blur z-20 shrink-0 transition-all">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <h1 className="text-2xl font-bold tracking-tight hidden md:block">
+              Clans
+            </h1>
+            {/* Toggle Switch */}
+            <div className="flex bg-muted p-1 rounded-lg shrink-0 w-full md:w-auto grid grid-cols-2 md:flex">
+              <button
+                onClick={() => setCurrentView("leaderboard")}
+                className={cn(
+                  "px-3 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-2",
+                  currentView === "leaderboard"
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Globe className="h-3.5 w-3.5" />
+                Leaderboard
+              </button>
+              <button
+                onClick={() => setCurrentView("my-clan")}
+                className={cn(
+                  "px-3 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-2",
+                  currentView === "my-clan"
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Swords className="h-3.5 w-3.5" />
+                My Squad
+                {myClan && (
+                  <span className="ml-1 h-1.5 w-1.5 rounded-full bg-primary/50" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-20">
-        {currentView === "leaderboard" ? (
-          // LEADERBOARD VIEW INLINE
-          <div className="max-w-5xl mx-auto w-full space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {/* Header + Filter + Search */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-yellow-500" />
-                  Top Study Squads
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Competed based on Total XP.
-                </p>
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-20">
+          {currentView === "leaderboard" ? (
+            // LEADERBOARD VIEW INLINE
+            <div className="max-w-5xl mx-auto w-full space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+              {/* Header + Filter + Search */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-yellow-500" />
+                    Top Study Squads
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 rounded-full p-0"
+                        >
+                          <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="right"
+                        className="max-w-[280px] p-3"
+                      >
+                        <div className="space-y-2">
+                          <p className="font-bold text-primary">
+                            How to Squad Up:
+                          </p>
+                          <div className="text-xs space-y-1">
+                            <p>
+                              • <strong>To Join:</strong> Enter a 6-digit Squad
+                              ID in the input box and click Join.
+                            </p>
+                            <p>
+                              • <strong>To Create:</strong> Go to the "My Squad"
+                              tab and fill out the form to start your own!
+                            </p>
+                            <p>
+                              • <strong>Max Members:</strong> Each squad can
+                              have up to 5 members.
+                            </p>
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Competed based on Total XP.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                  <Select
+                    value={viewMode}
+                    onValueChange={(value: "class" | "college") =>
+                      setViewMode(value)
+                    }
+                  >
+                    <SelectTrigger className="w-[140px] h-9">
+                      <SelectValue placeholder="Select View" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="class">My Class</SelectItem>
+                      <SelectItem value="college">This College</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {!myClan && (
+                    <div className="flex gap-2">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Enter ID..."
+                              value={joinCode}
+                              onChange={(e) => setJoinCode(e.target.value)}
+                              className="bg-background w-32 h-9"
+                            />
+                            <Button
+                              size="sm"
+                              onClick={() => handleJoinClan(joinCode)}
+                              disabled={isJoining || !joinCode}
+                            >
+                              {isJoining ? (
+                                <Loader2 className="animate-spin h-3 w-3" />
+                              ) : (
+                                "Join"
+                              )}
+                            </Button>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          <p className="text-xs">
+                            Enter a 6-digit Squad ID to join
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center gap-3 w-full md:w-auto">
-                <Select
-                  value={viewMode}
-                  onValueChange={(value: "class" | "college") =>
-                    setViewMode(value)
-                  }
-                >
-                  <SelectTrigger className="w-[140px] h-9">
-                    <SelectValue placeholder="Select View" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="class">My Class</SelectItem>
-                    <SelectItem value="college">This College</SelectItem>
-                  </SelectContent>
-                </Select>
+              {viewMode === "college" && showCollegeWarning && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 flex gap-3 text-yellow-600 dark:text-yellow-400 text-sm animate-in fade-in slide-in-from-top-2">
+                  <AlertTriangle className="h-5 w-5 shrink-0" />
+                  <div className="space-y-1">
+                    <div className="flex items-start justify-between">
+                      <p className="font-medium">Entertainment Purpose Only</p>
+                      <button
+                        onClick={() => setShowCollegeWarning(false)}
+                        className="text-yellow-600/50 hover:text-yellow-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <p className="text-xs opacity-90 leading-relaxed">
+                      This leaderboard includes all squads from your college.
+                      Note that students in different years or branches may have
+                      different workloads and assignment counts, so this
+                      comparison is not academically fair. It's just for fun!
+                    </p>
+                  </div>
+                </div>
+              )}
 
-                {!myClan && (
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Enter ID..."
-                      value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value)}
-                      className="bg-background w-32 h-9"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => handleJoinClan(joinCode)}
-                      disabled={isJoining || !joinCode}
-                    >
-                      {isJoining ? (
-                        <Loader2 className="animate-spin h-3 w-3" />
-                      ) : (
-                        "Join"
+              <div className="space-y-3">
+                {filteredClans.map((clan, i) => {
+                  const isMyClan = myClan?.id === clan.id;
+                  const isFull = clan.members.length >= 5;
+                  const members = clanMemberProfiles[clan.id] || [];
+                  const iconDef =
+                    CLAN_ICONS.find((icon) => icon.id === clan.tag) ||
+                    CLAN_ICONS[0];
+                  const ClanIcon = iconDef.icon;
+
+                  return (
+                    <div
+                      key={clan.id}
+                      onClick={() => handleClanClick(clan)}
+                      className={cn(
+                        "relative flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-xl transition-all cursor-pointer gap-4 md:gap-0",
+                        isMyClan
+                          ? "bg-primary/5 border-primary/20"
+                          : "bg-card hover:border-primary/50"
                       )}
-                    </Button>
+                    >
+                      {/* Member Count - Top Right */}
+                      <div className="absolute top-3 right-3 flex items-center text-xs text-muted-foreground gap-1 bg-background/50 backdrop-blur-sm p-1.5 rounded-md border shadow-sm z-10">
+                        <Users className="h-3 w-3" />
+                        {clan.members.length}/5
+                      </div>
+
+                      <div className="flex items-center gap-4 md:flex-1">
+                        <div
+                          className={cn(
+                            "h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0",
+                            i < 3
+                              ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-500"
+                              : "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {i + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold flex items-center gap-2">
+                            <div
+                              className={cn(
+                                "p-2 rounded-lg mr-2 shadow-sm text-white shrink-0",
+                                iconDef.gradient || "bg-primary"
+                              )}
+                            >
+                              <ClanIcon className="h-4 w-4" />
+                            </div>
+                            <span className="truncate">{clan.name}</span>
+                            {isMyClan && (
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px] shrink-0"
+                              >
+                                Your Clan
+                              </Badge>
+                            )}
+                          </h4>
+                          <p className="text-xs text-muted-foreground truncate max-w-[200px] md:max-w-md">
+                            {clan.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Stats (Avatars + XP) - Centered on desktop (via margins or flex) */}
+                      {/* Added md:mx-auto to center it and md:mr-16 to avoid overlapping absolute count */}
+                      <div className="flex items-center gap-4 mt-2 md:mt-0 md:mx-auto md:mr-20">
+                        <div className="flex -space-x-3">
+                          {members.slice(0, 5).map((m) => (
+                            <div key={m.uid} className="relative group/avatar">
+                              <Avatar className="h-8 w-8 md:h-10 md:w-10 border-2 border-background ring-1 ring-border transition-transform hover:scale-110 hover:z-20">
+                                <AvatarImage src={m.photoUrl} />
+                                <AvatarFallback className="text-[10px] md:text-xs">
+                                  {m.displayName[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-md opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                {m.displayName}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="text-right">
+                          <div className="text-sm md:text-base font-bold text-foreground/80">
+                            {clan.totalXP.toLocaleString()}{" "}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              XP
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredClans.length === 0 && (
+                  <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
+                    No active clans found. Be the first to create one!
                   </div>
                 )}
               </div>
             </div>
-
-            {viewMode === "college" && showCollegeWarning && (
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 flex gap-3 text-yellow-600 dark:text-yellow-400 text-sm animate-in fade-in slide-in-from-top-2">
-                <AlertTriangle className="h-5 w-5 shrink-0" />
-                <div className="space-y-1">
-                  <div className="flex items-start justify-between">
-                    <p className="font-medium">Entertainment Purpose Only</p>
-                    <button
-                      onClick={() => setShowCollegeWarning(false)}
-                      className="text-yellow-600/50 hover:text-yellow-600"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <p className="text-xs opacity-90 leading-relaxed">
-                    This leaderboard includes all squads from your college. Note
-                    that students in different years or branches may have
-                    different workloads and assignment counts, so this
-                    comparison is not academically fair. It's just for fun!
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              {filteredClans.map((clan, i) => {
-                const isMyClan = myClan?.id === clan.id;
-                const isFull = clan.members.length >= 5;
-                const members = clanMemberProfiles[clan.id] || [];
-                const iconDef =
-                  CLAN_ICONS.find((icon) => icon.id === clan.tag) ||
-                  CLAN_ICONS[0];
-                const ClanIcon = iconDef.icon;
-
-                return (
-                  <div
-                    key={clan.id}
-                    onClick={() => handleClanClick(clan)}
-                    className={cn(
-                      "relative flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-xl transition-all cursor-pointer gap-4 md:gap-0",
-                      isMyClan
-                        ? "bg-primary/5 border-primary/20"
-                        : "bg-card hover:border-primary/50"
-                    )}
-                  >
-                    {/* Member Count - Top Right */}
-                    <div className="absolute top-3 right-3 flex items-center text-xs text-muted-foreground gap-1 bg-background/50 backdrop-blur-sm p-1.5 rounded-md border shadow-sm z-10">
-                      <Users className="h-3 w-3" />
-                      {clan.members.length}/5
-                    </div>
-
-                    <div className="flex items-center gap-4 md:flex-1">
-                      <div
-                        className={cn(
-                          "h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0",
-                          i < 3
-                            ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-500"
-                            : "bg-muted text-muted-foreground"
-                        )}
-                      >
-                        {i + 1}
+          ) : (
+            // MY CLAN VIEW INLINE
+            <>
+              {!myClan ? (
+                // CREATE VIEW (Increased max-w to 4xl for more space)
+                <div className="max-w-4xl mx-auto w-full py-10 space-y-6 animate-in fade-in zoom-in-95 duration-500">
+                  {showCreateHelp && (
+                    <div className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-primary/5 to-transparent rounded-xl border border-primary/10 p-5 flex flex-col sm:flex-row gap-5 shadow-sm">
+                      <div className="absolute top-0 right-0 p-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                          onClick={() => setShowCreateHelp(false)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="font-bold flex items-center gap-2">
-                          <div
-                            className={cn(
-                              "p-2 rounded-lg mr-2 shadow-sm text-white shrink-0",
-                              iconDef.gradient || "bg-primary"
-                            )}
-                          >
-                            <ClanIcon className="h-4 w-4" />
-                          </div>
-                          <span className="truncate">{clan.name}</span>
-                          {isMyClan && (
-                            <Badge
-                              variant="secondary"
-                              className="text-[10px] shrink-0"
-                            >
-                              Your Clan
-                            </Badge>
-                          )}
-                        </h4>
-                        <p className="text-xs text-muted-foreground truncate max-w-[200px] md:max-w-md">
-                          {clan.description}
+
+                      <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
+                        <Swords className="h-6 w-6 text-primary" />
+                      </div>
+
+                      <div className="space-y-1">
+                        <h3 className="font-bold text-lg">
+                          Create Your Study Squad
+                        </h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed max-w-md">
+                          Squad up with friends to track progress together,
+                          compete on the leaderboard, and keep each other
+                          accountable.
                         </p>
                       </div>
                     </div>
+                  )}
 
-                    {/* Stats (Avatars + XP) - Centered on desktop (via margins or flex) */}
-                    {/* Added md:mx-auto to center it and md:mr-16 to avoid overlapping absolute count */}
-                    <div className="flex items-center gap-4 mt-2 md:mt-0 md:mx-auto md:mr-20">
-                      <div className="flex -space-x-3">
-                        {members.slice(0, 5).map((m) => (
-                          <div key={m.uid} className="relative group/avatar">
-                            <Avatar className="h-8 w-8 md:h-10 md:w-10 border-2 border-background ring-1 ring-border transition-transform hover:scale-110 hover:z-20">
-                              <AvatarImage src={m.photoUrl} />
-                              <AvatarFallback className="text-[10px] md:text-xs">
-                                {m.displayName[0]}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-md opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                              {m.displayName}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="text-right">
-                        <div className="text-sm md:text-base font-bold text-foreground/80">
-                          {clan.totalXP.toLocaleString()}{" "}
-                          <span className="text-xs font-normal text-muted-foreground">
-                            XP
-                          </span>
+                  <Card className="border-2 border-primary/10 shadow-lg">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        Squad Details
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 rounded-full p-0"
+                            >
+                              <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">
+                            <p className="text-xs">
+                              Give your squad a name and choose a badge to get
+                              started!
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </CardTitle>
+                      <CardDescription>
+                        Start a new journey with up to 4 other friends.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Squad Name</Label>
+                          <Input
+                            placeholder="e.g. Night Owls"
+                            value={createName}
+                            onChange={(e) => setCreateName(e.target.value)}
+                            maxLength={20}
+                          />
                         </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {filteredClans.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-xl border border-dashed">
-                  No active clans found. Be the first to create one!
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          // MY CLAN VIEW INLINE
-          <>
-            {!myClan ? (
-              // CREATE VIEW (Increased max-w to 4xl for more space)
-              <div className="max-w-4xl mx-auto w-full py-10 space-y-6 animate-in fade-in zoom-in-95 duration-500">
-                {showCreateHelp && (
-                  <div className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-primary/5 to-transparent rounded-xl border border-primary/10 p-5 flex flex-col sm:flex-row gap-5 shadow-sm">
-                    <div className="absolute top-0 right-0 p-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                        onClick={() => setShowCreateHelp(false)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+                      <div className="space-y-3">
+                        <Label>Choose Squad Badge</Label>
+                        <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
+                          {CLAN_ICONS.map((item) => {
+                            const Icon = item.icon;
+                            const isSelected = createTag === item.id;
+                            return (
+                              <div
+                                key={item.id}
+                                onClick={() => setCreateTag(item.id)}
+                                className={cn(
+                                  "aspect-square rounded-md border-2 flex flex-col items-center justify-center cursor-pointer hover:bg-muted transition-all",
+                                  isSelected
+                                    ? "border-primary bg-primary/5"
+                                    : "border-transparent bg-muted/50"
+                                )}
+                              >
+                                <Icon
+                                  className={cn(
+                                    "h-6 w-6 mb-1",
+                                    isSelected
+                                      ? item.color
+                                      : "text-muted-foreground"
+                                  )}
+                                />
+                                <span className="text-[10px] font-medium text-muted-foreground">
+                                  {item.label}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-                    <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
-                      <Swords className="h-6 w-6 text-primary" />
-                    </div>
-
-                    <div className="space-y-1">
-                      <h3 className="font-bold text-lg">
-                        Create Your Study Squad
-                      </h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed max-w-md">
-                        Squad up with friends to track progress together,
-                        compete on the leaderboard, and keep each other
-                        accountable.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <Card className="border-2 border-primary/10 shadow-lg">
-                  <CardHeader>
-                    <CardTitle>Squad Details</CardTitle>
-                    <CardDescription>
-                      Start a new journey with up to 4 other friends.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Squad Name</Label>
+                        <Label>Motto (Max 20 chars)</Label>
                         <Input
-                          placeholder="e.g. Night Owls"
-                          value={createName}
-                          onChange={(e) => setCreateName(e.target.value)}
+                          placeholder="We never sleep..."
+                          value={createDesc}
+                          onChange={(e) => setCreateDesc(e.target.value)}
                           maxLength={20}
                         />
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <Label>Choose Squad Badge</Label>
-                      <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
-                        {CLAN_ICONS.map((item) => {
-                          const Icon = item.icon;
-                          const isSelected = createTag === item.id;
-                          return (
-                            <div
-                              key={item.id}
-                              onClick={() => setCreateTag(item.id)}
-                              className={cn(
-                                "aspect-square rounded-md border-2 flex flex-col items-center justify-center cursor-pointer hover:bg-muted transition-all",
-                                isSelected
-                                  ? "border-primary bg-primary/5"
-                                  : "border-transparent bg-muted/50"
-                              )}
-                            >
-                              <Icon
-                                className={cn(
-                                  "h-6 w-6 mb-1",
-                                  isSelected
-                                    ? item.color
-                                    : "text-muted-foreground"
-                                )}
-                              />
-                              <span className="text-[10px] font-medium text-muted-foreground">
-                                {item.label}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Motto (Max 20 chars)</Label>
-                      <Input
-                        placeholder="We never sleep..."
-                        value={createDesc}
-                        onChange={(e) => setCreateDesc(e.target.value)}
-                        maxLength={20}
-                      />
-                      <div className="text-xs text-right text-muted-foreground">
-                        {createDesc.length}/20
-                      </div>
-                    </div>
-                    <Button
-                      className="w-full"
-                      size="lg"
-                      onClick={handleCreateClan}
-                      disabled={isCreating || !createName || !createTag}
-                    >
-                      {isCreating ? (
-                        <Loader2 className="animate-spin mr-2" />
-                      ) : (
-                        <Swords className="mr-2 h-4 w-4" />
-                      )}
-                      Form Squad
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              // DASHBOARD VIEW
-              <div className="max-w-7xl mx-auto w-full space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-                {/* Banner */}
-                {(() => {
-                  const iconDef =
-                    CLAN_ICONS.find((i) => i.id === myClan.tag) ||
-                    CLAN_ICONS[0];
-                  const BannerIcon = iconDef.icon;
-                  const bannerGradient =
-                    iconDef.gradient ||
-                    "bg-gradient-to-r from-blue-600 to-indigo-700";
-
-                  return (
-                    <>
-                      <div
-                        className={`relative rounded-xl overflow-hidden ${bannerGradient} p-4 md:p-8 text-white shadow-lg`}
-                      >
-                        <div className="absolute top-0 right-0 p-4 opacity-20">
-                          <BannerIcon className="h-32 w-32" />
+                        <div className="text-xs text-right text-muted-foreground">
+                          {createDesc.length}/20
                         </div>
+                      </div>
+                      <Button
+                        className="w-full"
+                        size="lg"
+                        onClick={handleCreateClan}
+                        disabled={isCreating || !createName || !createTag}
+                      >
+                        {isCreating ? (
+                          <Loader2 className="animate-spin mr-2" />
+                        ) : (
+                          <Swords className="mr-2 h-4 w-4" />
+                        )}
+                        Form Squad
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                // DASHBOARD VIEW
+                <div className="max-w-7xl mx-auto w-full space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+                  {/* Banner */}
+                  {(() => {
+                    const iconDef =
+                      CLAN_ICONS.find((i) => i.id === myClan.tag) ||
+                      CLAN_ICONS[0];
+                    const BannerIcon = iconDef.icon;
+                    const bannerGradient =
+                      iconDef.gradient ||
+                      "bg-gradient-to-r from-blue-600 to-indigo-700";
 
-                        <div className="relative z-10">
-                          <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <div className="h-8 w-8 bg-white/20 rounded flex items-center justify-center backdrop-blur-sm">
-                                  {getClanIcon(myClan.tag)}
-                                </div>
-                                {myClan.leaderId === user?.uid ? (
-                                  <Dialog
-                                    open={isEditDialogOpen}
-                                    onOpenChange={setIsEditDialogOpen}
-                                  >
-                                    <DialogTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 text-white/50 hover:text-white hover:bg-white/20"
-                                      >
-                                        <Settings className="h-4 w-4" />
-                                      </Button>
-                                    </DialogTrigger>
-                                    <DialogContent>
-                                      <DialogHeader>
-                                        <DialogTitle>
-                                          Edit Clan Details
-                                        </DialogTitle>
-                                      </DialogHeader>
-                                      <div className="space-y-4 py-4">
-                                        <div className="space-y-2">
-                                          <Label>Name</Label>
-                                          <Input
-                                            value={editName}
-                                            onChange={(e) =>
-                                              setEditName(e.target.value)
-                                            }
-                                          />
-                                        </div>
-                                        <div className="space-y-3">
-                                          <Label>Badge</Label>
-                                          <div className="grid grid-cols-5 gap-2">
-                                            {CLAN_ICONS.map((item) => {
-                                              const Icon = item.icon;
-                                              const isSelected =
-                                                editTag === item.id;
-                                              return (
-                                                <div
-                                                  key={item.id}
-                                                  onClick={() =>
-                                                    setEditTag(item.id)
-                                                  }
-                                                  className={cn(
-                                                    "aspect-square rounded-md border-2 flex flex-col items-center justify-center cursor-pointer hover:bg-muted transition-all",
-                                                    isSelected
-                                                      ? "border-primary bg-primary/5"
-                                                      : "border-transparent bg-muted/50"
-                                                  )}
-                                                >
-                                                  <Icon
+                    return (
+                      <>
+                        <div
+                          className={`relative rounded-xl overflow-hidden ${bannerGradient} p-4 md:p-8 text-white shadow-lg`}
+                        >
+                          <div className="absolute top-0 right-0 p-4 opacity-20">
+                            <BannerIcon className="h-32 w-32" />
+                          </div>
+
+                          <div className="relative z-10">
+                            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-8 w-8 bg-white/20 rounded flex items-center justify-center backdrop-blur-sm">
+                                    {getClanIcon(myClan.tag)}
+                                  </div>
+                                  {myClan.leaderId === user?.uid ? (
+                                    <Dialog
+                                      open={isEditDialogOpen}
+                                      onOpenChange={setIsEditDialogOpen}
+                                    >
+                                      <DialogTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 text-white/50 hover:text-white hover:bg-white/20"
+                                        >
+                                          <Settings className="h-4 w-4" />
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent>
+                                        <DialogHeader>
+                                          <DialogTitle>
+                                            Edit Clan Details
+                                          </DialogTitle>
+                                        </DialogHeader>
+                                        <div className="space-y-4 py-4">
+                                          <div className="space-y-2">
+                                            <Label>Name</Label>
+                                            <Input
+                                              value={editName}
+                                              onChange={(e) =>
+                                                setEditName(e.target.value)
+                                              }
+                                            />
+                                          </div>
+                                          <div className="space-y-3">
+                                            <Label>Badge</Label>
+                                            <div className="grid grid-cols-5 gap-2">
+                                              {CLAN_ICONS.map((item) => {
+                                                const Icon = item.icon;
+                                                const isSelected =
+                                                  editTag === item.id;
+                                                return (
+                                                  <div
+                                                    key={item.id}
+                                                    onClick={() =>
+                                                      setEditTag(item.id)
+                                                    }
                                                     className={cn(
-                                                      "h-5 w-5 mb-1",
+                                                      "aspect-square rounded-md border-2 flex flex-col items-center justify-center cursor-pointer hover:bg-muted transition-all",
                                                       isSelected
-                                                        ? item.color
-                                                        : "text-foreground"
+                                                        ? "border-primary bg-primary/5"
+                                                        : "border-transparent bg-muted/50"
                                                     )}
-                                                  />
-                                                </div>
-                                              );
-                                            })}
+                                                  >
+                                                    <Icon
+                                                      className={cn(
+                                                        "h-5 w-5 mb-1",
+                                                        isSelected
+                                                          ? item.color
+                                                          : "text-foreground"
+                                                      )}
+                                                    />
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label>
+                                              Description (Max 20 chars)
+                                            </Label>
+                                            <Input
+                                              value={editDesc}
+                                              onChange={(e) =>
+                                                setEditDesc(e.target.value)
+                                              }
+                                              maxLength={20}
+                                            />
+                                          </div>
+                                          <div className="pt-4 border-t mt-4">
+                                            <Button
+                                              variant="destructive"
+                                              size="sm"
+                                              className="w-full"
+                                              onClick={handleLeaveClan}
+                                            >
+                                              <LogOut className="h-4 w-4 mr-2" />
+                                              Leave Clan
+                                            </Button>
                                           </div>
                                         </div>
-                                        <div className="space-y-2">
-                                          <Label>
-                                            Description (Max 20 chars)
-                                          </Label>
-                                          <Input
-                                            value={editDesc}
-                                            onChange={(e) =>
-                                              setEditDesc(e.target.value)
-                                            }
-                                            maxLength={20}
-                                          />
-                                        </div>
-                                        <div className="pt-4 border-t mt-4">
+                                        <DialogFooter>
                                           <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            className="w-full"
-                                            onClick={handleLeaveClan}
+                                            variant="outline"
+                                            onClick={() =>
+                                              setIsEditDialogOpen(false)
+                                            }
                                           >
-                                            <LogOut className="h-4 w-4 mr-2" />
-                                            Leave Clan
+                                            Cancel
                                           </Button>
-                                        </div>
-                                      </div>
-                                      <DialogFooter>
+                                          <Button
+                                            onClick={handleUpdateClan}
+                                            disabled={isEditing}
+                                          >
+                                            Save Changes
+                                          </Button>
+                                        </DialogFooter>
+                                      </DialogContent>
+                                    </Dialog>
+                                  ) : (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
                                         <Button
-                                          variant="outline"
-                                          onClick={() =>
-                                            setIsEditDialogOpen(false)
-                                          }
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6 text-white/50 hover:text-white hover:bg-white/20 transition-all rounded-full"
                                         >
-                                          Cancel
+                                          <Settings className="h-4 w-4" />
                                         </Button>
-                                        <Button
-                                          onClick={handleUpdateClan}
-                                          disabled={isEditing}
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>
+                                          Squad Settings
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onClick={handleLeaveClan}
+                                          className="text-destructive focus:text-destructive"
                                         >
-                                          Save Changes
-                                        </Button>
-                                      </DialogFooter>
-                                    </DialogContent>
-                                  </Dialog>
-                                ) : (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={handleLeaveClan}
-                                    className="h-6 w-6 text-white/50 hover:text-red-300 hover:bg-red-500/20 transition-all rounded-full"
-                                    title="Leave Squad"
-                                  >
-                                    <LogOut className="h-4 w-4" />
-                                  </Button>
-                                )}
+                                          <LogOut className="mr-2 h-4 w-4" />
+                                          Leave Squad
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  )}
+                                </div>
+                                <h2 className="text-xl md:text-3xl font-black tracking-tight">
+                                  {myClan.name}
+                                </h2>
+                                <p className="text-blue-100 italic max-w-lg">
+                                  {myClan.description}
+                                </p>
                               </div>
-                              <h2 className="text-xl md:text-3xl font-black tracking-tight">
-                                {myClan.name}
-                              </h2>
-                              <p className="text-blue-100 italic max-w-lg">
-                                {myClan.description}
-                              </p>
                             </div>
-                          </div>
 
-                          <div className="flex gap-3 mt-8">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-white border-white/40 hover:bg-white/10 hover:text-white"
-                              onClick={() => {
-                                navigator.clipboard.writeText(myClan.id);
-                                toast({
-                                  title: "Copied!",
-                                  description: "Clan ID copied to clipboard.",
-                                });
-                              }}
-                            >
-                              <Copy className="h-4 w-4 mr-2" />
-                              Copy Clan ID
-                            </Button>
-                            {myClan.leaderId === user?.uid && (
-                              <Badge
-                                variant="outline"
-                                className="text-white border-white/40 h-9 px-3"
-                              >
-                                <Crown className="h-3 w-3 mr-1" />
-                                Leader
-                              </Badge>
-                            )}
-                          </div>
-
-                          <div className="absolute bottom-0 right-0 text-right p-3 md:p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 origin-bottom-right transform scale-75 md:scale-100">
-                            <div className="text-3xl font-mono font-bold tracking-tighter">
-                              {myClan.totalXP.toLocaleString()}
-                            </div>
-                            <div className="text-xs text-blue-200 font-medium tracking-widest uppercase">
-                              Total XP
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Squad Members Card */}
-                        <Card className="lg:col-span-2 overflow-hidden">
-                          <CardHeader className="pb-3 bg-gradient-to-br from-background to-muted/20">
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                <Users className="h-4 w-4 text-primary" />
-                                Squad Members
-                              </CardTitle>
-                              <Badge
-                                variant="outline"
-                                className="text-xs font-mono tabular-nums"
-                              >
-                                {membersData.length}/5
-                              </Badge>
-                            </div>
-                          </CardHeader>
-
-                          <CardContent className="space-y-3 pt-4">
-                            {(() => {
-                              console.log(
-                                "Rendering Squad Members, membersData:",
-                                membersData.map((m) => ({
-                                  name: m.displayName,
-                                  photoUrl: m.photoUrl,
-                                  role: m.role,
-                                }))
-                              );
-                              return null;
-                            })()}
-                            {membersData.map((m, i) => (
-                              <div
-                                key={m.uid}
-                                className="group/member flex items-center justify-between p-3 rounded-lg border bg-card/50 hover:bg-muted/50 hover:border-border transition-all"
-                              >
-                                <div className="flex items-center gap-3 flex-1 min-w-0">
-                                  {/* Rank Number */}
-                                  <div
-                                    className={cn(
-                                      "font-mono text-center text-sm font-bold w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors",
-                                      i === 0
-                                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-500"
-                                        : "bg-muted text-muted-foreground"
-                                    )}
-                                  >
-                                    {i + 1}
-                                  </div>
-
-                                  {/* Avatar */}
-                                  <div className="relative shrink-0">
-                                    <Avatar className="h-9 w-9 border">
-                                      <AvatarImage
-                                        src={m.photoUrl}
-                                        className="object-cover"
-                                        onError={(e) => {
-                                          console.error(
-                                            "Failed to load avatar for",
-                                            m.displayName,
-                                            "URL:",
-                                            m.photoUrl,
-                                            e
-                                          );
-                                        }}
-                                      />
-                                      <AvatarFallback className="text-xs">
-                                        {m.displayName[0]}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                    {m.role === "leader" && (
-                                      <div className="absolute -top-0.5 -right-0.5 p-0.5 bg-amber-500 rounded-full">
-                                        <Crown className="h-2.5 w-2.5 text-white fill-white" />
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Member Info */}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium flex items-center gap-2 text-sm truncate">
-                                      <span className="truncate">
-                                        {m.displayName}
-                                      </span>
-                                      {m.role === "leader" && (
-                                        <Badge
-                                          variant="secondary"
-                                          className="text-[10px] px-1 py-0 shrink-0"
-                                        >
-                                          Leader
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground capitalize">
-                                      {m.role}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* XP */}
-                                <div className="text-right shrink-0">
-                                  <div className="font-bold text-sm font-mono tabular-nums">
-                                    {m.currentXP.toLocaleString()}
-                                  </div>
-                                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                                    XP
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-
-                            {/* Invite Card */}
-                            {membersData.length < 5 && (
-                              <div
-                                className="border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center text-muted-foreground gap-2 hover:bg-muted/50 hover:border-primary/50 transition-all cursor-pointer"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(myClan.id);
-                                  toast({
-                                    title: "Copied!",
-                                    description: "Share this ID with a friend.",
-                                  });
-                                }}
-                              >
-                                <UserPlus className="h-5 w-5 text-primary" />
-                                <span className="text-sm font-medium">
-                                  Invite a Friend
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {5 - membersData.length}{" "}
-                                  {5 - membersData.length === 1
-                                    ? "slot"
-                                    : "slots"}{" "}
-                                  remaining
-                                </span>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        {/* Weekly Stats Card - Enhanced */}
-                        <div className="space-y-6">
-                          <Card className="border-2 shadow-xl hover:shadow-2xl transition-all duration-300 group/stats overflow-hidden relative">
-                            {/* Gradient overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-blue-500/5 opacity-0 group-hover/stats:opacity-100 transition-opacity duration-500 pointer-events-none" />
-
-                            <CardHeader className="pb-3 relative z-10">
-                              <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                                <div className="h-1 w-1 rounded-full bg-primary animate-pulse" />
-                                Weekly Stats
-                              </CardTitle>
-                            </CardHeader>
-
-                            <CardContent className="space-y-4 pt-4">
-                              {/* Attendance Stat */}
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <div className="p-2 rounded-lg bg-emerald-500/10">
-                                    <CalendarCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                  </div>
-                                  <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                                    Avg. Attendance
-                                  </div>
-                                </div>
-                                <div className="text-3xl font-semibold font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
-                                  -- %
-                                </div>
-                              </div>
-
-                              <div className="h-px bg-border" />
-
-                              {/* Class Rank Stat */}
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <div className="p-2 rounded-lg bg-primary/10">
-                                    <School className="h-4 w-4 text-primary" />
-                                  </div>
-                                  <div className="text-xs text-muted-foreground uppercase tracking-wide">
-                                    Class Rank
-                                  </div>
-                                </div>
-                                <div className="text-3xl font-semibold font-mono tracking-tight">
-                                  #
-                                  {filteredClans.findIndex(
-                                    (c) => c.id === myClan.id
-                                  ) + 1}
-                                </div>
-                              </div>
-
-                              <div className="h-px bg-border" />
-
-                              {/* Quick Action */}
+                            <div className="flex gap-3 mt-8">
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="w-full h-8 text-xs"
+                                className="text-white border-white/40 hover:bg-white/10 hover:text-white"
                                 onClick={() => {
                                   navigator.clipboard.writeText(myClan.id);
                                   toast({
@@ -1670,16 +1745,334 @@ export default function ClansPage() {
                                   });
                                 }}
                               >
-                                <Copy className="h-3 w-3 mr-2" />
+                                <Copy className="h-4 w-4 mr-2" />
                                 Copy Clan ID
                               </Button>
+                              {myClan.leaderId === user?.uid && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-white border-white/40 h-9 px-3"
+                                >
+                                  <Crown className="h-3 w-3 mr-1" />
+                                  Leader
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="absolute bottom-0 right-0 text-right p-3 md:p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10 origin-bottom-right transform scale-75 md:scale-100">
+                              <div className="text-3xl font-mono font-bold tracking-tighter">
+                                {myClan.totalXP.toLocaleString()}
+                              </div>
+                              <div className="text-xs text-blue-200 font-medium tracking-widest uppercase">
+                                Total XP
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                          {/* Squad Members Card */}
+                          <Card className="lg:col-span-2 overflow-hidden">
+                            <CardHeader className="pb-3 bg-gradient-to-br from-background to-muted/20">
+                              <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                  <Users className="h-4 w-4 text-primary" />
+                                  Squad Members
+                                </CardTitle>
+                                <Badge
+                                  variant="outline"
+                                  className="text-xs font-mono tabular-nums"
+                                >
+                                  {membersData.length}/5
+                                </Badge>
+                              </div>
+                            </CardHeader>
+
+                            <CardContent className="space-y-3 pt-4">
+                              {(() => {
+                                console.log(
+                                  "Rendering Squad Members, membersData:",
+                                  membersData.map((m) => ({
+                                    name: m.displayName,
+                                    photoUrl: m.photoUrl,
+                                    role: m.role,
+                                  }))
+                                );
+                                return null;
+                              })()}
+                              {membersData.map((m, i) => (
+                                <div
+                                  key={m.uid}
+                                  className="group/member flex items-center justify-between p-3 rounded-lg border bg-card/50 hover:bg-muted/50 hover:border-border transition-all"
+                                >
+                                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    {/* Rank Number */}
+                                    <div
+                                      className={cn(
+                                        "font-mono text-center text-sm font-bold w-7 h-7 rounded-md flex items-center justify-center shrink-0 transition-colors",
+                                        i === 0
+                                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-500"
+                                          : "bg-muted text-muted-foreground"
+                                      )}
+                                    >
+                                      {i + 1}
+                                    </div>
+
+                                    {/* Avatar */}
+                                    <div className="relative shrink-0">
+                                      <Avatar className="h-9 w-9 border">
+                                        <AvatarImage
+                                          src={m.photoUrl}
+                                          className="object-cover"
+                                          onError={(e) => {
+                                            console.error(
+                                              "Failed to load avatar for",
+                                              m.displayName,
+                                              "URL:",
+                                              m.photoUrl,
+                                              e
+                                            );
+                                          }}
+                                        />
+                                        <AvatarFallback className="text-xs">
+                                          {m.displayName[0]}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      {m.role === "leader" && (
+                                        <div className="absolute -top-0.5 -right-0.5 p-0.5 bg-amber-500 rounded-full">
+                                          <Crown className="h-2.5 w-2.5 text-white fill-white" />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Member Info */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium flex items-center gap-2 text-sm truncate">
+                                        <span className="truncate">
+                                          {m.displayName}
+                                        </span>
+                                        {m.role === "leader" && (
+                                          <Badge
+                                            variant="secondary"
+                                            className="text-[10px] px-1 py-0 shrink-0"
+                                          >
+                                            Leader
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground capitalize">
+                                        {m.role}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* XP */}
+                                  <div className="text-right shrink-0">
+                                    <div className="font-bold text-sm font-mono tabular-nums">
+                                      {m.currentXP.toLocaleString()}
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                                      XP
+                                    </div>
+                                  </div>
+
+                                  {/* Member Actions Menu */}
+                                  {myClan.leaderId === user?.uid && (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        {m.uid === user?.uid ? (
+                                          // Options for leader's own card
+                                          <>
+                                            <DropdownMenuLabel>
+                                              Leader Options
+                                            </DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              onClick={() =>
+                                                setIsEditDialogOpen(true)
+                                              }
+                                            >
+                                              <Settings className="mr-2 h-4 w-4" />
+                                              Edit Squad
+                                            </DropdownMenuItem>
+                                            {membersData.length > 1 && (
+                                              <>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                  onClick={() =>
+                                                    setIsTransferDialogOpen(
+                                                      true
+                                                    )
+                                                  }
+                                                >
+                                                  <Crown className="mr-2 h-4 w-4" />
+                                                  Transfer Leadership
+                                                </DropdownMenuItem>
+                                              </>
+                                            )}
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              onClick={handleLeaveClan}
+                                              className="text-destructive focus:text-destructive"
+                                            >
+                                              <LogOut className="mr-2 h-4 w-4" />
+                                              {membersData.length === 1
+                                                ? "Disband Squad"
+                                                : "Leave Squad"}
+                                            </DropdownMenuItem>
+                                          </>
+                                        ) : (
+                                          // Options for other members
+                                          <>
+                                            <DropdownMenuLabel>
+                                              Member Actions
+                                            </DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              onClick={() =>
+                                                handleTransferLeadership(
+                                                  m.uid,
+                                                  m.displayName
+                                                )
+                                              }
+                                            >
+                                              <Crown className="mr-2 h-4 w-4" />
+                                              Make Leader
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              onClick={() =>
+                                                handleRemoveMember(
+                                                  m.uid,
+                                                  m.displayName
+                                                )
+                                              }
+                                              className="text-destructive focus:text-destructive"
+                                            >
+                                              <UserMinus className="mr-2 h-4 w-4" />
+                                              Remove Member
+                                            </DropdownMenuItem>
+                                          </>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  )}
+                                </div>
+                              ))}
+
+                              {/* Invite Card */}
+                              {membersData.length < 5 && (
+                                <div
+                                  className="border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center text-muted-foreground gap-2 hover:bg-muted/50 hover:border-primary/50 transition-all cursor-pointer"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(myClan.id);
+                                    toast({
+                                      title: "Copied!",
+                                      description:
+                                        "Share this ID with a friend.",
+                                    });
+                                  }}
+                                >
+                                  <UserPlus className="h-5 w-5 text-primary" />
+                                  <span className="text-sm font-medium">
+                                    Invite a Friend
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {5 - membersData.length}{" "}
+                                    {5 - membersData.length === 1
+                                      ? "slot"
+                                      : "slots"}{" "}
+                                    remaining
+                                  </span>
+                                </div>
+                              )}
                             </CardContent>
                           </Card>
-                        </div>
-                      </div>
 
-                      {/* CSS Animation */}
-                      <style>{`
+                          {/* Weekly Stats Card - Enhanced */}
+                          <div className="space-y-6">
+                            <Card className="border-2 shadow-xl hover:shadow-2xl transition-all duration-300 group/stats overflow-hidden relative">
+                              {/* Gradient overlay */}
+                              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-blue-500/5 opacity-0 group-hover/stats:opacity-100 transition-opacity duration-500 pointer-events-none" />
+
+                              <CardHeader className="pb-3 relative z-10">
+                                <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                                  <div className="h-1 w-1 rounded-full bg-primary animate-pulse" />
+                                  Weekly Stats
+                                </CardTitle>
+                              </CardHeader>
+
+                              <CardContent className="space-y-4 pt-4">
+                                {/* Attendance Stat */}
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-2 rounded-lg bg-emerald-500/10">
+                                      <CalendarCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                    </div>
+                                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                                      Avg. Attendance
+                                    </div>
+                                  </div>
+                                  <div className="text-3xl font-semibold font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
+                                    -- %
+                                  </div>
+                                </div>
+
+                                <div className="h-px bg-border" />
+
+                                {/* Class Rank Stat */}
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-2 rounded-lg bg-primary/10">
+                                      <School className="h-4 w-4 text-primary" />
+                                    </div>
+                                    <div className="text-xs text-muted-foreground uppercase tracking-wide">
+                                      Class Rank
+                                    </div>
+                                  </div>
+                                  <div className="text-3xl font-semibold font-mono tracking-tight">
+                                    #
+                                    {filteredClans.findIndex(
+                                      (c) => c.id === myClan.id
+                                    ) + 1}
+                                  </div>
+                                </div>
+
+                                <div className="h-px bg-border" />
+
+                                {/* Quick Action */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full h-8 text-xs"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(myClan.id);
+                                    toast({
+                                      title: "Copied!",
+                                      description:
+                                        "Clan ID copied to clipboard.",
+                                    });
+                                  }}
+                                >
+                                  <Copy className="h-3 w-3 mr-2" />
+                                  Copy Clan ID
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        </div>
+
+                        {/* CSS Animation */}
+                        <style>{`
                         @keyframes fadeInUp {
                           from {
                             opacity: 0;
@@ -1691,122 +2084,266 @@ export default function ClansPage() {
                           }
                         }
                       `}</style>
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-      {/* View Clan Details Dialog */}
-      <Dialog open={viewClanDialogOpen} onOpenChange={setViewClanDialogOpen}>
-        <DialogContent className="max-w-md">
-          {selectedClan && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-3">
-                  {(() => {
-                    const iconDef =
-                      CLAN_ICONS.find((i) => i.id === selectedClan.tag) ||
-                      CLAN_ICONS[0];
-                    const Icon = iconDef.icon;
-                    return (
-                      <>
-                        <div
-                          className={cn(
-                            "p-2 rounded-lg text-white",
-                            iconDef.gradient || "bg-primary"
-                          )}
-                        >
-                          <Icon className="h-5 w-5" />
-                        </div>
-                        <div className="flex flex-col gap-0.5">
-                          <span>{selectedClan.name}</span>
-                          <span className="text-xs font-normal text-muted-foreground">
-                            {selectedClan.totalXP.toLocaleString()} XP
-                          </span>
-                        </div>
                       </>
                     );
                   })()}
-                </DialogTitle>
-                <DialogDescription>
-                  {selectedClan.description}
-                </DialogDescription>
-              </DialogHeader>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        {/* View Clan Details Dialog */}
+        <Dialog open={viewClanDialogOpen} onOpenChange={setViewClanDialogOpen}>
+          <DialogContent className="max-w-md">
+            {selectedClan && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-3">
+                    {(() => {
+                      const iconDef =
+                        CLAN_ICONS.find((i) => i.id === selectedClan.tag) ||
+                        CLAN_ICONS[0];
+                      const Icon = iconDef.icon;
+                      return (
+                        <>
+                          <div
+                            className={cn(
+                              "p-2 rounded-lg text-white",
+                              iconDef.gradient || "bg-primary"
+                            )}
+                          >
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            <span>{selectedClan.name}</span>
+                            <span className="text-xs font-normal text-muted-foreground">
+                              {selectedClan.totalXP.toLocaleString()} XP
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {selectedClan.description}
+                  </DialogDescription>
+                </DialogHeader>
 
-              <div className="py-4 space-y-4">
-                <h4 className="text-sm font-medium text-muted-foreground uppercase flex items-center justify-between">
-                  <span>Squad Members</span>
-                  <span className="text-xs">
-                    {selectedClan.members.length}/5
-                  </span>
-                </h4>
+                <div className="py-4 space-y-4">
+                  <h4 className="text-sm font-medium text-muted-foreground uppercase flex items-center justify-between">
+                    <span>Squad Members</span>
+                    <span className="text-xs">
+                      {selectedClan.members.length}/5
+                    </span>
+                  </h4>
 
-                {loadingMembers ? (
-                  <div className="flex justify-center py-4">
-                    <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {selectedClanMembers.map((member, i) => (
+                  {loadingMembers ? (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {selectedClanMembers.map((member, i) => (
+                        <div
+                          key={member.uid}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-muted-foreground w-4 text-center">
+                              {i + 1}
+                            </span>
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={member.photoUrl} />
+                              <AvatarFallback>
+                                {member.displayName[0]}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium leading-none flex items-center gap-1">
+                                {member.displayName}
+                                {member.uid === selectedClan.leaderId && (
+                                  <Crown className="h-3 w-3 text-yellow-500" />
+                                )}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                Level {Math.floor(member.currentXP / 1000) + 1}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-sm font-bold">
+                            {member.currentXP.toLocaleString()}{" "}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              XP
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {!myClan &&
+                  selectedClan.members.length < 5 &&
+                  !selectedClan.members.includes(user!.uid) && (
+                    <DialogFooter className="flex-col sm:justify-between gap-2 border-t pt-4">
+                      <div className="text-xs text-muted-foreground italic flex-1 flex items-center"></div>
+                      <Button
+                        className="w-full sm:w-auto"
+                        onClick={handleRequestJoin}
+                        disabled={pendingRequests.has(selectedClan.id)}
+                        variant={
+                          pendingRequests.has(selectedClan.id)
+                            ? "secondary"
+                            : "default"
+                        }
+                      >
+                        <Send className="w-4 h-4 mr-2" />
+                        {pendingRequests.has(selectedClan.id)
+                          ? "Requested"
+                          : "Request to Join"}
+                      </Button>
+                    </DialogFooter>
+                  )}
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Transfer Leadership Dialog */}
+        <Dialog
+          open={isTransferDialogOpen}
+          onOpenChange={setIsTransferDialogOpen}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Crown className="h-5 w-5 text-amber-500" />
+                Transfer Leadership
+              </DialogTitle>
+              <DialogDescription>
+                Select a member to become the new squad leader.{" "}
+                <strong>You will become a regular member</strong> and lose all
+                leader privileges.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4">
+              <Label className="text-sm font-medium mb-3 block">
+                Select New Leader
+              </Label>
+              <RadioGroup
+                value={selectedNewLeader}
+                onValueChange={setSelectedNewLeader}
+              >
+                <div className="space-y-2">
+                  {membersData
+                    .filter((m) => m.uid !== user?.uid)
+                    .map((member) => (
                       <div
                         key={member.uid}
-                        className="flex items-center justify-between"
+                        className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
+                        onClick={() => setSelectedNewLeader(member.uid)}
                       >
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-muted-foreground w-4 text-center">
-                            {i + 1}
-                          </span>
-                          <Avatar className="h-8 w-8">
+                        <RadioGroupItem value={member.uid} id={member.uid} />
+                        <Label
+                          htmlFor={member.uid}
+                          className="flex items-center gap-3 flex-1 cursor-pointer"
+                        >
+                          <Avatar className="h-9 w-9 border">
                             <AvatarImage src={member.photoUrl} />
                             <AvatarFallback>
                               {member.displayName[0]}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium leading-none flex items-center gap-1">
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">
                               {member.displayName}
-                              {member.uid === selectedClan.leaderId && (
-                                <Crown className="h-3 w-3 text-yellow-500" />
-                              )}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              Level {Math.floor(member.currentXP / 1000) + 1}
-                            </span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {member.currentXP.toLocaleString()} XP
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-sm font-bold">
-                          {member.currentXP.toLocaleString()}{" "}
-                          <span className="text-xs font-normal text-muted-foreground">
-                            XP
-                          </span>
-                        </div>
+                        </Label>
                       </div>
                     ))}
-                  </div>
-                )}
-              </div>
+                </div>
+              </RadioGroup>
+            </div>
 
-              {!myClan &&
-                selectedClan.members.length < 5 &&
-                !selectedClan.members.includes(user!.uid) && (
-                  <DialogFooter className="flex-col sm:justify-between gap-2 border-t pt-4">
-                    <div className="text-xs text-muted-foreground italic flex-1 flex items-center"></div>
-                    <Button
-                      className="w-full sm:w-auto"
-                      onClick={handleRequestJoin}
-                    >
-                      <Send className="w-4 h-4 mr-2" />
-                      Request to Join
-                    </Button>
-                  </DialogFooter>
-                )}
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsTransferDialogOpen(false);
+                  setSelectedNewLeader("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmTransferLeadership}
+                disabled={!selectedNewLeader}
+              >
+                <Crown className="mr-2 h-4 w-4" />
+                Transfer Leadership
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Leave Squad Confirmation */}
+        <AlertDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Leave Squad?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {myClan && myClan.members.length === 1
+                  ? "You are the last member. The squad will be permanently deleted."
+                  : "Are you sure you want to leave this squad? You can join another squad or create a new one."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmLeaveClan}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {myClan && myClan.members.length === 1
+                  ? "Disband Squad"
+                  : "Leave Squad"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Remove Member Confirmation */}
+        <AlertDialog
+          open={showRemoveConfirm}
+          onOpenChange={setShowRemoveConfirm}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove Member?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to remove{" "}
+                <strong>{memberToRemove?.name}</strong> from{" "}
+                <strong>{myClan?.name}</strong>? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setMemberToRemove(null)}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmRemoveMember}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Remove Member
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </TooltipProvider>
   );
 }

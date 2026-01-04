@@ -127,9 +127,10 @@ export const AttendanceService = {
     // Convert column letter to index (A=0, B=1, C=2, etc.)
     const emailColIndex = emailColumn.toUpperCase().charCodeAt(0) - 65;
 
-    // 1. Fetch values from the first sheet (assumed 'Sheet1' or first tab)
-    // We fetch a large range, e.g., A1:Z100
-    const range = "A1:Z500";
+    // 1. Fetch a very large range to ensure we get all columns
+    // Use ZZ (702 columns) to support any realistic attendance sheet
+    // The dynamic logic below will stop when it finds empty headers
+    const range = "A1:ZZ500";
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?majorDimension=ROWS`;
 
     const response = await fetch(url, {
@@ -176,12 +177,17 @@ export const AttendanceService = {
     let attended = 0;
     const history: StudentAttendanceRecord[] = [];
 
-    // Iterate columns starting from 1 (skipping ID column)
+    // Dynamically iterate through columns starting from index 1 (after email column)
+    // Stop when we encounter empty headers (no more dates)
     for (let i = 1; i < headers.length; i++) {
-      const date = headers[i];
-      const rawStatus = studentRow[i]?.toUpperCase().trim(); // 'P', 'A', '1', '0'
+      const date = headers[i]?.trim();
 
-      if (!date) continue;
+      // Stop processing if we hit an empty header (no more date columns)
+      if (!date) {
+        break;
+      }
+
+      const rawStatus = studentRow[i]?.toUpperCase().trim(); // 'P', 'A', '1', '0'
 
       let status: StudentAttendanceRecord["status"] = "Unknown";
 
@@ -220,8 +226,7 @@ export const AttendanceService = {
       history: history.reverse(), // Newest first
     };
 
-    // Helper to calculate expiry?
-    // Standard 30 min cache for attendance
+    // Cache for 30 minutes
     CacheService.set(cacheKey, result, 60 * 30);
 
     return result;

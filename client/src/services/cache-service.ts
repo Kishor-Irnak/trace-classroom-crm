@@ -40,6 +40,14 @@ export const CacheService = {
     localStorage.removeItem(`trace_cache_${key}`);
   },
 
+  clearPattern: (pattern: string): void => {
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("trace_cache_") && key.includes(pattern)) {
+        localStorage.removeItem(key);
+      }
+    });
+  },
+
   clearAll: (): void => {
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith("trace_cache_")) {

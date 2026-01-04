@@ -13,6 +13,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { CacheService } from "@/services/cache-service";
 
 interface AppHeaderProps {
   onMobileMenuClick: () => void;
@@ -45,6 +46,26 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
     setShowDocsTooltip(false);
     localStorage.setItem("trace_docs_seen", "true");
     window.location.href = "/docs";
+  };
+
+  const handleGlobalRefresh = () => {
+    console.log("[GLOBAL REFRESH] Clearing all caches...");
+
+    // Clear all caches for complete refresh
+    CacheService.clearAll();
+
+    console.log("[GLOBAL REFRESH] Cache cleared. Starting sync...");
+
+    // Trigger classroom sync
+    syncClassroom().catch((err) => {
+      console.error("Sync failed:", err);
+    });
+
+    // Reload the current page to refresh attendance and other data
+    setTimeout(() => {
+      console.log("[GLOBAL REFRESH] Reloading page...");
+      window.location.reload();
+    }, 1000);
   };
 
   // Extract domain from user email
@@ -136,15 +157,10 @@ export function AppHeader({ onMobileMenuClick }: AppHeaderProps) {
         <Button
           variant="ghost"
           size="icon"
-          onClick={(e) => {
-            e.preventDefault();
-            syncClassroom().catch((err) => {
-              console.error("Sync failed:", err);
-            });
-          }}
+          onClick={handleGlobalRefresh}
           disabled={isSyncing}
           className={cn(isSyncing && "animate-spin")}
-          title="Sync with Classroom"
+          title="Refresh Everything"
         >
           <RefreshCw className="w-5 h-5" />
         </Button>

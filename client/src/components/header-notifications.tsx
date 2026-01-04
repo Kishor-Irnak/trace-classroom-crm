@@ -31,6 +31,7 @@ import {
   arrayUnion,
   addDoc,
   serverTimestamp,
+  getDocs,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Activity } from "@shared/schema";
@@ -75,6 +76,7 @@ export function HeaderNotifications() {
         id: doc.id,
         ...doc.data(),
       })) as ClanRequest[];
+      console.log("Notification requests for user", user.uid, ":", newRequests);
       setRequests(newRequests);
     });
 
@@ -114,6 +116,69 @@ export function HeaderNotifications() {
     ).length;
     setUnreadCount(unreadActivities + requests.length);
   }, [activities, requests, lastReadTime]);
+
+  // Auto-cleanup: Delete old data to save storage
+  useEffect(() => {
+    if (!user) return;
+
+    const cleanupOldData = async () => {
+      try {
+        // 1. Delete activities older than 24 hours
+        const twentyFourHoursAgo = new Date();
+        twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+        const activitiesRef = collection(db, "activities");
+        const oldActivitiesQuery = query(
+          activitiesRef,
+          where("createdAt", "<", twentyFourHoursAgo.toISOString())
+        );
+
+        const activitiesSnapshot = await getDocs(oldActivitiesQuery);
+        const deleteActivitiesPromises = activitiesSnapshot.docs.map((doc) =>
+          deleteDoc(doc.ref)
+        );
+        await Promise.all(deleteActivitiesPromises);
+
+        if (activitiesSnapshot.docs.length > 0) {
+          console.log(
+            `Cleaned up ${activitiesSnapshot.docs.length} old activities`
+          );
+        }
+
+        // 2. Delete clan requests older than 7 days (likely stale/forgotten)
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        const requestsRef = collection(db, "clan_requests");
+        const oldRequestsQuery = query(
+          requestsRef,
+          where("createdAt", "<", sevenDaysAgo.toISOString())
+        );
+
+        const requestsSnapshot = await getDocs(oldRequestsQuery);
+        const deleteRequestsPromises = requestsSnapshot.docs.map((doc) =>
+          deleteDoc(doc.ref)
+        );
+        await Promise.all(deleteRequestsPromises);
+
+        if (requestsSnapshot.docs.length > 0) {
+          console.log(
+            `Cleaned up ${requestsSnapshot.docs.length} old clan requests`
+          );
+        }
+      } catch (error) {
+        console.error("Error cleaning up old data:", error);
+      }
+    };
+
+    // Run cleanup immediately
+    cleanupOldData();
+
+    // Run cleanup every hour
+    const intervalId = setInterval(cleanupOldData, 60 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [user]);
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);

@@ -168,7 +168,6 @@ export default function AttendancePage() {
   const [courseStates, setCourseStates] = useState<
     Record<string, EnrichedCourseData>
   >({});
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [unlockingCourseId, setUnlockingCourseId] = useState<string | null>(
     null
   );
@@ -179,27 +178,20 @@ export default function AttendancePage() {
 
   // Initialize course states
   useEffect(() => {
-    if (!courses || !user) return;
+    if (!courses || !user || !accessToken) return;
 
     const initCourses = async () => {
       // Parallel fetch configs
       const results = await Promise.all(
         courses.map(async (c) => {
-          // If already loaded successfully, don't overwrite with initial state unless forcing refresh
-          if (courseStates[c.id]?.state === "loaded") {
-            return courseStates[c.id];
-          }
-
           const config = await AttendanceService.getCourseConfig(c.id);
-          // console.log(`[DEBUG] Course ${c.name} (${c.id}): Config =`, config);
 
           if (!config) {
             return { courseId: c.id, state: "no-config" } as EnrichedCourseData;
           } else if (!config.isVisible) {
             return { courseId: c.id, state: "hidden" } as EnrichedCourseData;
           } else {
-            // Directly fetch attendance if configured and visible (no pass key needed)
-            fetchAttendance(c.id, config.sheetUrl);
+            // Mark as loading, then fetch
             return { courseId: c.id, state: "loading" } as EnrichedCourseData;
           }
         })
@@ -210,10 +202,18 @@ export default function AttendancePage() {
         newStateMap[r.courseId] = r;
       });
       setCourseStates((prev) => ({ ...prev, ...newStateMap }));
+
+      // Now fetch attendance for all visible courses
+      for (const c of courses) {
+        const config = await AttendanceService.getCourseConfig(c.id);
+        if (config && config.isVisible) {
+          fetchAttendance(c.id, config.sheetUrl);
+        }
+      }
     };
 
     initCourses();
-  }, [courses, user]); // Added user to dependencies
+  }, [courses, user, accessToken]); // Removed courseStates dependency to avoid infinite loops
 
   // Select first available course on load
   useEffect(() => {
@@ -223,7 +223,10 @@ export default function AttendancePage() {
   }, [courses, selectedSubject]);
 
   const fetchAttendance = async (courseId: string, sheetUrl: string) => {
-    if (!accessToken || !user?.email) return;
+    if (!accessToken || !user?.email) {
+      console.log("Missing accessToken or user email");
+      return;
+    }
 
     const sheetId = AttendanceService.extractSheetId(sheetUrl);
     if (!sheetId) {
@@ -254,7 +257,7 @@ export default function AttendancePage() {
         [courseId]: { courseId, state: "loaded", data },
       }));
     } catch (err: any) {
-      console.error(err);
+      console.error("Attendance fetch error:", err);
       setCourseStates((prev) => ({
         ...prev,
         [courseId]: {
@@ -296,27 +299,6 @@ export default function AttendancePage() {
         variant: "destructive",
       });
     }
-  };
-
-  const handleRefresh = async (e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setIsRefreshing(true);
-    // Re-fetch all 'loaded' courses
-    const promises = Object.values(courseStates)
-      .filter(
-        (cs) =>
-          cs.state === "loaded" ||
-          cs.state === "error" ||
-          cs.state === "loading"
-      ) // Retry errors too
-      .map(async (cs) => {
-        const config = await AttendanceService.getCourseConfig(cs.courseId); // Re-fetch config too in case URL changed
-        if (config) return fetchAttendance(cs.courseId, config.sheetUrl);
-        return Promise.resolve();
-      });
-
-    await Promise.allSettled(promises);
-    setIsRefreshing(false);
   };
 
   // --- Derived Stats ---
@@ -394,23 +376,6 @@ export default function AttendancePage() {
               Academic Year {academicYear}
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRefresh}
-            className={cn(
-              "text-muted-foreground h-8 shrink-0",
-              isRefreshing && "opacity-70"
-            )}
-          >
-            <RotateCw
-              className={cn(
-                "h-3.5 w-3.5 sm:mr-2",
-                isRefreshing && "animate-spin"
-              )}
-            />
-            <span className="hidden sm:inline">Refresh Data</span>
-          </Button>
         </div>
       </div>
 
