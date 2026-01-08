@@ -94,7 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRole(null);
         setLoading(false);
         setAccessToken(null);
-        localStorage.removeItem("google_access_token");
+        // Don't clear localStorage here to avoid race conditions on reload
+        // localStorage.removeItem("google_access_token");
         clearCurrentUser();
       }
       // If user exists, we wait for role detection which happens via effect below or explicit call
@@ -129,11 +130,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
 
         if (teacherRes.status === 401) {
-          console.log("Token expired (401). User needs to re-authenticate.");
-          setError("Session expired. Please sign in again.");
-          setRole(null);
-          setLoading(false);
-          localStorage.removeItem("google_access_token");
+          console.log("Token expired (401). Attempting to refresh session...");
+          // Don't immediately logout. Attempt to refresh.
+          const refreshed = await refreshTokenInternal();
+          if (!refreshed) {
+            setError("Session expired. Please sign in again.");
+            setRole(null);
+            setLoading(false);
+            localStorage.removeItem("google_access_token");
+          }
+          // If refreshed, refreshTokenInternal updates state, which triggers this effect again
           return;
         }
 
