@@ -655,22 +655,22 @@ export default function SettingsPage() {
                     },
                     {
                       id: "male",
-                      src: "/avatars/avatar_male.png",
+                      src: "/avatars/avatar_male.jpg",
                       label: "Avatar 1",
                     },
                     {
                       id: "female",
-                      src: "/avatars/avatar_female.png",
+                      src: "/avatars/avatar_female.jpg",
                       label: "Avatar 2",
                     },
                     {
                       id: "male_men",
-                      src: "/avatars/avatar_male_men.png",
+                      src: "/avatars/avatar_male_men.jpg",
                       label: "Avatar 3",
                     },
                     {
                       id: "male_women",
-                      src: "/avatars/avatar_male_women.png",
+                      src: "/avatars/avatar_male_women.jpg",
                       label: "Avatar 4",
                     },
                   ].map((option) => (
