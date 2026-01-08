@@ -58,7 +58,7 @@ export const GoogleClassroomService = {
       courseState: c.courseState || "ACTIVE",
       alternateLink: c.alternateLink || null,
       lastSyncedAt: new Date().toISOString(),
-      color: generateCourseColor(c.id),
+      color: generateCourseColor(c.name),
     }));
 
     CacheService.set(`courses_${userId}`, mapped, 60 * 60 * 24);
@@ -160,28 +160,88 @@ export const GoogleClassroomService = {
   },
 };
 
-const COURSE_COLORS = [
-  "#FFADAD",
-  "#FFD6A5",
-  "#FDFFB6",
-  "#CAFFBF",
-  "#9BF6FF",
-  "#A0C4FF",
-  "#BDB2FF",
-  "#FFC6FF",
-  "#E0F7FA",
-  "#F3E5F5",
-  "#E8F5E9",
-  "#FFF3E0",
+// Ultra-subtle but distinct color palettes with perfectly matching text colors
+// Each palette: [background, textColor]
+const COLOR_PALETTES: [string, string][] = [
+  // Sky Blue - Cool and professional
+  ["#E0F2FE", "#0369A1"],
+
+  // Lavender - Creative and calm
+  ["#EDE9FE", "#7C3AED"],
+
+  // Rose Pink - Warm and friendly
+  ["#FCE7F3", "#BE185D"],
+
+  // Mint Green - Fresh and balanced
+  ["#D1FAE5", "#047857"],
+
+  // Peach - Warm and inviting
+  ["#FED7AA", "#C2410C"],
+
+  // Aqua Teal - Calm and sophisticated
+  ["#CCFBF1", "#0F766E"],
+
+  // Coral - Energetic and bold
+  ["#FECACA", "#B91C1C"],
+
+  // Periwinkle - Professional and deep
+  ["#DBEAFE", "#1E40AF"],
+
+  // Turquoise - Modern and tech
+  ["#A5F3FC", "#0E7490"],
+
+  // Amber Gold - Rich and warm
+  ["#FDE68A", "#92400E"],
+
+  // Lime - Vibrant and fresh
+  ["#D9F99D", "#4D7C0F"],
+
+  // Orchid - Unique and elegant
+  ["#F3E8FF", "#6B21A8"],
 ];
 
-function generateCourseColor(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+function generateCourseColor(content: string): string {
+  // 1. Clean up and normalize to find the "Base Subject"
+  let normalized = content.toLowerCase().trim();
+
+  // Remove common academic suffixes/types regardless of position
+  const stopWords = [
+    /\blab(oratory)?\b/g,
+    /\bpractical\b/g,
+    /\btheory\b/g,
+    /\btutorial\b/g,
+    /\blecture\b/g,
+    /\bcourse\b/g,
+    /\bsection\b/g,
+    /\bmini project\b/g,
+    /\sproject\b/g,
+    /\s\d+[a-z]?\b/g,
+  ];
+
+  for (const pattern of stopWords) {
+    normalized = normalized.replace(pattern, "");
   }
-  const index = Math.abs(hash) % COURSE_COLORS.length;
-  return COURSE_COLORS[index];
+
+  // Remove non-alphanumeric chars (except spaces) to ignore parenthesis, dashes, etc
+  normalized = normalized.replace(/[^a-z0-9\s]/g, "").trim();
+  // Collapse multiple spaces to single
+  normalized = normalized.replace(/\s+/g, " ");
+
+  // If we stripped everything (e.g. course named just "Lab"), revert to original
+  if (!normalized) normalized = content.toLowerCase().trim();
+
+  // 2. Generate Hash from the Normalized Base Name
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  // 3. Select palette based on hash
+  const paletteIndex = Math.abs(hash) % COLOR_PALETTES.length;
+  const [bgColor, textColor] = COLOR_PALETTES[paletteIndex];
+
+  // Return just the background color (text color will be retrieved separately)
+  return bgColor;
 }
 
 function mapToAssignment(

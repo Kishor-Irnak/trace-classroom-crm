@@ -82,7 +82,8 @@ export class LeaderboardService {
     displayName: string,
     photoURL: string,
     assignments: Assignment[],
-    courses: Course[]
+    courses: Course[],
+    role: "student" | "teacher" | "no_access" | null = "student"
   ): Promise<void> {
     try {
       // Calculate XP and get processed assignment IDs
@@ -125,6 +126,7 @@ export class LeaderboardService {
           processedAssignmentIds: processedIds,
           lastSyncedAt: serverTimestamp(),
           badges: badges,
+          role: role,
         },
         { merge: true }
       );
@@ -265,7 +267,8 @@ export class LeaderboardService {
     displayName: string,
     photoURL: string,
     assignments: Assignment[],
-    courses: Course[]
+    courses: Course[],
+    role: "student" | "teacher" | "no_access" | null
   ): Promise<void> {
     try {
       const currentCourseIds = courses.map((c) => c.id);
@@ -287,7 +290,8 @@ export class LeaderboardService {
         displayName,
         photoURL,
         assignments,
-        courses
+        courses,
+        role
       );
     } catch (error) {
       console.error("❌ Auto-sync failed:", error);

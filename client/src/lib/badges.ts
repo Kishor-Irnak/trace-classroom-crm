@@ -20,32 +20,6 @@ export interface Badge {
 }
 
 export const BADGES: Record<string, Badge> = {
-  // Consistency (Streak)
-  "5-day-consistent": {
-    id: "5-day-consistent",
-    label: "5-Day Streak",
-    description: "Visited app for 5 consecutive days",
-    category: "consistency",
-    icon: Flame,
-    color: "text-orange-500 bg-orange-50 dark:bg-orange-500/10",
-  },
-  "10-day-consistent": {
-    id: "10-day-consistent",
-    label: "10-Day Streak",
-    description: "Visited app for 10 consecutive days",
-    category: "consistency",
-    icon: Zap,
-    color: "text-amber-500 bg-amber-50 dark:bg-amber-500/10",
-  },
-  "30-day-consistent": {
-    id: "30-day-consistent",
-    label: "Monthly Master",
-    description: "Visited app for 30 consecutive days",
-    category: "consistency",
-    icon: Trophy,
-    color: "text-purple-500 bg-purple-50 dark:bg-purple-500/10",
-  },
-
   // Productivity (Volume)
   "10-submissions": {
     id: "10-submissions",

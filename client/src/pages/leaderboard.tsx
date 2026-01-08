@@ -13,6 +13,7 @@ import {
   serverTimestamp,
   getDoc,
   where,
+  deleteDoc,
 } from "firebase/firestore";
 import {
   Select,
@@ -35,6 +36,7 @@ import {
   Sparkles,
   AlertTriangle,
   Lightbulb,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +55,7 @@ interface LeaderboardStudent {
   emailDomain?: string;
   enrolledCourseIds?: string[];
   badges?: string[];
+  role?: string;
 }
 
 export default function LeaderboardPage() {
@@ -100,6 +103,11 @@ export default function LeaderboardPage() {
       const validAssignmentIds = new Set(assignments.map((a) => a.id));
 
       studentMap.forEach((student) => {
+        // 0. EXCLUDE TEACHERS (Strict)
+        if (student.role === "teacher") {
+          return;
+        }
+
         // 1. Data Preparation
         const studentEmail = student.email || "";
         // Try multiple sources for domain: emailDomain field, extract from email, or empty
@@ -167,6 +175,7 @@ export default function LeaderboardPage() {
             data.emailDomain || (data.email ? data.email.split("@")[1] : ""),
           enrolledCourseIds: data.enrolledCourseIds || data.subjects || [],
           badges: data.badges || [],
+          role: data.role,
         } as LeaderboardStudent;
 
         const existing = studentMap.get(doc.id);
@@ -262,6 +271,28 @@ export default function LeaderboardPage() {
 
   // Combine: students with XP (sorted by XP) + students with 0 XP (sorted by join time)
   const smartSortedData = [...studentsWithXP, ...sortedZeroXPStudents];
+
+  // Temporary Dev/Admin Mode to clean up data
+  const isDevMode = false; // Set to false when done cleaning up
+
+  const handleDelete = async (studentId: string, studentName: string) => {
+    if (
+      !confirm(
+        `Are you sure you want to remove ${studentName} from the leaderboard?`
+      )
+    )
+      return;
+
+    try {
+      await deleteDoc(
+        doc(db, "leaderboards", "all-courses", "students", studentId)
+      );
+      setLeaderboardData((prev) => prev.filter((s) => s.id !== studentId));
+    } catch (error) {
+      console.error("Failed to delete user:", error);
+      alert("Failed to delete user");
+    }
+  };
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground font-sans selection:bg-muted">
@@ -478,7 +509,7 @@ export default function LeaderboardPage() {
                     <div
                       key={student.id}
                       className={cn(
-                        "flex items-center p-3 sm:p-4 rounded-xl border transition-all duration-200",
+                        "flex items-center p-3 sm:p-4 rounded-xl border transition-all duration-200 group",
                         isMe
                           ? "bg-primary/5 border-primary/20 shadow-sm"
                           : "bg-card border-border hover:bg-muted/30"
@@ -523,6 +554,20 @@ export default function LeaderboardPage() {
                           0 XP
                         </span>
                       </div>
+
+                      {/* Admin Delete */}
+                      {isDevMode && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 ml-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() =>
+                            handleDelete(student.id, student.displayName)
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   );
                 })}
@@ -539,10 +584,27 @@ export default function LeaderboardPage() {
                   )}
                 >
                   {/* Rank 2 */}
-                  <div className="flex flex-col items-center gap-2 order-1 w-1/3 sm:w-32 max-w-[100px]">
+                  <div className="flex flex-col items-center gap-2 order-1 w-1/3 sm:w-32 max-w-[100px] group relative">
                     {smartSortedData[1] && smartSortedData[1].totalXP > 0 ? (
                       <>
                         <div className="relative">
+                          {isDevMode && (
+                            <div className="absolute -top-2 -right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                className="h-6 w-6 rounded-full shadow-md"
+                                onClick={() =>
+                                  handleDelete(
+                                    smartSortedData[1].id,
+                                    smartSortedData[1].displayName
+                                  )
+                                }
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
                           <Avatar className="h-14 w-14 sm:h-20 sm:w-20 border-4 border-background ring-2 ring-zinc-300 shadow-xl">
                             <AvatarImage src={smartSortedData[1].photoUrl} />
                             <AvatarFallback className="text-lg bg-zinc-100 text-zinc-500">
@@ -584,8 +646,25 @@ export default function LeaderboardPage() {
                   </div>
 
                   {/* Rank 1 */}
-                  <div className="flex flex-col items-center gap-2 order-2 w-1/3 sm:w-40 max-w-[120px] -mt-6 sm:-mt-8 z-10">
+                  <div className="flex flex-col items-center gap-2 order-2 w-1/3 sm:w-40 max-w-[120px] -mt-6 sm:-mt-8 z-10 group relative">
                     <div className="relative">
+                      {isDevMode && (
+                        <div className="absolute -top-2 -right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="h-6 w-6 rounded-full shadow-md"
+                            onClick={() =>
+                              handleDelete(
+                                smartSortedData[0].id,
+                                smartSortedData[0].displayName
+                              )
+                            }
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                       <div className="absolute -top-6 sm:-top-8 left-1/2 -translate-x-1/2 animate-bounce duration-[2000ms]">
                         <Crown className="fill-yellow-400 text-yellow-500 h-6 w-6 sm:h-8 sm:w-8 drop-shadow-sm" />
                       </div>
@@ -617,10 +696,27 @@ export default function LeaderboardPage() {
                   </div>
 
                   {/* Rank 3 */}
-                  <div className="flex flex-col items-center gap-2 order-3 w-1/3 sm:w-32 max-w-[100px]">
+                  <div className="flex flex-col items-center gap-2 order-3 w-1/3 sm:w-32 max-w-[100px] group relative">
                     {smartSortedData[2] && smartSortedData[2].totalXP > 0 ? (
                       <>
                         <div className="relative">
+                          {isDevMode && (
+                            <div className="absolute -top-2 -right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                className="h-6 w-6 rounded-full shadow-md"
+                                onClick={() =>
+                                  handleDelete(
+                                    smartSortedData[2].id,
+                                    smartSortedData[2].displayName
+                                  )
+                                }
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
                           <Avatar className="h-14 w-14 sm:h-20 sm:w-20 border-4 border-background ring-2 ring-amber-700/50 shadow-xl">
                             <AvatarImage src={smartSortedData[2].photoUrl} />
                             <AvatarFallback className="text-lg bg-amber-50 text-amber-700">
@@ -740,6 +836,20 @@ export default function LeaderboardPage() {
                             XP
                           </span>
                         </div>
+
+                        {/* Admin Delete */}
+                        {isDevMode && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 ml-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() =>
+                              handleDelete(student.id, student.displayName)
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     );
                   })}

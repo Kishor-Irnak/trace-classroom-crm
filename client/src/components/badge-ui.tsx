@@ -60,7 +60,15 @@ export function BadgeIcon({
             onMouseEnter={() => setIsOpen(true)} // Show on hover (desktop)
             onMouseLeave={() => setIsOpen(false)} // Hide on hover out (desktop)
           >
-            <Icon className={cn(iconSizes[size])} strokeWidth={2.5} />
+            {badge.imageSrc ? (
+              <img
+                src={badge.imageSrc}
+                alt={badge.label}
+                className={cn(iconSizes[size], "object-contain")}
+              />
+            ) : (
+              <Icon className={cn(iconSizes[size])} strokeWidth={2.5} />
+            )}
             {showLabel && (
               <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">
                 {badge.label}

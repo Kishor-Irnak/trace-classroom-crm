@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AssignmentDetail } from "@/components/assignment-detail";
-import { useClassroom } from "@/lib/classroom-context";
+import { useClassroom, getTextColor } from "@/lib/classroom-context";
 import { useAuth } from "@/lib/auth-context";
 import type { Assignment } from "@shared/schema";
 import {
@@ -180,32 +180,34 @@ const STATUS_CONFIG: Record<
 > = {
   backlog: {
     label: "Backlog",
-    color: "bg-slate-100",
-    border: "border-slate-200",
+    color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+    border: "border-slate-200 dark:border-slate-700",
     timelineStyle: "bg-slate-100 border-slate-300 text-slate-700",
   },
   in_progress: {
     label: "In Progress",
-    color: "bg-blue-50 text-blue-700",
-    border: "border-blue-100",
+    color: "bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200",
+    border: "border-blue-100 dark:border-blue-800",
     timelineStyle: "bg-blue-100 border-blue-300 text-blue-800",
   },
   submitted: {
     label: "Submitted",
-    color: "bg-purple-50 text-purple-700",
-    border: "border-purple-100",
+    color:
+      "bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200",
+    border: "border-purple-100 dark:border-purple-800",
     timelineStyle: "bg-purple-100 border-purple-300 text-purple-800",
   },
   graded: {
     label: "Graded",
-    color: "bg-emerald-50 text-emerald-700",
-    border: "border-emerald-100",
+    color:
+      "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200",
+    border: "border-emerald-100 dark:border-emerald-800",
     timelineStyle: "bg-emerald-100 border-emerald-300 text-emerald-800",
   },
   overdue: {
     label: "Overdue",
-    color: "bg-red-50 text-red-700",
-    border: "border-red-100",
+    color: "bg-red-50 text-red-700 dark:bg-red-900/40 dark:text-red-200",
+    border: "border-red-100 dark:border-red-800",
     timelineStyle: "bg-red-100 border-red-300 text-red-800",
   },
 };
@@ -597,6 +599,11 @@ export default function TimelinePage() {
                         : courseColor
                         ? "rgba(0,0,0,0.1)"
                         : undefined,
+                      color: isCompleted
+                        ? undefined
+                        : courseColor
+                        ? getTextColor(courseColor)
+                        : undefined,
                     };
 
                     const statusConfig =
@@ -606,9 +613,7 @@ export default function TimelinePage() {
                     const completedStyle =
                       "bg-green-100/80 border-green-300 text-green-800";
 
-                    const defaultStyle =
-                      "bg-card border shadow-sm " +
-                      (courseColor ? "text-slate-900" : "text-foreground");
+                    const defaultStyle = "bg-card border shadow-sm";
 
                     const taskHeight = compactView ? "h-8" : "h-12";
                     const containerHeight = compactView ? "h-9" : "h-14";
@@ -1010,9 +1015,21 @@ export default function TimelinePage() {
                           </span>
                           <div className="flex-1 flex flex-col gap-1.5">
                             {dayTasks.map((task) => {
+                              const course = courses.find(
+                                (c) => c.id === task.courseId
+                              );
+                              const courseColor = course?.color;
+                              const isCompleted = [
+                                "submitted",
+                                "graded",
+                              ].includes(task.systemStatus);
+                              const useCustomColor =
+                                !isCompleted && courseColor;
+
                               const statusConfig =
                                 STATUS_CONFIG[task.systemStatus] ||
                                 STATUS_CONFIG.backlog;
+
                               return (
                                 <div
                                   key={task.id}
@@ -1022,9 +1039,16 @@ export default function TimelinePage() {
                                   }}
                                   className={cn(
                                     "text-[10px] px-2 py-1 rounded-md border cursor-pointer truncate shadow-sm hover:scale-[1.02] transition-transform font-medium",
-                                    statusConfig.color,
-                                    statusConfig.border
+                                    !useCustomColor && statusConfig.color,
+                                    !useCustomColor && statusConfig.border,
+                                    useCustomColor &&
+                                      "text-slate-900 border-transparent/20"
                                   )}
+                                  style={
+                                    useCustomColor
+                                      ? { backgroundColor: courseColor }
+                                      : undefined
+                                  }
                                   title={task.title}
                                 >
                                   {task.title}

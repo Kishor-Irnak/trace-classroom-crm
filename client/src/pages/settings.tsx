@@ -496,20 +496,8 @@ export default function SettingsPage() {
       const currentBadges = new Set(data.badges || []);
       let badgesChanged = false;
 
-      // Check streak badges
-      const streak = data.loginStreak || 0;
-      if (streak >= 5 && !currentBadges.has("5-day-consistent")) {
-        currentBadges.add("5-day-consistent");
-        badgesChanged = true;
-      }
-      if (streak >= 10 && !currentBadges.has("10-day-consistent")) {
-        currentBadges.add("10-day-consistent");
-        badgesChanged = true;
-      }
-      if (streak >= 30 && !currentBadges.has("30-day-consistent")) {
-        currentBadges.add("30-day-consistent");
-        badgesChanged = true;
-      }
+      // Check streak badges (Removed feature)
+      // const streak = data.loginStreak || 0;
 
       // Check submission badges
       const submissions = data.processedAssignmentIds?.length || 0;

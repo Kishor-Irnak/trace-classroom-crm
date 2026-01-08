@@ -349,28 +349,120 @@ export async function fetchAllPages<T>(
   return allItems;
 }
 
-const COURSE_COLORS = [
-  "#FFADAD", // Pastel Red
-  "#FFD6A5", // Pastel Orange
-  "#FDFFB6", // Pastel Yellow
-  "#CAFFBF", // Pastel Green
-  "#9BF6FF", // Pastel Cyan
-  "#A0C4FF", // Pastel Blue
-  "#BDB2FF", // Pastel Purple
-  "#FFC6FF", // Pastel Pink
-  "#E0F7FA", // Cyan 50
-  "#F3E5F5", // Purple 50
-  "#E8F5E9", // Green 50
-  "#FFF3E0", // Orange 50
+// Ultra-subtle but distinct color palettes with perfectly matching text colors
+// Each palette: [background, textColor]
+const COLOR_PALETTES: [string, string][] = [
+  // Sky Blue - Cool and professional
+  ["#E0F2FE", "#0369A1"],
+
+  // Lavender - Creative and calm
+  ["#EDE9FE", "#7C3AED"],
+
+  // Rose Pink - Warm and friendly
+  ["#FCE7F3", "#BE185D"],
+
+  // Mint Green - Fresh and balanced
+  ["#D1FAE5", "#047857"],
+
+  // Peach - Warm and inviting
+  ["#FED7AA", "#C2410C"],
+
+  // Aqua Teal - Calm and sophisticated
+  ["#CCFBF1", "#0F766E"],
+
+  // Coral - Energetic and bold
+  ["#FECACA", "#B91C1C"],
+
+  // Periwinkle - Professional and deep
+  ["#DBEAFE", "#1E40AF"],
+
+  // Turquoise - Modern and tech
+  ["#A5F3FC", "#0E7490"],
+
+  // Amber Gold - Rich and warm
+  ["#FDE68A", "#92400E"],
+
+  // Lime - Vibrant and fresh
+  ["#D9F99D", "#4D7C0F"],
+
+  // Orchid - Unique and elegant
+  ["#F3E8FF", "#6B21A8"],
 ];
 
-function generateCourseColor(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+function generateCourseColor(content: string): string {
+  // 1. Clean up and normalize to find the "Base Subject"
+  let normalized = content.toLowerCase().trim();
+
+  // Remove common academic suffixes/types regardless of position
+  const stopWords = [
+    /\blab(oratory)?\b/g,
+    /\bpractical\b/g,
+    /\btheory\b/g,
+    /\btutorial\b/g,
+    /\blecture\b/g,
+    /\bcourse\b/g,
+    /\bsection\b/g,
+    /\bmini project\b/g,
+    /\sproject\b/g,
+    /\s\d+[a-z]?\b/g,
+  ];
+
+  for (const pattern of stopWords) {
+    normalized = normalized.replace(pattern, "");
   }
-  const index = Math.abs(hash) % COURSE_COLORS.length;
-  return COURSE_COLORS[index];
+
+  // Remove non-alphanumeric chars (except spaces) to ignore parenthesis, dashes, etc
+  normalized = normalized.replace(/[^a-z0-9\s]/g, "").trim();
+  // Collapse multiple spaces to single
+  normalized = normalized.replace(/\s+/g, " ");
+
+  // If we stripped everything (e.g. course named just "Lab"), revert to original
+  if (!normalized) normalized = content.toLowerCase().trim();
+
+  // 2. Generate Hash from the Normalized Base Name
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  // 3. Select palette based on hash
+  const paletteIndex = Math.abs(hash) % COLOR_PALETTES.length;
+  const [bgColor, textColor] = COLOR_PALETTES[paletteIndex];
+
+  // Return just the background color (text color will be retrieved separately)
+  return bgColor;
+}
+
+// Helper to get the matching text color for a background
+function getTextColor(backgroundColor: string): string {
+  // Find the matching text color from our palettes
+  const palette = COLOR_PALETTES.find(([bg]) => bg === backgroundColor);
+  if (palette) {
+    return palette[1]; // Return the matching text color
+  }
+
+  // Fallback: calculate based on luminance if color not in palette
+  const luminance = getRelativeLuminance(backgroundColor);
+  return luminance > 0.6 ? "#52525b" : "#FFFFFF";
+}
+
+// Helper function to calculate relative luminance for WCAG contrast
+function getRelativeLuminance(hex: string): number {
+  // Remove # if present
+  const color = hex.replace("#", "");
+
+  // Convert to RGB
+  const r = parseInt(color.substring(0, 2), 16) / 255;
+  const g = parseInt(color.substring(2, 4), 16) / 255;
+  const b = parseInt(color.substring(4, 6), 16) / 255;
+
+  // Apply gamma correction
+  const rsRGB = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+  const gsRGB = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+  const bsRGB = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+
+  // Calculate relative luminance
+  return 0.2126 * rsRGB + 0.7152 * gsRGB + 0.0722 * bsRGB;
 }
 
 // Fetch courses from Google Classroom API
@@ -402,7 +494,7 @@ async function fetchCourses(
     courseState: gc.courseState || null,
     alternateLink: gc.alternateLink || null,
     lastSyncedAt: now,
-    color: generateCourseColor(gc.id),
+    color: generateCourseColor(gc.name),
   }));
 }
 
@@ -637,7 +729,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       courseState: "ACTIVE",
       alternateLink: null,
       lastSyncedAt: now.toISOString(),
-      color: generateCourseColor("gc-1"),
+      color: generateCourseColor("Introduction to Computer Science"),
     },
     {
       id: "course-2",
@@ -652,7 +744,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       courseState: "ACTIVE",
       alternateLink: null,
       lastSyncedAt: now.toISOString(),
-      color: generateCourseColor("gc-2"),
+      color: generateCourseColor("Data Structures & Algorithms"),
     },
     {
       id: "course-3",
@@ -667,7 +759,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       courseState: "ACTIVE",
       alternateLink: null,
       lastSyncedAt: now.toISOString(),
-      color: generateCourseColor("gc-3"),
+      color: generateCourseColor("Web Development"),
     },
     {
       id: "course-4",
@@ -682,7 +774,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       courseState: "ACTIVE",
       alternateLink: null,
       lastSyncedAt: now.toISOString(),
-      color: generateCourseColor("gc-4"),
+      color: generateCourseColor("Database Systems"),
     },
   ];
 
@@ -927,6 +1019,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
 export function ClassroomProvider({ children }: { children: ReactNode }) {
   const {
     user,
+    role,
     accessToken,
     refreshAccessToken,
     loading: authLoading,
@@ -1101,7 +1194,8 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
           user.displayName || "Anonymous",
           user.photoURL || "",
           fetchedAssignments,
-          fetchedCourses
+          fetchedCourses,
+          role
         ).catch(console.warn);
       } catch (err: any) {
         console.error("Sync Error", err);
@@ -1118,12 +1212,12 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     },
-    [user, accessToken, refreshAccessToken, toast]
+    [user, role, accessToken, refreshAccessToken, toast]
   );
 
   // Auto-sync logic
   useEffect(() => {
-    if (!user || !accessToken) return;
+    if (authLoading || !user || !accessToken) return;
     if (!hasAutoSynced && !isSyncing) {
       setHasAutoSynced(true);
       syncClassroom(true);
@@ -1423,3 +1517,6 @@ export function useClassroom() {
   }
   return context;
 }
+
+// Export helper function for determining text color based on background
+export { getTextColor };

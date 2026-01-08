@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { BadgeList } from "@/components/badge-ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Medal, Flame, Target, CalendarDays } from "lucide-react";
+import { Medal, Target, CalendarDays } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -39,14 +39,6 @@ export function DashboardBadgesCard() {
     const candidates = [];
 
     // Check 5-day streak
-    candidates.push({
-      badge: BADGES["5-day-consistent"],
-      current: loginStreak || 1,
-      target: 5,
-      percentage: Math.min(((loginStreak || 1) / 5) * 100, 100),
-      type: "streak" as const,
-      label: "Days",
-    });
 
     // Check 10 submissions
     candidates.push({
@@ -130,8 +122,12 @@ export function DashboardBadgesCard() {
           <div className="flex flex-col gap-3 justify-between h-full">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                {nextBadge.type === "streak" ? (
-                  <Flame className="h-5 w-5 text-orange-500" />
+                {nextBadge.badge.imageSrc ? (
+                  <img
+                    src={nextBadge.badge.imageSrc}
+                    alt={nextBadge.badge.label}
+                    className="h-5 w-5 object-contain"
+                  />
                 ) : nextBadge.type === "submission" ? (
                   <Target className="h-5 w-5 text-blue-500" />
                 ) : (
@@ -151,9 +147,7 @@ export function DashboardBadgesCard() {
                 <div className="h-2 w-full bg-secondary rounded-full overflow-hidden border border-border/50">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
-                      nextBadge.type === "streak"
-                        ? "bg-orange-500"
-                        : nextBadge.type === "submission"
+                      nextBadge.type === "submission"
                         ? "bg-blue-500"
                         : "bg-emerald-500"
                     }`}

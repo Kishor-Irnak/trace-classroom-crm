@@ -17,7 +17,6 @@ export function BadgeShowroom({
   attendanceStats,
 }: BadgeShowroomProps) {
   const categories = [
-    { id: "consistency", label: "Consistency & Streaks" },
     { id: "productivity", label: "Productivity & Volume" },
     { id: "reliability", label: "Reliability & Attendance" },
   ];

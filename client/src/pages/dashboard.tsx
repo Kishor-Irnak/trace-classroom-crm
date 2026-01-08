@@ -35,7 +35,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AssignmentCardCompact } from "@/components/assignment-card";
 import { AssignmentDetail } from "@/components/assignment-detail";
-import { useClassroom, fetchAllPages } from "@/lib/classroom-context";
+import {
+  useClassroom,
+  fetchAllPages,
+  getTextColor,
+} from "@/lib/classroom-context";
 import { useAuth } from "@/lib/auth-context";
 import type { Assignment } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -45,7 +49,7 @@ import { AttendanceService } from "@/services/attendance-service";
 import { UserCheck } from "lucide-react";
 import { BadgeList } from "@/components/badge-ui";
 import { DashboardBadgesCard } from "@/components/dashboard-badges-card";
-import { StreakCard } from "@/components/streak-card";
+
 import { TokenRefreshPrompt } from "@/components/token-refresh-prompt";
 import { MetricSkeleton, AssignmentRowSkeleton } from "@/components/skeletons";
 
@@ -740,7 +744,15 @@ function WeeklyWorkload({
   );
 }
 
-function NextActions({ assignments }: { assignments: Assignment[] }) {
+function NextActions({
+  assignments,
+  onSelectAssignment,
+  courses,
+}: {
+  assignments: Assignment[];
+  onSelectAssignment: (assignment: Assignment) => void;
+  courses: import("@shared/schema").Course[];
+}) {
   const navigate = () => {}; // Helper to just define render
 
   // Custom priority sort
@@ -763,7 +775,7 @@ function NextActions({ assignments }: { assignments: Assignment[] }) {
         label: "Overdue",
         color: "text-red-500",
         bg: "bg-red-500/10",
-        border: "border-red-200 dark:border-red-900",
+        border: "border-red-200 dark:border-red-900/50",
       };
 
     if (assignment.dueDate) {
@@ -776,7 +788,7 @@ function NextActions({ assignments }: { assignments: Assignment[] }) {
           label: "Due Soon",
           color: "text-amber-500",
           bg: "bg-amber-500/10",
-          border: "border-amber-200 dark:border-amber-900",
+          border: "border-amber-200 dark:border-amber-900/50",
         };
       if (hours < 72)
         return {
@@ -796,8 +808,8 @@ function NextActions({ assignments }: { assignments: Assignment[] }) {
   };
 
   return (
-    <Card className="flex flex-col h-full border-zinc-200 dark:border-zinc-800 shadow-sm">
-      <CardHeader className="pb-4">
+    <Card className="flex flex-col h-full border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+      <CardHeader className="pb-4 border-b border-zinc-100 dark:border-zinc-800/50 bg-zinc-50/50 dark:bg-zinc-900/20">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <AlertCircle className="h-4 w-4 text-rose-500" />
@@ -811,89 +823,108 @@ function NextActions({ assignments }: { assignments: Assignment[] }) {
           Prioritized by deadline and urgency
         </p>
       </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto pr-2 space-y-3">
-        {topAssignments.length > 0 ? (
-          topAssignments.map((assignment) => {
-            const p = getPriorityInfo(assignment);
-            const dueDate = assignment.dueDate
-              ? new Date(assignment.dueDate)
-              : null;
+      <CardContent className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+        <div className="p-3 space-y-2">
+          {topAssignments.length > 0 ? (
+            topAssignments.map((assignment) => {
+              const p = getPriorityInfo(assignment);
+              const dueDate = assignment.dueDate
+                ? new Date(assignment.dueDate)
+                : null;
 
-            return (
-              <div
-                key={assignment.id}
-                className={cn(
-                  "group flex items-start gap-3 p-3 rounded-xl border transition-all duration-200 hover:shadow-md hover:bg-zinc-50 dark:hover:bg-zinc-900/50 cursor-pointer bg-card",
-                  p.border
-                )}
-                // We'll use a link wrapper normally, but here we can just make it look clickable or wrap in Link
-              >
-                {/* Priority Indicator Line */}
+              // Find the course color
+              const course = courses.find((c) => c.id === assignment.courseId);
+              const courseColor = course?.color;
+
+              return (
                 <div
+                  key={assignment.id}
+                  onClick={() => onSelectAssignment(assignment)}
                   className={cn(
-                    "w-1 self-stretch rounded-full flex-shrink-0",
-                    p.bg.replace("/10", "")
+                    "group flex items-center gap-3 p-3 rounded-lg border transition-all duration-200 hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 bg-card cursor-pointer relative overflow-hidden",
+                    p.border
                   )}
-                />
+                >
+                  {/* Subtle hover background */}
+                  <div className="absolute inset-0 bg-current opacity-0 group-hover:opacity-[0.02] transition-opacity" />
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start gap-2">
-                    <h4 className="text-sm font-semibold truncate text-foreground group-hover:text-primary transition-colors">
-                      {assignment.title}
-                    </h4>
-                    <span
-                      className={cn(
-                        "text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded",
-                        p.bg,
-                        p.color
+                  {/* Priority Indicator Pill */}
+                  <div
+                    className={cn(
+                      "w-1 h-8 rounded-full flex-shrink-0",
+                      p.bg.replace("/10", "")
+                    )}
+                  />
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center gap-2 mb-1">
+                      <h4 className="text-sm font-medium truncate text-foreground/90 group-hover:text-primary transition-colors">
+                        {assignment.title}
+                      </h4>
+                      {assignment.systemStatus === "overdue" && (
+                        <div className="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-1 rounded-full">
+                          <AlertCircle className="h-3 w-3" />
+                        </div>
                       )}
-                    >
-                      {p.label}
-                    </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 h-4 font-medium border-0"
+                        style={{
+                          backgroundColor: courseColor || undefined,
+                          color: courseColor
+                            ? getTextColor(courseColor)
+                            : undefined,
+                        }}
+                      >
+                        {assignment.courseName}
+                      </Badge>
+                      {dueDate && (
+                        <span
+                          className={cn(
+                            "text-[10px] flex items-center gap-1 font-medium",
+                            p.color
+                          )}
+                        >
+                          <Clock className="h-3 w-3" />
+                          {dueDate.toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge
-                      variant="secondary"
-                      className="text-[10px] px-1 h-5 font-medium bg-zinc-100 dark:bg-zinc-800 text-muted-foreground hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                  {/* Hover Action */}
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity -mr-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
                     >
-                      {assignment.courseName}
-                    </Badge>
-                    {dueDate && (
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {dueDate.toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                        {assignment.dueTime
-                          ? `, ${assignment.dueTime.slice(0, 5)}`
-                          : ""}
-                      </span>
-                    )}
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-
-                {/* Hover Action */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 -mr-1 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <ArrowUpRight className="h-4 w-4" />
-                </Button>
+              );
+            })
+          ) : (
+            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+              <div className="h-12 w-12 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mb-3">
+                <CheckCircle className="h-6 w-6 text-emerald-500" />
               </div>
-            );
-          })
-        ) : (
-          <div className="flex flex-col items-center justify-center h-40 text-muted-foreground border-2 border-dashed rounded-xl border-zinc-100 dark:border-zinc-800">
-            <CheckCircle className="h-10 w-10 mb-3 text-emerald-500/50" />
-            <p className="text-sm font-medium">All caught up!</p>
-            <p className="text-xs text-muted-foreground/60">
-              No pending actions for now.
-            </p>
-          </div>
-        )}
+              <p className="text-sm font-medium text-foreground">
+                All caught up!
+              </p>
+              <p className="text-xs text-muted-foreground text-center max-w-[180px]">
+                No pending actions for now. Great job staying on top of things.
+              </p>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -1120,14 +1151,13 @@ export default function DashboardPage() {
                     </div>
                   ),
                   features: (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       <ClassActivityCard
                         courses={courses}
                         assignments={assignments}
                       />
                       <OverallAttendanceCard courses={courses} />
                       <DashboardBadgesCard />
-                      <StreakCard />
                     </div>
                   ),
                   charts: (
@@ -1136,7 +1166,11 @@ export default function DashboardPage() {
                         <WeeklyWorkload data={metrics.weeklyWorkload} />
                       </div>
                       <div className="lg:col-span-1 h-full min-h-[300px]">
-                        <NextActions assignments={activeAssignments} />
+                        <NextActions
+                          assignments={activeAssignments}
+                          onSelectAssignment={setSelectedAssignment}
+                          courses={courses}
+                        />
                       </div>
                     </div>
                   ),

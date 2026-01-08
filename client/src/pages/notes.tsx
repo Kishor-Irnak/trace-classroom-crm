@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useClassroom } from "@/lib/classroom-context";
+import { useClassroom, getTextColor } from "@/lib/classroom-context";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   FileText,
@@ -141,7 +141,7 @@ export default function NotesPage() {
                 key={course.id}
                 onClick={() => setSelectedCourseId(course.id)}
                 className={cn(
-                  "w-full text-left px-3 py-3 rounded-md transition-all group flex items-center gap-3",
+                  "w-full text-left px-3 py-3.5 rounded-md transition-all group flex items-center gap-3",
                   selectedCourseId === course.id
                     ? "bg-primary text-primary-foreground shadow-md"
                     : "hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -149,28 +149,32 @@ export default function NotesPage() {
               >
                 <div
                   className={cn(
-                    "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
+                    "h-8 w-8 rounded-full flex items-center justify-center shrink-0 border border-transparent",
+                    // Ensure shadow/border when selected for better visibility
                     selectedCourseId === course.id
-                      ? "bg-primary-foreground/20"
-                      : "bg-muted"
+                      ? "ring-2 ring-primary-foreground/20"
+                      : ""
                   )}
+                  style={{
+                    backgroundColor: course.color || "#e4e4e7", // fallback to muted
+                  }}
                 >
                   <Folder
-                    className={cn(
-                      "h-4 w-4",
-                      selectedCourseId === course.id
-                        ? "text-primary-foreground"
-                        : "text-muted-foreground"
-                    )}
+                    className="h-4 w-4"
+                    style={{
+                      color: course.color
+                        ? getTextColor(course.color)
+                        : undefined,
+                    }}
                   />
                 </div>
-                <div className="truncate flex-1">
-                  <p className="text-sm font-semibold leading-none mb-1 truncate">
+                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                  <p className="text-sm font-semibold leading-tight mb-0.5 truncate">
                     {course.name}
                   </p>
                   <p
                     className={cn(
-                      "text-[10px] uppercase tracking-wider font-medium",
+                      "text-[10px] uppercase tracking-wider font-medium leading-tight",
                       selectedCourseId === course.id
                         ? "text-primary-foreground/80"
                         : "text-muted-foreground/70"
@@ -181,7 +185,7 @@ export default function NotesPage() {
                 </div>
                 <ChevronRight
                   className={cn(
-                    "h-4 w-4 transition-transform",
+                    "h-4 w-4 transition-transform shrink-0",
                     selectedCourseId === course.id
                       ? "translate-x-0"
                       : "-translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0"
