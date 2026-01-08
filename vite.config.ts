@@ -2,6 +2,22 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import dotenv from "dotenv";
+
+// Manually load .env using dotenv to fix loading issues
+const envResult = dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+
+if (envResult.error) {
+  console.warn("⚠️ Failed to load .env file via dotenv:", envResult.error);
+} else {
+  console.log("✅ .env file loaded successfully via dotenv");
+  const apiKey = process.env.VITE_FIREBASE_API_KEY;
+  console.log(
+    `   VITE_FIREBASE_API_KEY: ${
+      apiKey ? apiKey.substring(0, 5) + "..." : "MISSING"
+    }`
+  );
+}
 
 // Determine base path based on environment
 // For custom domain: use "/"
@@ -46,6 +62,7 @@ export default defineConfig({
 
   // Frontend root
   root: path.resolve(import.meta.dirname, "client"),
+  envDir: path.resolve(import.meta.dirname),
 
   // Output for GitHub Pages
   build: {
