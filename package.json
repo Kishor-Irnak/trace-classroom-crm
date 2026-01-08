@@ -9,7 +9,7 @@
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
     "client:dev": "vite",
     "client:build": "vite build",
-    "build": "npm run client:build",
+    "build": "npm run client:build && tsx script/copy-404.ts",
     "client:build:custom-domain": "cross-env VITE_USE_CUSTOM_DOMAIN=true vite build",
     "predeploy": "npm run client:build && tsx script/copy-404.ts",
     "predeploy:custom": "npm run client:build:custom-domain && tsx script/copy-404.ts",
