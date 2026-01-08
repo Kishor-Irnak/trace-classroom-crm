@@ -1,0 +1,295 @@
+Executive Summary
+Student CRM for Google Classroom is a micro-SaaS web application that connects to a student’s Google Classroom account and restructures all assignments into a CRM-style personal productivity system. The MVP focuses on a pipeline view, timeline view, and dashboard that help students manage tasks across courses, reduce missed deadlines, and track progress in a modern interface optimized for clarity and speed.​
+
+2. Problem Statement
+Students using Google Classroom often juggle multiple courses and assignments without a unified, student-centric task management view. Google Classroom’s teacher-oriented design makes it difficult for students to prioritize work, see workload over time, and track personal progress beyond basic status indicators. The result is missed deadlines, stress, and reliance on ad hoc tools like spreadsheets or generic to-do apps that are not integrated with classroom data.​
+
+3. Target Users & Personas
+Primary users are senior school and college students (typically 16–24 years old) who use Google Classroom daily for multiple courses and have a high volume of ongoing assignments. These users are moderately tech-savvy, often already using productivity tools, but lack a dedicated system that directly reflects Classroom data.​
+
+Example persona: “Aarav, 19, CS undergraduate”
+
+Enrolled in 6–8 courses on Google Classroom with frequent assignments and quizzes.​
+
+Goals: see all work in one board, plan weeks in advance, mark progress and add notes per assignment.​
+
+Pain points: jumps between Classroom, calendar, and notes apps; frequently overlooks smaller assignments when focusing on major projects.​
+
+4. User Stories
+Core user stories for MVP:
+
+As a student, I want to sign in with my Google account and connect Google Classroom so that all my courses and assignments are available automatically.​
+
+As a student, I want to view all assignments across all courses in a Kanban-style pipeline so that I can see what is upcoming, in progress, submitted, graded, and overdue in one place.​
+
+As a student, I want to drag cards between pipeline columns so that my personal progress tracking reflects how I actually work.​
+
+As a student, I want assignment status to update automatically when my submission or grade changes in Google Classroom so that my board stays current without manual effort.​
+
+As a student, I want a timeline view grouped by day or week so that I can visualize workload and deadlines over time.​
+
+As a student, I want a dashboard that shows upcoming deadlines, overdue tasks, and weekly workload so that I can prioritize my next actions.​
+
+As a student, I want to add private notes to each assignment so that I can track my own plan, thoughts, and sub-tasks without affecting Classroom.​
+
+5. Functional Requirements
+5.1 Authentication & Onboarding
+Google Sign-In using Firebase Authentication with OAuth 2.0, requesting only the scopes needed to read courses, coursework, and student submissions.​
+
+First-time onboarding flow:
+
+Explain what data is read from Classroom and how it is used.​
+
+Prompt user consent for Classroom access scopes and store granted tokens securely using Google’s recommended OAuth patterns.​
+
+Ability to disconnect Classroom, revoke access, and delete all locally stored data for that user.​
+
+5.2 Google Classroom Integration
+Fetch list of active courses for the authenticated user using the Classroom API courses.list endpoint.​
+
+For each course, fetch coursework (assignments, quizzes) including titles, descriptions (if needed), due dates, and max points using courses.courseWork.list.​
+
+Fetch student submissions per coursework (e.g., state: CREATED, TURNED_IN, RETURNED; assigned grades) using courses.courseWork.studentSubmissions.list.​
+
+Map Classroom states to internal statuses:
+
+Upcoming/Backlog: not submitted, due date in future or none.​
+
+In Progress: user manually marks as in progress.
+
+Submitted: TURNED_IN or equivalent.​
+
+Graded: RETURNED with assigned grade.​
+
+Overdue: not submitted and due date in past.​
+
+Background sync (optional via Cloud Functions) to refresh assignment and submission data periodically (e.g., every few hours) or on-demand when user opens the app.​
+
+5.3 Pipeline View (Primary Feature)
+Kanban-style board with fixed columns: Backlog/Upcoming, In Progress, Submitted, Graded, Overdue.
+
+Each assignment represented as a card with:
+
+Title, course name, due date, current status, and grade (if available).​
+
+Visual indicators for urgency (e.g., subtle icon or text for due soon / overdue, no color-heavy badges).​
+
+Drag-and-drop:
+
+Drag cards between columns to update local status attributes (e.g., userStatus separate from Classroom’s system status).​
+
+Business rules prevent conflicting states (e.g., graded card remains in graded unless user moves to a “review” column in future versions).​
+
+Auto-update:
+
+When data sync detects submission or grade changes, system status and pipeline placement update automatically, preserving user-specific status metadata where possible.​
+
+5.4 Timeline View
+Chronological list or calendar-style layout of assignments, grouped by day or week.​
+
+Each entry shows assignment title, course, due date, and current status, with markers for:
+
+Due date.
+
+Submission date (if TURNED_IN).
+
+Grade return date (if RETURNED).​
+
+Filters:
+
+Filter by course, status (upcoming/overdue/submitted/graded), and time range (this week, next week, custom).​
+
+5.5 Dashboard Overview
+Summary metrics:
+
+Total active assignments (not graded).​
+
+Count of upcoming assignments within next 3 and 7 days.​
+
+Count of overdue assignments.​
+
+Weekly workload: number of assignments due per day in current week.​
+
+Highlight section:
+
+“Next actions” list: top 3–5 assignments sorted by due date and urgency.​
+
+Basic trend indicator (MVP-level) for week-over-week total assignments completed, if data is available.​
+
+5.6 Personal Notes
+For each assignment, user can add one or more text notes stored only in Firestore under that user’s document tree.​
+
+Notes are not written back to Google Classroom; the UI must clearly state notes are private to this app.​
+
+Basic note actions:
+
+Create, edit, delete notes.
+
+Optional: mark note as “important” for quick visibility.
+
+5.7 Settings & Account
+View and manage connected Google account and Classroom connection status.​
+
+Toggle options:
+
+Enable/disable background sync.​
+
+Time zone preference if not derived reliably from browser.​
+
+Account deletion: user can trigger deletion of all Firestore data associated with their user ID and revoke OAuth tokens.​
+
+6. Non-Functional Requirements
+6.1 Performance & Reliability
+Initial data load (courses + current term assignments) should complete within a reasonable time on typical college Wi-Fi (target <5–7 seconds after authentication for first usable view, with progressive loading).​
+
+Subsequent loads should use cached data in Firestore/local storage, then refresh in background.​
+
+The app should handle intermittent connectivity gracefully with optimistic UI and retry mechanisms for Classroom API calls.​
+
+6.2 Security & Privacy
+All data access must be scoped to authenticated user IDs; Firestore security rules must enforce request.auth.uid == resource.data.userId (or equivalent) for all reads/writes of user data.​
+
+Use OAuth scopes that allow reading courses, coursework, and submissions without unnecessary write scopes, following least-privilege guidance.​
+
+Use HTTPS for all communication (handled by Firebase Hosting or GitHub Pages with proper configuration).​
+
+Implement App Check where supported to reduce abuse of Firestore from non-legitimate clients.​
+
+6.3 Usability & Accessibility
+Keyboard navigation for all major actions (moving between columns, opening assignment details, adding notes).​
+
+Text and contrast should meet at least WCAG AA for the monochrome palette.​
+
+Responsiveness: layout should handle common laptop and tablet breakpoints; mobile optimization can be minimal in MVP but layout must remain functional.​
+
+7. UX & Design Guidelines
+7.1 Visual Style
+Aesthetic inspired by modern CRM tools like Attio and Linear: minimal chrome, high information density, and fast-feeling interactions.​
+
+Color palette: black, white, and greys only; use typography, spacing, and subtle shadows to create hierarchy instead of color.​
+
+Components: rectangular cards and panels with soft corner radius and minimal borders; rely on whitespace and slight elevation changes rather than heavy outlines.​
+
+7.2 Interaction & Layout
+Primary layout: three main surfaces—pipeline (default), timeline, dashboard—accessible via a top or side navigation bar.​
+
+Micro-interactions: smooth drag-and-drop animations, hover states with subtle elevation or border opacity shift, and lightweight transitions between views.​
+
+Keyboard shortcuts:
+
+Navigate columns (e.g., left/right).
+
+Open assignment detail (enter/space).
+
+Quick note creation for selected assignment.
+
+8. Technical Architecture (High Level)
+8.1 Frontend
+React (or Vite + React) SPA with Tailwind CSS for styling and utility classes.​
+
+State management: combination of React Query or similar for server data, plus local state for UI interactions (drag-and-drop, filters).​
+
+Integration with Firebase SDKs for Authentication and Firestore.​
+
+8.2 Backend / Integration
+Firestore as primary data store for:
+
+User profile and settings.
+
+Cached Classroom metadata (courses, assignments, mapping to user).
+
+User-specific fields like notes and personal statuses.​
+
+Google Classroom API:
+
+Called from frontend with OAuth tokens where allowed, or via Cloud Functions as a proxy if necessary for security and quota management.​
+
+Optional Firebase Cloud Functions:
+
+Scheduled sync of Classroom data for connected accounts.
+
+Webhook-like polling patterns if Classroom does not support push notifications for specific events.​
+
+Deployment:
+
+Firebase Hosting or GitHub Pages for static frontend, with Firebase project handling auth and Firestore.​
+
+9. Data Model Overview
+9.1 Core Entities (Conceptual)
+User:
+
+id (Firebase auth UID)
+
+googleAccountEmail
+
+classroomConnected (boolean, timestamps)
+
+Settings (time zone, feature toggles)​
+
+Course:
+
+id (Classroom courseId)
+
+userId
+
+name, section, archived flag
+
+lastSyncedAt​
+
+Assignment:
+
+id (Classroom coursework id, namespaced with courseId)
+
+userId, courseId
+
+title, descriptionSnippet (optional, truncated)
+
+dueDate, dueTime, maxPoints
+
+systemStatus (upcoming, submitted, graded, overdue) derived from Classroom.​
+
+userStatus (backlog, in progress, focus, etc.) purely local.
+
+submissionId, submittedAt, gradedAt, grade.​
+
+Note:
+
+id
+
+userId, assignmentId
+
+content, createdAt, updatedAt, optional isImportant.​
+
+9.2 Security Model
+Firestore collections segmented by user: /users/{userId}/courses, /users/{userId}/assignments, /users/{userId}/notes.​
+
+Rules ensure user can only read/write documents where resource.data.userId == request.auth.uid.​
+
+10. Risks & Constraints
+Google Classroom API quotas and approval process for production use may limit scale or require additional verification (especially for sensitive scopes).​
+
+Changes in Classroom API or scope policies could break integration or require re-consent flows.​
+
+Dependence on Google sign-in means outages or account restrictions affect access for all users.​
+
+As a student-first tool, monetization options may be limited without introducing friction such as paywalls, which is out of scope for MVP.​
+
+Performance constraints on Firestore reads/writes if data model or queries are not optimized for per-user segmented collections.​
+
+11. MVP Scope vs Future Scope
+Area	MVP Scope	Future Scope (Ideas)
+Priority logic	Simple sorting by due date and overdue status. ​	Smart priority scoring based on workload, course weight, and historical behavior. ​
+Visualization	Pipeline, basic timeline, weekly workload counts. ​	Workload heatmap, richer charts, calendar integration (Google Calendar). ​
+Platforms	Desktop-first responsive web app. ​	Mobile-first PWA with offline support and push reminders. ​
+Intelligence	Manual notes, manual status changes. ​	AI-based study suggestions and task breakdowns leveraging assignment context. ​
+Integration depth	Read-only Classroom integration plus local metadata. ​	Bi-directional enhancements where possible (e.g., optional draft submissions). ​
+12. Open Questions & Assumptions
+Assumption: read-only Classroom scopes are sufficient for MVP; no need to create or modify coursework on behalf of teachers or students.​
+
+Assumption: Classroom API provides enough metadata (due dates, states, timestamps) to model statuses and timeline events without scraping or unsupported behaviors.​
+
+Open question: Are there reliable webhook or push mechanisms for Classroom changes, or is periodic polling via Cloud Functions the only viable approach for sync freshness?​
+
+Open question: How to handle courses and assignments from past terms—should they be auto-archived after a certain date or managed manually by the user?​
+
+Open question: Are there regional or institutional restrictions that require additional compliance or review when connecting student accounts to third-party apps via Classroom?​
