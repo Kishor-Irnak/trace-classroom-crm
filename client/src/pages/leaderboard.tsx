@@ -56,6 +56,7 @@ interface LeaderboardStudent {
   enrolledCourseIds?: string[];
   badges?: string[];
   role?: string;
+  lastSubmissionTime?: number;
 }
 
 export default function LeaderboardPage() {
@@ -152,8 +153,17 @@ export default function LeaderboardPage() {
         }
       });
 
-      // Sort by Total XP descending
-      students.sort((a, b) => b.totalXP - a.totalXP);
+      // Sort by Total XP descending, then by Last Submission Time ascending (earlier is better)
+      students.sort((a, b) => {
+        if (b.totalXP !== a.totalXP) {
+          return b.totalXP - a.totalXP;
+        }
+        // Tie-breaker: Earlier submission wins
+        // If time is missing (old data), treat as very late (Infinity)
+        const timeA = a.lastSubmissionTime || Number.MAX_SAFE_INTEGER;
+        const timeB = b.lastSubmissionTime || Number.MAX_SAFE_INTEGER;
+        return timeA - timeB;
+      });
 
       setLeaderboardData(students);
       setLoadingLeaderboard(false);
@@ -176,6 +186,7 @@ export default function LeaderboardPage() {
           enrolledCourseIds: data.enrolledCourseIds || data.subjects || [],
           badges: data.badges || [],
           role: data.role,
+          lastSubmissionTime: data.lastSubmissionTime || 0,
         } as LeaderboardStudent;
 
         const existing = studentMap.get(doc.id);

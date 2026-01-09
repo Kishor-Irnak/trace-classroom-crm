@@ -25,9 +25,11 @@ export class LeaderboardService {
   static calculateXP(assignments: Assignment[]): {
     totalXP: number;
     processedIds: string[];
+    lastSubmissionTime: number | null;
   } {
     let totalXP = 0;
     const processedIds: string[] = [];
+    let lastSubmissionTime: number | null = null;
 
     for (const assignment of assignments) {
       const isCompleted =
@@ -41,11 +43,23 @@ export class LeaderboardService {
         // Bonus XP for early submission (48h before deadline)
         if (assignment.submittedAt && assignment.dueDate) {
           const submittedTime = new Date(assignment.submittedAt).getTime();
+
+          // Track latest submission time
+          if (!lastSubmissionTime || submittedTime > lastSubmissionTime) {
+            lastSubmissionTime = submittedTime;
+          }
+
           const dueTime = new Date(assignment.dueDate).getTime();
           const hoursDiff = (dueTime - submittedTime) / (1000 * 60 * 60);
 
           if (hoursDiff > 48) {
             totalXP += 50;
+          }
+        } else if (assignment.submittedAt) {
+          // Even if no due date, track submission time
+          const submittedTime = new Date(assignment.submittedAt).getTime();
+          if (!lastSubmissionTime || submittedTime > lastSubmissionTime) {
+            lastSubmissionTime = submittedTime;
           }
         }
 
@@ -53,7 +67,7 @@ export class LeaderboardService {
       }
     }
 
-    return { totalXP, processedIds };
+    return { totalXP, processedIds, lastSubmissionTime };
   }
 
   /**
@@ -87,7 +101,8 @@ export class LeaderboardService {
   ): Promise<void> {
     try {
       // Calculate XP and get processed assignment IDs
-      const { totalXP, processedIds } = this.calculateXP(assignments);
+      const { totalXP, processedIds, lastSubmissionTime } =
+        this.calculateXP(assignments);
 
       // Extract email domain
       const emailDomain = userEmail.includes("@")
@@ -124,6 +139,7 @@ export class LeaderboardService {
           enrolledCourseIds: enrolledCourseIds,
           totalXP: totalXP,
           processedAssignmentIds: processedIds,
+          lastSubmissionTime: lastSubmissionTime,
           lastSyncedAt: serverTimestamp(),
           badges: badges,
           role: role,
