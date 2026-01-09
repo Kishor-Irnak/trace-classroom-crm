@@ -27,8 +27,9 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # Dynamic base URL for GitHub Pages (repo subfolder)
-          VITE_BASE_URL: /${{ github.event.repository.name }}/
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           CI: true
 
       - name: Deploy
