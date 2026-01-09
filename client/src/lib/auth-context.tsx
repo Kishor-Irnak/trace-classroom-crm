@@ -26,6 +26,7 @@ import { handleUserSwitch, clearCurrentUser } from "./storage-manager";
 interface AuthContextType {
   user: FirebaseUser | null;
   loading: boolean;
+  authenticating: boolean; // New: true when sign-in popup is active
   role: "student" | "teacher" | "no_access" | null;
   accessToken: string | null;
   signInWithGoogle: () => Promise<void>;
@@ -45,6 +46,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authenticating, setAuthenticating] = useState(false); // New state
   const [accessToken, setAccessToken] = useState<string | null>(() => {
     return localStorage.getItem("google_access_token");
   });
@@ -186,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRole("no_access"); // Fallback safety
       } finally {
         setLoading(false);
+        setAuthenticating(false); // Clear authenticating state
       }
     }
 
@@ -195,6 +198,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     try {
       setError(null);
+      setAuthenticating(true); // Show loading immediately
+
       // Persist Firebase session
       await setPersistence(auth, browserLocalPersistence);
 
@@ -211,10 +216,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccessToken(credential.accessToken);
         localStorage.setItem("google_access_token", credential.accessToken);
       }
+      // Keep authenticating true - it will be cleared when role detection completes
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to sign in";
       setError(errorMessage);
+      setAuthenticating(false); // Clear on error
       console.error("Sign in error:", err);
     }
   };
@@ -460,6 +467,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user: enhancedUser,
         loading,
+        authenticating,
         role,
         accessToken,
         signInWithGoogle,

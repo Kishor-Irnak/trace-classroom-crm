@@ -89,7 +89,7 @@ function AuthenticatedApp() {
 }
 
 function AppContent() {
-  const { user, loading: authLoading, role } = useAuth();
+  const { user, loading: authLoading, authenticating, role } = useAuth();
   const { isLoading: classroomLoading } = useClassroom();
 
   // Public route check - must be accessible without auth
@@ -115,6 +115,11 @@ function AppContent() {
     window.location.pathname.endsWith("/docs")
   ) {
     return <DocsPage />;
+  }
+
+  // Show loading immediately when user clicks "Sign in with Google"
+  if (authenticating) {
+    return <EnhancedLoadingScreen message="Signing in..." />;
   }
 
   // Unified loading state check

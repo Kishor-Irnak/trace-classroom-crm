@@ -33,7 +33,7 @@ const features = [
 ];
 
 export default function LoginPage() {
-  const { signInWithGoogle, loading, error } = useAuth();
+  const { signInWithGoogle, loading, authenticating, error } = useAuth();
 
   return (
     <div className="h-screen w-full bg-white text-zinc-950 flex overflow-hidden font-sans selection:bg-zinc-200">
@@ -163,12 +163,14 @@ export default function LoginPage() {
 
               <Button
                 onClick={signInWithGoogle}
-                disabled={loading}
-                className="w-full h-12 bg-zinc-950 hover:bg-zinc-800 text-white border border-transparent rounded-md transition-all duration-200 flex items-center justify-center gap-3 shadow-sm hover:shadow-md"
+                disabled={loading || authenticating}
+                className="w-full h-12 bg-zinc-950 hover:bg-zinc-800 text-white border border-transparent rounded-md transition-all duration-200 flex items-center justify-center gap-3 shadow-sm hover:shadow-md disabled:opacity-50"
                 data-testid="button-signin-google"
               >
                 <SiGoogle className="h-4 w-4" />
-                <span className="font-medium">Continue with Google</span>
+                <span className="font-medium">
+                  {authenticating ? "Signing in..." : "Continue with Google"}
+                </span>
               </Button>
 
               {error && (
