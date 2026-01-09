@@ -879,10 +879,10 @@ function NextActions({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between gap-2 mt-1">
                       <Badge
                         variant="outline"
-                        className="text-[10px] px-1.5 py-0 h-4 font-medium border-0"
+                        className="text-[10px] px-1.5 py-0 h-4 font-medium border-0 truncate max-w-[160px]"
                         style={{
                           backgroundColor: courseColor || undefined,
                           color: courseColor
@@ -895,7 +895,7 @@ function NextActions({
                       {dueDate && (
                         <span
                           className={cn(
-                            "text-[10px] flex items-center gap-1 font-medium",
+                            "text-[10px] flex items-center gap-1 font-medium flex-shrink-0 whitespace-nowrap",
                             p.color
                           )}
                         >
