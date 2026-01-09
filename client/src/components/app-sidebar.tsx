@@ -32,10 +32,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/pipeline", label: "Pipeline", icon: LayoutGrid },
-  { path: "/leaderboard", label: "Leaderboard", icon: Trophy },
-
   { path: "/timeline", label: "Timeline", icon: Calendar },
-  { path: "/attendance", label: "Attendance", icon: UserCheck }, // Added
+  { path: "/attendance", label: "Attendance", icon: UserCheck },
+  { path: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { path: "/notes", label: "Notes", icon: FileText },
 ];
 
