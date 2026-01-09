@@ -380,6 +380,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshTokenInternal = async (): Promise<boolean> => {
     if (!user) return false;
 
+    // 1. Try Silent Refresh via Backend
+    try {
+      console.log("Attempting silent token refresh via backend...");
+      const response = await fetch("/api/auth/google/refresh", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ uid: user.uid }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.accessToken) {
+          setAccessToken(data.accessToken);
+          localStorage.setItem("google_access_token", data.accessToken);
+          console.log("Silent refresh successful! ✅");
+          return true;
+        }
+      } else {
+        console.warn(
+          "Silent refresh failed, falling back to popup...",
+          response.status
+        );
+      }
+    } catch (e) {
+      console.warn("Silent refresh error:", e);
+    }
+
+    // 2. Fallback to Interactive Popup if silent refresh fails
     try {
       // Force a re-authentication with the same provider to get a fresh token
       const provider = new GoogleAuthProvider();
@@ -411,7 +441,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (credential?.accessToken) {
         setAccessToken(credential.accessToken);
         localStorage.setItem("google_access_token", credential.accessToken);
-        console.log("Access token refreshed successfully");
+        console.log("Access token refreshed successfully (Interactive)");
         return true;
       }
       return false;
