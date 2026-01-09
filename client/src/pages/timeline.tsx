@@ -1129,18 +1129,27 @@ export default function TimelinePage() {
                 <GanttChart className="h-3.5 w-3.5" />
                 Timeline
               </button>
-              <button
-                onClick={() => setCurrentView("calendar")}
-                className={cn(
-                  "px-3 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-2",
-                  currentView === "calendar"
-                    ? "bg-background shadow-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <CalendarDays className="h-3.5 w-3.5" />
-                Calendar
-              </button>
+              <TooltipProvider>
+                <Tooltip delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setCurrentView("calendar")}
+                      className={cn(
+                        "px-3 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-2",
+                        currentView === "calendar"
+                          ? "bg-background shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      Calendar
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>Switch to monthly calendar view</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </div>

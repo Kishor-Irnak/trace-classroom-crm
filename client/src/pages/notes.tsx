@@ -13,6 +13,12 @@ import {
   AlertCircle,
   Eye,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -136,63 +142,71 @@ export default function NotesPage() {
             </h2>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {courses.map((course) => (
-              <button
-                key={course.id}
-                onClick={() => setSelectedCourseId(course.id)}
-                className={cn(
-                  "w-full text-left px-3 py-3.5 rounded-md transition-all group flex items-center gap-3",
-                  selectedCourseId === course.id
-                    ? "bg-primary text-primary-foreground shadow-md"
-                    : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <div
-                  className={cn(
-                    "h-8 w-8 rounded-full flex items-center justify-center shrink-0 border border-transparent",
-                    // Ensure shadow/border when selected for better visibility
-                    selectedCourseId === course.id
-                      ? "ring-2 ring-primary-foreground/20"
-                      : ""
-                  )}
-                  style={{
-                    backgroundColor: course.color || "#e4e4e7", // fallback to muted
-                  }}
-                >
-                  <Folder
-                    className="h-4 w-4"
-                    style={{
-                      color: course.color
-                        ? getTextColor(course.color)
-                        : undefined,
-                    }}
-                  />
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <p className="text-sm font-semibold leading-tight mb-0.5 truncate">
-                    {course.name}
-                  </p>
-                  <p
-                    className={cn(
-                      "text-[10px] uppercase tracking-wider font-medium leading-tight",
-                      selectedCourseId === course.id
-                        ? "text-primary-foreground/80"
-                        : "text-muted-foreground/70"
-                    )}
-                  >
-                    {course.section || "No Section"}
-                  </p>
-                </div>
-                <ChevronRight
-                  className={cn(
-                    "h-4 w-4 transition-transform shrink-0",
-                    selectedCourseId === course.id
-                      ? "translate-x-0"
-                      : "-translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0"
-                  )}
-                />
-              </button>
-            ))}
+            <TooltipProvider>
+              {courses.map((course) => (
+                <Tooltip key={course.id} delayDuration={0}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setSelectedCourseId(course.id)}
+                      className={cn(
+                        "w-full text-left px-3 py-3.5 rounded-md transition-all group flex items-center gap-3 outline-none focus:ring-2 focus:ring-primary/20",
+                        selectedCourseId === course.id
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "h-8 w-8 rounded-full flex items-center justify-center shrink-0 border border-transparent",
+                          // Ensure shadow/border when selected for better visibility
+                          selectedCourseId === course.id
+                            ? "ring-2 ring-primary-foreground/20"
+                            : ""
+                        )}
+                        style={{
+                          backgroundColor: course.color || "#e4e4e7", // fallback to muted
+                        }}
+                      >
+                        <Folder
+                          className="h-4 w-4"
+                          style={{
+                            color: course.color
+                              ? getTextColor(course.color)
+                              : undefined,
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <p className="text-sm font-semibold leading-tight mb-0.5 truncate">
+                          {course.name}
+                        </p>
+                        <p
+                          className={cn(
+                            "text-[10px] uppercase tracking-wider font-medium leading-tight",
+                            selectedCourseId === course.id
+                              ? "text-primary-foreground/80"
+                              : "text-muted-foreground/70"
+                          )}
+                        >
+                          {course.section || "No Section"}
+                        </p>
+                      </div>
+                      <ChevronRight
+                        className={cn(
+                          "h-4 w-4 transition-transform shrink-0",
+                          selectedCourseId === course.id
+                            ? "translate-x-0"
+                            : "-translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0"
+                        )}
+                      />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{course.name}</p>
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </TooltipProvider>
           </div>
         </div>
 

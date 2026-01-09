@@ -1,20 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  DndContext,
-  DragOverlay,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { useDroppable } from "@dnd-kit/core";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,7 +24,6 @@ const LOADING_TIPS = [
 ];
 
 function PipelineColumn({
-  id,
   title,
   assignments,
   onCardClick,
@@ -51,16 +35,8 @@ function PipelineColumn({
   onCardClick: (assignment: Assignment) => void;
   notes: Map<string, unknown[]>;
 }) {
-  const { isOver, setNodeRef } = useDroppable({ id });
-
   return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "flex flex-col min-w-[280px] w-[280px] h-full",
-        isOver && "bg-muted/50"
-      )}
-    >
+    <div className="flex flex-col min-w-[280px] w-[280px] h-full">
       <div className="flex items-center justify-between gap-2 p-3 sticky top-0 bg-background z-10 border-b">
         <h3 className="text-sm font-medium">{title}</h3>
         <Badge variant="secondary" className="text-xs font-mono">
@@ -69,25 +45,20 @@ function PipelineColumn({
       </div>
 
       <div className="flex-1 p-3 space-y-3 overflow-y-auto">
-        <SortableContext
-          items={assignments.map((a) => a.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          {assignments.length > 0 ? (
-            assignments.map((assignment) => (
-              <AssignmentCard
-                key={assignment.id}
-                assignment={assignment}
-                onClick={() => onCardClick(assignment)}
-                hasNotes={(notes.get(assignment.id)?.length || 0) > 0}
-              />
-            ))
-          ) : (
-            <div className="flex items-center justify-center h-24 text-sm text-muted-foreground border border-dashed rounded-md">
-              No assignments
-            </div>
-          )}
-        </SortableContext>
+        {assignments.length > 0 ? (
+          assignments.map((assignment) => (
+            <AssignmentCard
+              key={assignment.id}
+              assignment={assignment}
+              onClick={() => onCardClick(assignment)}
+              hasNotes={(notes.get(assignment.id)?.length || 0) > 0}
+            />
+          ))
+        ) : (
+          <div className="flex items-center justify-center h-24 text-sm text-muted-foreground border border-dashed rounded-md">
+            No assignments
+          </div>
+        )}
       </div>
     </div>
   );
@@ -193,20 +164,10 @@ function EnhancedLoadingScreen() {
 // --- Main Page Component ---
 
 export default function PipelinePage() {
-  const {
-    getPipelineColumns,
-    updateAssignmentStatus,
-    isLoading,
-    isSyncing,
-    notes,
-    assignments,
-    syncClassroom,
-    error,
-  } = useClassroom();
-  const { signOut } = useAuth();
+  const { getPipelineColumns, isLoading, notes, assignments, error } =
+    useClassroom();
   const [selectedAssignment, setSelectedAssignment] =
     useState<Assignment | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
 
   // Check if there's a token-related error
   if (error && error.toLowerCase().includes("session")) {
@@ -225,48 +186,9 @@ export default function PipelinePage() {
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, left: 0 });
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor)
+  const columns = getPipelineColumns().filter(
+    (col) => col.id !== "in_progress"
   );
-
-  const columns = getPipelineColumns();
-  const activeAssignment = activeId
-    ? assignments.find((a) => a.id === activeId)
-    : null;
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-
-    if (!over) return;
-
-    const assignmentId = active.id as string;
-    const targetColumnId = over.id as AssignmentStatus;
-
-    if (
-      ["backlog", "in_progress", "submitted", "graded", "overdue"].includes(
-        targetColumnId
-      )
-    ) {
-      const assignment = assignments.find((a) => a.id === assignmentId);
-      if (assignment && assignment.systemStatus !== targetColumnId) {
-        if (targetColumnId === "in_progress") {
-          updateAssignmentStatus(assignmentId, "in_progress");
-        } else {
-          updateAssignmentStatus(assignmentId, "backlog");
-        }
-      }
-    }
-  };
 
   // Drag scroll handlers (from timeline)
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -338,55 +260,38 @@ export default function PipelinePage() {
           </div>
         </div>
       )}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="relative h-full flex flex-col">
-          <div
-            ref={scrollContainerRef}
-            className={cn(
-              "flex gap-4 flex-1 overflow-x-auto p-6 pb-0 select-none",
-              isDragging ? "cursor-grabbing" : "cursor-grab"
-            )}
-            onMouseDown={handleMouseDown}
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            {columns.map((column) => (
-              <PipelineColumn
-                key={column.id}
-                id={column.id}
-                title={column.title}
-                assignments={column.assignments}
-                onCardClick={setSelectedAssignment}
-                notes={notes}
-              />
-            ))}
-          </div>
-
-          {/* Tip UI (exact copy from timeline) */}
-          <div className="flex-none p-2 border-t bg-background/70 backdrop-blur-sm flex items-center justify-center text-xs text-muted-foreground font-medium z-30 relative">
-            <MousePointer size={14} className="mr-2" />
-            Tip: Hold{" "}
-            <kbd className="mx-1 px-1 py-0.5 rounded-md bg-muted border text-foreground font-bold text-[10px]">
-              Right Click
-            </kbd>{" "}
-            to drag timeline
-          </div>
+      <div className="relative h-full flex flex-col">
+        <div
+          ref={scrollContainerRef}
+          className={cn(
+            "flex gap-4 flex-1 overflow-x-auto p-6 pb-0 select-none",
+            isDragging ? "cursor-grabbing" : "cursor-grab"
+          )}
+          onMouseDown={handleMouseDown}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {columns.map((column) => (
+            <PipelineColumn
+              key={column.id}
+              id={column.id}
+              title={column.title}
+              assignments={column.assignments}
+              onCardClick={setSelectedAssignment}
+              notes={notes}
+            />
+          ))}
         </div>
 
-        <DragOverlay>
-          {activeAssignment && (
-            <AssignmentCard
-              assignment={activeAssignment}
-              isDragging
-              hasNotes={(notes.get(activeAssignment.id)?.length || 0) > 0}
-            />
-          )}
-        </DragOverlay>
-      </DndContext>
+        {/* Tip UI (exact copy from timeline) */}
+        <div className="flex-none p-2 border-t bg-background/70 backdrop-blur-sm flex items-center justify-center text-xs text-muted-foreground font-medium z-30 relative">
+          <MousePointer size={14} className="mr-2" />
+          Tip: Hold{" "}
+          <kbd className="mx-1 px-1 py-0.5 rounded-md bg-muted border text-foreground font-bold text-[10px]">
+            Right Click
+          </kbd>{" "}
+          to drag timeline
+        </div>
+      </div>
 
       <AssignmentDetail
         assignment={selectedAssignment}

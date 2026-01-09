@@ -1,8 +1,5 @@
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import {
   Calendar,
-  GripVertical,
   AlertCircle,
   CheckCircle,
   Clock,
@@ -11,6 +8,12 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { Assignment } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { useClassroom, getTextColor } from "@/lib/classroom-context";
@@ -54,22 +57,8 @@ export function AssignmentCard({
   assignment,
   onClick,
   hasNotes,
-  isDragging,
 }: AssignmentCardProps) {
   const { courses } = useClassroom();
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging: isSortableDragging,
-  } = useSortable({ id: assignment.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
 
   const daysUntil = getDaysUntilDue(assignment.dueDate);
   const isUrgent = daysUntil !== null && daysUntil <= 1 && daysUntil >= 0;
@@ -83,11 +72,8 @@ export function AssignmentCard({
 
   return (
     <Card
-      ref={setNodeRef}
-      style={style}
       className={cn(
         "p-4 cursor-pointer transition-all duration-200 hover-elevate group",
-        (isDragging || isSortableDragging) && "opacity-50 rotate-1 shadow-lg",
         isOverdue && "border-destructive/30"
       )}
       onClick={onClick}
@@ -95,24 +81,25 @@ export function AssignmentCard({
     >
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-2">
-          <Badge
-            variant="secondary"
-            className="text-[11px] px-2 py-0.5 rounded-full font-medium truncate max-w-[180px] border-0"
-            style={{
-              backgroundColor: courseColor || undefined,
-              color: courseColor ? getTextColor(courseColor) : undefined,
-            }}
-          >
-            {assignment.courseName}
-          </Badge>
-          <div
-            {...attributes}
-            {...listeners}
-            className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
-          </div>
+          <TooltipProvider>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="secondary"
+                  className="text-[11px] px-2 py-0.5 rounded-full font-medium truncate max-w-[180px] border-0"
+                  style={{
+                    backgroundColor: courseColor || undefined,
+                    color: courseColor ? getTextColor(courseColor) : undefined,
+                  }}
+                >
+                  {assignment.courseName}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{assignment.courseName}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <h3 className="text-sm font-medium leading-snug line-clamp-2">

@@ -196,8 +196,8 @@ export default function DocsPage() {
                   <li className="flex gap-3">
                     <span className="text-primary">✓</span>
                     <div>
-                      <strong>Class Ranking</strong> - See your position in the
-                      class leaderboard based on XP
+                      <strong>Ranking</strong> - See your position in the class
+                      leaderboard based on XP
                     </div>
                   </li>
                   <li className="flex gap-3">
@@ -933,7 +933,7 @@ export default function DocsPage() {
               <div>
                 <h3 className="font-semibold">Explore the Dashboard</h3>
                 <p className="text-sm text-muted-foreground">
-                  Check your upcoming tasks, attendance, and class ranking
+                  Check your upcoming tasks, attendance, and Ranking
                 </p>
               </div>
             </div>

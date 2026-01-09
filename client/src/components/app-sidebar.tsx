@@ -97,34 +97,59 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        <div className="mb-6">
+        <div>
           <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-            Views
+            Academic
           </p>
-          {navItems.map((item) => {
-            const isActive = location === item.path;
-            const Icon = item.icon;
+          {[
+            { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
+            { path: "/pipeline", label: "Pipeline", icon: LayoutGrid },
+            { path: "/timeline", label: "Timeline", icon: Calendar },
+            { path: "/notes", label: "Notes", icon: FileText },
+          ].map((item) => (
+            <Link
+              key={item.path}
+              href={item.path}
+              onClick={onMobileClose}
+              className={cn(
+                "w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                location === item.path
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              )}
+              data-testid={`nav-${item.label.toLowerCase()}`}
+            >
+              <item.icon className="w-4 h-4 mr-3" />
+              {item.label}
+            </Link>
+          ))}
+        </div>
 
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                onClick={onMobileClose}
-                className={cn(
-                  "w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                  isActive
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                )}
-                data-testid={`nav-${item.label.toLowerCase()}`}
-              >
-                <Icon className="w-4 h-4 mr-3" />
-                {item.label}
-              </Link>
-            );
-          })}
+        <div className="mt-8">
+          <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+            Performance
+          </p>
+          {[
+            { path: "/attendance", label: "Attendance", icon: UserCheck },
+            { path: "/leaderboard", label: "Leaderboard", icon: Trophy },
+          ].map((item) => (
+            <Link
+              key={item.path}
+              href={item.path}
+              onClick={onMobileClose}
+              className={cn(
+                "w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                location === item.path
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              )}
+              data-testid={`nav-${item.label.toLowerCase()}`}
+            >
+              <item.icon className="w-4 h-4 mr-3" />
+              {item.label}
+            </Link>
+          ))}
         </div>
       </nav>
 

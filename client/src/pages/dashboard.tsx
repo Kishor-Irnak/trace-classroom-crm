@@ -23,6 +23,12 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   DndContext,
   closestCenter,
   KeyboardSensor,
@@ -52,6 +58,7 @@ import type { Assignment } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { OnboardingGuide } from "@/components/onboarding-guide";
 import { AttendanceService } from "@/services/attendance-service";
 import { UserCheck } from "lucide-react";
 import { BadgeList } from "@/components/badge-ui";
@@ -212,7 +219,7 @@ function ClassActivityCard({
     >
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
         <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Class Ranking
+          Ranking
         </CardTitle>
         <div className="p-1.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-500 shadow-sm group-hover:scale-110 transition-transform">
           <Trophy className="h-4 w-4" />
@@ -227,36 +234,33 @@ function ClassActivityCard({
         ) : rankData ? (
           <>
             <div className="mt-2">
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold tracking-tight text-foreground">
-                  #{rankData.rank}
-                </span>
-                <span className="text-sm font-medium text-muted-foreground">
-                  / {rankData.total}
-                </span>
+              <div className="mt-2 text-center sm:text-left">
+                <p className="text-xl font-bold text-foreground leading-tight">
+                  {rankData.total - rankData.rank > 0
+                    ? `You are ahead of ${
+                        rankData.total - rankData.rank
+                      } classmates`
+                    : "You are leading the class!"}
+                </p>
+                <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground font-medium">
+                  <span>Rank #{rankData.rank}</span>
+                  <span>•</span>
+                  <span>{rankData.xp.toLocaleString()} XP</span>
+                </div>
               </div>
 
-              <div className="mt-2 space-y-1">
+              <div className="mt-4 space-y-1">
+                <div className="flex justify-between text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                  <span>Class Performance</span>
+                  <span>Top {100 - rankData.percentile}%</span>
+                </div>
                 {/* Percentile Bar */}
-                <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-secondary rounded-full overflow-hidden border border-border/50">
                   <div
                     className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full"
                     style={{ width: `${rankData.percentile}%` }}
                   />
                 </div>
-              </div>
-
-              <div className="mt-2 flex flex-col gap-0.5">
-                <p className="text-xs font-bold text-amber-600 dark:text-amber-400">
-                  Top{" "}
-                  {100 - rankData.percentile < 1
-                    ? 1
-                    : 100 - rankData.percentile}
-                  % of class
-                </p>
-                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
-                  {rankData.xp.toLocaleString()} Total XP
-                </p>
               </div>
             </div>
 
@@ -499,14 +503,18 @@ function MetricCard({
   title,
   value,
   icon: Icon,
+  description,
   variant = "default",
   onClick,
+  className,
 }: {
   title: string;
   value: number;
   icon: typeof Clock;
-  variant?: "default" | "warning" | "danger";
+  description?: string;
+  variant?: "default" | "warning" | "danger" | "success";
   onClick?: () => void;
+  className?: string;
 }) {
   const variantStyles = {
     default: {
@@ -533,11 +541,21 @@ function MetricCard({
       border: "border-red-200/60 dark:border-red-800/60",
       ring: "group-hover:ring-red-200 dark:group-hover:ring-red-800/50",
     },
+    success: {
+      bg: "bg-emerald-50/30 dark:bg-emerald-950/10",
+      iconBg: "bg-emerald-100 dark:bg-emerald-900/30",
+      iconColor: "text-emerald-600 dark:text-emerald-400",
+      valueColor: "text-emerald-700 dark:text-emerald-400",
+      border: "border-emerald-200/60 dark:border-emerald-800/60",
+      ring: "group-hover:ring-emerald-200 dark:group-hover:ring-emerald-800/50",
+    },
   };
 
-  const styles = variantStyles[variant];
+  const styles =
+    variantStyles[variant as keyof typeof variantStyles] ||
+    variantStyles.default;
 
-  return (
+  const content = (
     <Card
       data-testid={`card-metric-${title.toLowerCase().replace(/\s+/g, "-")}`}
       className={cn(
@@ -546,7 +564,8 @@ function MetricCard({
         styles.border,
         onClick && "cursor-pointer active:scale-95 transition-transform",
         "hover:ring-1",
-        styles.ring
+        styles.ring,
+        className
       )}
       onClick={onClick}
     >
@@ -564,20 +583,42 @@ function MetricCard({
         </div>
       </CardHeader>
       <CardContent className="p-3 pt-0">
-        <div className="flex items-baseline gap-2">
-          <div
-            className={cn(
-              "text-2xl font-bold tracking-tight tabular-nums",
-              styles.valueColor
-            )}
-          >
-            {value}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-baseline gap-2">
+            <div
+              className={cn(
+                "text-2xl font-bold tracking-tight tabular-nums",
+                styles.valueColor
+              )}
+            >
+              {value}
+            </div>
+            {/* Optional trend indicator could go here if available */}
           </div>
-          {/* Optional trend indicator could go here if available */}
+          {description && (
+            <p className="text-[10px] font-medium text-muted-foreground">
+              {description}
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
   );
+
+  if (onClick) {
+    return (
+      <TooltipProvider>
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>{content}</TooltipTrigger>
+          <TooltipContent>
+            <p className="font-medium">Click to see filtered assignments</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return content;
 }
 
 // --- Chart Helpers ---
@@ -618,138 +659,95 @@ function getSmoothPath(
   return d;
 }
 
-function WeeklyWorkload({
-  data,
-}: {
-  data: { day: string; count: number; isToday: boolean }[];
-}) {
-  const maxCount = Math.max(...data.map((d) => d.count), 5); // Minimum scale of 5 for visuals
-  // Chart dimensions essentially percentages
-  const width = 300;
-  const height = 100; // viewBox units
+function WeeklyWorkload({ assignments }: { assignments: Assignment[] }) {
+  // 1. Filter assignments due in next 7 days
+  const now = new Date();
+  const nextWeek = new Date();
+  nextWeek.setDate(now.getDate() + 7);
 
-  const pathLine = getSmoothPath(data, width, height, maxCount);
-  const pathArea = `${pathLine} L ${width},${height} L 0,${height} Z`;
+  const upcoming = assignments.filter((a) => {
+    if (!a.dueDate) return false;
+    const due = new Date(a.dueDate);
+    return due >= now && due <= nextWeek;
+  });
+
+  // 2. Group by day
+  const grouped = upcoming.reduce((acc, curr) => {
+    if (!curr.dueDate) return acc;
+    const date = new Date(curr.dueDate);
+    const dateKey = date.toDateString(); // "Fri Jan 10 2025" or similar
+
+    if (!acc[dateKey]) {
+      acc[dateKey] = {
+        date: date,
+        dayLabel: date.toLocaleDateString(undefined, { weekday: "short" }),
+        items: [],
+      };
+    }
+    acc[dateKey].items.push(curr);
+    return acc;
+  }, {} as Record<string, { date: Date; dayLabel: string; items: Assignment[] }>);
+
+  // 3. Sort by date and take top 3 active days
+  const sortedDays = Object.values(grouped)
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .slice(0, 3);
 
   return (
-    <Card className="overflow-hidden border-zinc-200 dark:border-zinc-800 shadow-sm">
+    <Card className="overflow-hidden border-zinc-100 dark:border-zinc-800/60 shadow-none bg-card/60 flex flex-col h-full">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Calendar className="h-4 w-4 text-purple-500" />
-            Weekly Workload
+            This Week
           </CardTitle>
-          <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-bold tabular-nums">
-              {data.reduce((sum, d) => sum + d.count, 0)}
-            </span>
-            <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-              Assignments
-            </span>
-          </div>
+          <Link href="/timeline">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-xs text-muted-foreground hover:text-foreground"
+            >
+              View Full Timeline <ArrowUpRight className="ml-1 h-3 w-3" />
+            </Button>
+          </Link>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Your assignment distribution for the next 7 days
-        </p>
       </CardHeader>
-      <CardContent className="pt-6 relative">
-        <div className="h-40 w-full relative group">
-          {/* Chart SVG */}
-          <svg
-            viewBox={`0 0 ${width} ${height}`}
-            className="w-full h-full overflow-visible"
-            preserveAspectRatio="none"
-          >
-            <defs>
-              <linearGradient id="gradientArea" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="0%"
-                  stopColor="rgb(168 85 247)"
-                  stopOpacity="0.3"
-                />
-                <stop
-                  offset="100%"
-                  stopColor="rgb(168 85 247)"
-                  stopOpacity="0"
-                />
-              </linearGradient>
-            </defs>
-            {/* Area Fill */}
-            <path
-              d={pathArea}
-              fill="url(#gradientArea)"
-              className="transition-all duration-500"
-            />
-            {/* Line Stroke */}
-            <path
-              d={pathLine}
-              fill="none"
-              stroke="rgb(168 85 247)"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="drop-shadow-sm transition-all duration-500"
-            />
-          </svg>
-
-          {/* Data Points & Tooltips (Aligned absolute over SVG) */}
-          <div className="absolute inset-0 flex justify-between items-end pointer-events-none">
-            {data.map((item, index) => {
-              const relativeHeight = (item.count / maxCount) * 100;
-              return (
-                <div
-                  key={index}
-                  className="flex flex-col items-center justify-end h-full flex-1 relative group/point"
-                >
-                  {/* Tooltip-like point */}
-                  <div
-                    className="absolute w-full flex justify-center transition-all duration-500"
-                    style={{
-                      bottom: `${relativeHeight}%`,
-                      marginBottom: "-6px",
-                    }}
-                  >
-                    {/* Dot */}
-                    <div
-                      className={cn(
-                        "h-3 w-3 rounded-full border-2 border-background transition-transform duration-300 z-10",
-                        item.isToday
-                          ? "bg-purple-600 scale-125 ring-4 ring-purple-500/20"
-                          : "bg-purple-400 opacity-0 group-hover/point:opacity-100 group-hover/point:scale-125"
-                      )}
-                    />
-
-                    {/* Tooltip Value */}
-                    <div
-                      className={cn(
-                        "absolute bottom-full mb-2 bg-foreground text-background text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm opacity-0 group-hover/point:opacity-100 transition-opacity duration-200 pointer-events-auto",
-                        item.isToday && "opacity-100 bg-purple-600 text-white"
-                      )}
-                    >
-                      {item.count}
-                    </div>
-                  </div>
+      <CardContent className="flex-1 overflow-y-auto px-4 pb-4">
+        {sortedDays.length > 0 ? (
+          <div className="space-y-4">
+            {sortedDays.map((dayGroup, idx) => (
+              <div key={idx} className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                    {dayGroup.dayLabel}
+                  </span>
+                  <div className="h-px flex-1 bg-border/50" />
+                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
+                    {dayGroup.items.length} assignment
+                    {dayGroup.items.length !== 1 ? "s" : ""}
+                  </span>
                 </div>
-              );
-            })}
+                <div className="space-y-1 ml-2 border-l-2 border-muted pl-3">
+                  {dayGroup.items.map((assignment) => (
+                    <div
+                      key={assignment.id}
+                      className="text-sm text-foreground/90 truncate"
+                    >
+                      {assignment.title}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-
-        {/* X-Axis Labels */}
-        <div className="flex justify-between mt-2 px-1">
-          {data.map((item, index) => (
-            <div key={index} className="flex-1 text-center">
-              <span
-                className={cn(
-                  "text-[10px] uppercase font-bold tracking-wider transition-colors",
-                  item.isToday ? "text-purple-600" : "text-muted-foreground"
-                )}
-              >
-                {item.day}
-              </span>
-            </div>
-          ))}
-        </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-center p-4 opacity-60">
+            <Calendar className="h-8 w-8 text-muted-foreground mb-2" />
+            <p className="text-sm font-medium text-muted-foreground">
+              No assignments due fast.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -764,7 +762,7 @@ function NextActions({
   onSelectAssignment: (assignment: Assignment) => void;
   courses: import("@shared/schema").Course[];
 }) {
-  const navigate = () => {}; // Helper to just define render
+  const [showAll, setShowAll] = useState(false);
 
   // Custom priority sort
   const sorted = [...assignments].sort((a, b) => {
@@ -778,165 +776,174 @@ function NextActions({
     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
   });
 
-  const topAssignments = sorted; // Show all to allow scrolling
+  const heroAssignment = sorted[0];
+  const nextAssignments = sorted.slice(1);
+  const visibleNext = showAll ? nextAssignments : nextAssignments.slice(0, 3);
 
-  const getPriorityInfo = (assignment: Assignment) => {
-    if (assignment.systemStatus === "overdue")
-      return {
-        label: "Overdue",
-        color: "text-red-500",
-        bg: "bg-red-500/10",
-        border: "border-red-200 dark:border-red-900/50",
-      };
+  const getDueDateLabel = (dateStr?: string | null) => {
+    if (!dateStr) return "No Due Date";
+    const date = new Date(dateStr);
+    const today = new Date();
+    const diffTime = date.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (assignment.dueDate) {
-      const now = new Date();
-      const due = new Date(assignment.dueDate);
-      const hours = (due.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-      if (hours < 24)
-        return {
-          label: "Due Soon",
-          color: "text-amber-500",
-          bg: "bg-amber-500/10",
-          border: "border-amber-200 dark:border-amber-900/50",
-        };
-      if (hours < 72)
-        return {
-          label: "Upcoming",
-          color: "text-blue-500",
-          bg: "bg-blue-500/10",
-          border: "border-zinc-100 dark:border-zinc-800",
-        };
-    }
-
-    return {
-      label: "Backlog",
-      color: "text-muted-foreground",
-      bg: "bg-muted/50",
-      border: "border-zinc-100 dark:border-zinc-800",
-    };
+    if (diffDays < 0) return "Overdue";
+    if (diffDays === 0) return "Due Today";
+    if (diffDays === 1) return "Due Tomorrow";
+    return `Due ${date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    })}`;
   };
 
+  if (!heroAssignment) {
+    return (
+      <Card className="flex flex-col h-full border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden min-h-[300px]">
+        <div className="flex flex-col items-center justify-center flex-1 p-6 text-center">
+          <div className="h-16 w-16 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mb-4">
+            <CheckCircle className="h-8 w-8 text-emerald-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-foreground">
+            All caught up!
+          </h3>
+          <p className="text-sm text-muted-foreground max-w-[250px] mt-2">
+            No pending assignments. Take a break or check upcoming work in the
+            timeline.
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
+  const heroCourse = courses.find((c) => c.id === heroAssignment.courseId);
+  const heroIsOverdue = heroAssignment.systemStatus === "overdue";
+
   return (
-    <Card className="flex flex-col h-full border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-      <CardHeader className="pb-4 border-b border-zinc-100 dark:border-zinc-800/50 bg-zinc-50/50 dark:bg-zinc-900/20">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-rose-500" />
-            Next Actions
-          </CardTitle>
+    <Card className="flex flex-col h-full border-zinc-300 dark:border-zinc-700 shadow-md ring-1 ring-black/5 dark:ring-white/5 overflow-hidden">
+      <div className="p-6 pb-2">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center justify-center h-6 w-6 rounded bg-primary/10 text-primary">
+              <Lightbulb className="h-4 w-4" />
+            </span>
+            <h2 className="text-lg font-semibold tracking-tight">
+              Next Action
+            </h2>
+          </div>
           <Badge variant="outline" className="font-mono text-xs">
-            {assignments.length} pending
+            {sorted.length} pending
           </Badge>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Prioritized by deadline and urgency
-        </p>
-      </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-zinc-200 dark:scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-        <div className="p-3 space-y-2">
-          {topAssignments.length > 0 ? (
-            topAssignments.map((assignment) => {
-              const p = getPriorityInfo(assignment);
-              const dueDate = assignment.dueDate
-                ? new Date(assignment.dueDate)
-                : null;
 
-              // Find the course color
-              const course = courses.find((c) => c.id === assignment.courseId);
-              const courseColor = course?.color;
-
-              return (
-                <div
-                  key={assignment.id}
-                  onClick={() => onSelectAssignment(assignment)}
-                  className={cn(
-                    "group flex items-center gap-3 p-3 rounded-lg border transition-all duration-200 hover:shadow-md hover:border-zinc-300 dark:hover:border-zinc-700 bg-card cursor-pointer relative overflow-hidden",
-                    p.border
-                  )}
+        {/* Hero Card */}
+        <div
+          className={cn(
+            "relative p-4 rounded-xl border-2 transition-all cursor-pointer group bg-card hover:border-primary/50",
+            heroIsOverdue
+              ? "border-red-500/20 bg-red-500/5"
+              : "border-primary/20 bg-primary/5"
+          )}
+          onClick={() => onSelectAssignment(heroAssignment)}
+        >
+          <div className="space-y-4">
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <Badge
+                  variant="secondary"
+                  className="mb-2 text-[10px] px-2 py-0.5 border-0"
+                  style={{
+                    backgroundColor: heroCourse?.color || undefined,
+                    color: heroCourse?.color
+                      ? getTextColor(heroCourse.color)
+                      : undefined,
+                  }}
                 >
-                  {/* Subtle hover background */}
-                  <div className="absolute inset-0 bg-current opacity-0 group-hover:opacity-[0.02] transition-opacity" />
+                  {heroAssignment.courseName}
+                </Badge>
+                <h3 className="text-xl font-bold leading-tight group-hover:text-primary transition-colors">
+                  {heroAssignment.title}
+                </h3>
+              </div>
+              {heroIsOverdue && (
+                <Badge variant="destructive" className="shrink-0 animate-pulse">
+                  Overdue
+                </Badge>
+              )}
+            </div>
 
-                  {/* Priority Indicator Pill */}
-                  <div
-                    className={cn(
-                      "w-1 h-8 rounded-full flex-shrink-0",
-                      p.bg.replace("/10", "")
-                    )}
-                  />
+            <div className="flex flex-col items-center mt-6 gap-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                <span className={heroIsOverdue ? "text-red-500 font-bold" : ""}>
+                  {getDueDateLabel(heroAssignment.dueDate)}
+                </span>
+              </div>
+              <Button
+                size="sm"
+                className="w-[60%] gap-2 shadow-lg hover:translate-y-[-2px] transition-transform"
+              >
+                Start Next Task <ArrowUpRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center gap-2 mb-1">
-                      <h4 className="text-sm font-medium truncate text-foreground/90 group-hover:text-primary transition-colors">
-                        {assignment.title}
-                      </h4>
-                      {assignment.systemStatus === "overdue" && (
-                        <div className="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-1 rounded-full">
-                          <AlertCircle className="h-3 w-3" />
-                        </div>
-                      )}
-                    </div>
+      {/* Up Next List */}
+      <div className="flex-1 overflow-hidden flex flex-col px-6 pb-4">
+        {nextAssignments.length > 0 && (
+          <div className="mt-6 mb-3">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Up Next
+            </h4>
+          </div>
+        )}
 
-                    <div className="flex items-center justify-between gap-2 mt-1">
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] px-1.5 py-0 h-4 font-medium border-0 truncate max-w-[160px]"
-                        style={{
-                          backgroundColor: courseColor || undefined,
-                          color: courseColor
-                            ? getTextColor(courseColor)
-                            : undefined,
-                        }}
-                      >
-                        {assignment.courseName}
-                      </Badge>
-                      {dueDate && (
-                        <span
-                          className={cn(
-                            "text-[10px] flex items-center gap-1 font-medium flex-shrink-0 whitespace-nowrap",
-                            p.color
-                          )}
-                        >
-                          <Clock className="h-3 w-3" />
-                          {dueDate.toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+        <div className="flex-1 overflow-y-auto -mx-2 px-2 space-y-2">
+          {visibleNext.map((assignment) => {
+            const course = courses.find((c) => c.id === assignment.courseId);
+            const isOverdue = assignment.systemStatus === "overdue";
 
-                  {/* Hover Action */}
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity -mr-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                    >
-                      <ArrowUpRight className="h-4 w-4" />
-                    </Button>
+            return (
+              <div
+                key={assignment.id}
+                onClick={() => onSelectAssignment(assignment)}
+                className="flex items-center gap-3 p-3 rounded-lg border border-transparent hover:border-border hover:bg-muted/50 transition-colors cursor-pointer group/item"
+              >
+                <div
+                  className={cn(
+                    "w-1 h-8 rounded-full shrink-0",
+                    isOverdue ? "bg-red-500" : "bg-muted-foreground/30"
+                  )}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate group-hover/item:text-primary transition-colors">
+                    {assignment.title}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="truncate max-w-[120px]">
+                      {assignment.courseName}
+                    </span>
+                    <span>•</span>
+                    <span>{getDueDateLabel(assignment.dueDate)}</span>
                   </div>
                 </div>
-              );
-            })
-          ) : (
-            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-              <div className="h-12 w-12 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mb-3">
-                <CheckCircle className="h-6 w-6 text-emerald-500" />
               </div>
-              <p className="text-sm font-medium text-foreground">
-                All caught up!
-              </p>
-              <p className="text-xs text-muted-foreground text-center max-w-[180px]">
-                No pending actions for now. Great job staying on top of things.
-              </p>
-            </div>
-          )}
+            );
+          })}
         </div>
-      </CardContent>
+
+        {nextAssignments.length > 3 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full mt-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => setShowAll(!showAll)}
+          >
+            {showAll ? "Show Less" : `View All (${nextAssignments.length})`}
+          </Button>
+        )}
+      </div>
     </Card>
   );
 }
@@ -1002,7 +1009,7 @@ export default function DashboardPage() {
   });
 
   const [activeFilter, setActiveFilter] = useState<{
-    type: "3days" | "7days" | "overdue" | "active";
+    type: "urgent" | "upcoming" | "active";
     label: string;
   } | null>(null);
 
@@ -1046,28 +1053,28 @@ export default function DashboardPage() {
   const filteredAssignments = activeFilter
     ? assignments
         .filter((a) => {
-          // Base filter for all: exclude graded/submitted unless specifically requested?
-          // The metrics like "Total Active" exclude graded/submitted.
-          // "Overdue" is overdue.
           const isFinished =
             a.systemStatus === "graded" || a.systemStatus === "submitted";
 
           if (activeFilter.type === "active") return !isFinished;
-          if (activeFilter.type === "overdue")
-            return a.systemStatus === "overdue";
 
           if (isFinished) return false;
 
           const now = new Date();
           const due = a.dueDate ? new Date(a.dueDate) : null;
-          if (!due) return false;
 
-          if (activeFilter.type === "3days") {
+          // "Urgent" = Overdue OR Due in next 3 days
+          if (activeFilter.type === "urgent") {
+            if (a.systemStatus === "overdue") return true;
+            if (!due) return false;
             const limit = new Date(now);
             limit.setDate(limit.getDate() + 3);
-            return due >= now && due <= limit;
+            return due <= limit; // Include past due (overdue status handles it, but just in case)
           }
-          if (activeFilter.type === "7days") {
+
+          // "Upcoming" = Due in next 7 days (broad view)
+          if (activeFilter.type === "upcoming") {
+            if (!due) return false;
             const limit = new Date(now);
             limit.setDate(limit.getDate() + 7);
             return due >= now && due <= limit;
@@ -1115,10 +1122,9 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-        {metrics.upcoming7Days > 0 && (
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-8">
+        {activeAssignments.length > 0 && (
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-50 via-amber-50/80 to-orange-50/50 dark:from-amber-950/40 dark:via-amber-900/20 dark:to-orange-950/20 border border-amber-200/60 dark:border-amber-800/40 shadow-lg shadow-amber-100/50 dark:shadow-amber-950/20 animate-in slide-in-from-top-2">
-            {/* Decorative background pattern */}
             <div className="absolute inset-0 bg-grid-amber-200/20 dark:bg-grid-amber-800/10 [mask-image:radial-gradient(ellipse_at_center,transparent_20%,black)]" />
 
             <div className="relative flex items-center justify-between p-5 sm:p-6">
@@ -1128,36 +1134,35 @@ export default function DashboardPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm font-bold text-amber-900 dark:text-amber-100 flex items-center gap-2">
-                    Weekly Focus
-                    <Badge
-                      variant="secondary"
-                      className="bg-amber-200/60 dark:bg-amber-800/40 text-amber-900 dark:text-amber-100 border-0 text-xs font-bold"
-                    >
-                      {metrics.upcoming7Days}{" "}
-                      {metrics.upcoming7Days === 1 ? "task" : "tasks"}
-                    </Badge>
+                    This Week's Focus
                   </p>
                   <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
-                    You have{" "}
-                    <span className="font-bold text-amber-900 dark:text-amber-100">
-                      {metrics.upcoming7Days} assignment
-                      {metrics.upcoming7Days !== 1 ? "s" : ""}
+                    Complete{" "}
+                    <span className="font-bold text-foreground">
+                      "{activeAssignments[0]?.title || "Upcoming tasks"}"
                     </span>{" "}
-                    due within the next 7 days.
+                    by{" "}
+                    {activeAssignments[0]?.dueDate
+                      ? new Date(
+                          activeAssignments[0].dueDate
+                        ).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        })
+                      : "the deadline"}
                   </p>
                 </div>
               </div>
-              {/* Action can be context-aware, e.g., view timeline */}
-              <Link href="/timeline">
+              {activeAssignments[0] && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="hidden sm:flex border-amber-300 dark:border-amber-700 bg-white/50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/50 hover:border-amber-400 dark:hover:border-amber-600 shadow-sm"
+                  onClick={() => setSelectedAssignment(activeAssignments[0])}
+                  className="hidden sm:flex border-amber-300 dark:border-amber-700 bg-white/50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/50"
                 >
-                  View Timeline
-                  <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" />
+                  View Assignment
                 </Button>
-              </Link>
+              )}
             </div>
           </div>
         )}
@@ -1177,78 +1182,84 @@ export default function DashboardPage() {
                 // Define each section
                 const sections: Record<string, React.ReactNode> = {
                   metrics: (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <MetricCard
-                        title="Due in 3 Days"
-                        value={metrics.upcoming3Days}
-                        icon={Clock}
-                        variant={
-                          metrics.upcoming3Days > 3 ? "warning" : "default"
-                        }
-                        onClick={() =>
-                          setActiveFilter({
-                            type: "3days",
-                            label: "Due in 3 Days",
-                          })
-                        }
-                      />
-                      <MetricCard
-                        title="Due in 7 Days"
-                        value={metrics.upcoming7Days}
-                        icon={Calendar}
-                        onClick={() =>
-                          setActiveFilter({
-                            type: "7days",
-                            label: "Due in 7 Days",
-                          })
-                        }
-                      />
-                      <MetricCard
-                        title="Overdue"
-                        value={metrics.overdue}
-                        icon={AlertCircle}
-                        variant={metrics.overdue > 0 ? "danger" : "default"}
-                        onClick={() =>
-                          setActiveFilter({
-                            type: "overdue",
-                            label: "Overdue Assignments",
-                          })
-                        }
-                      />
-                      <MetricCard
-                        title="Total Active"
-                        value={metrics.totalActive}
-                        icon={CheckCircle}
-                        onClick={() =>
-                          setActiveFilter({
-                            type: "active",
-                            label: "Active Assignments",
-                          })
-                        }
-                      />
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-6">
+                      <div className="lg:col-span-3 h-full">
+                        {/* Urgent: Overdue + 3 Days */}
+                        <MetricCard
+                          title="Urgent"
+                          value={metrics.overdue + metrics.upcoming3Days}
+                          description={
+                            metrics.overdue + metrics.upcoming3Days === 0
+                              ? "You're all caught up"
+                              : "Overdue + due in 3 days"
+                          }
+                          icon={
+                            metrics.overdue + metrics.upcoming3Days === 0
+                              ? CheckCircle
+                              : AlertCircle
+                          }
+                          variant={
+                            metrics.overdue + metrics.upcoming3Days === 0
+                              ? "success"
+                              : "danger"
+                          }
+                          className="h-full"
+                          onClick={() =>
+                            setActiveFilter({
+                              type: "urgent",
+                              label: "Urgent Assignments",
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="lg:col-span-2 h-full">
+                        {/* Upcoming: Next 7 Days */}
+                        <MetricCard
+                          title="Upcoming"
+                          value={metrics.upcoming7Days}
+                          description="Due this week"
+                          icon={Calendar}
+                          variant="default"
+                          className="h-full"
+                          onClick={() =>
+                            setActiveFilter({
+                              type: "upcoming",
+                              label: "Upcoming (7 Days)",
+                            })
+                          }
+                        />
+                      </div>
                     </div>
                   ),
                   features: (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      <ClassActivityCard
-                        courses={courses}
-                        assignments={assignments}
-                      />
-                      <OverallAttendanceCard courses={courses} />
-                      <DashboardBadgesCard />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-10 gap-6">
+                      <div className="lg:col-span-4 h-full">
+                        <ClassActivityCard
+                          courses={courses}
+                          assignments={assignments}
+                        />
+                      </div>
+                      <div className="lg:col-span-3 h-full">
+                        <OverallAttendanceCard courses={courses} />
+                      </div>
+                      <div className="lg:col-span-3 h-full">
+                        <DashboardBadgesCard />
+                      </div>
                     </div>
                   ),
                   charts: (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:h-[340px]">
-                      <div className="lg:col-span-2 h-full min-h-[300px]">
-                        <WeeklyWorkload data={metrics.weeklyWorkload} />
-                      </div>
-                      <div className="lg:col-span-1 h-full min-h-[300px]">
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:h-[450px]">
+                      {/* Hero (NextActions) moved to Left (60%) */}
+                      <div className="lg:col-span-3 h-full min-h-[300px]">
                         <NextActions
                           assignments={activeAssignments}
                           onSelectAssignment={setSelectedAssignment}
                           courses={courses}
                         />
+                      </div>
+                      {/* Charts moved to Right (40%) */}
+                      <div className="lg:col-span-2 h-full min-h-[300px]">
+                        <WeeklyWorkload assignments={activeAssignments} />
                       </div>
                     </div>
                   ),
@@ -1278,14 +1289,11 @@ export default function DashboardPage() {
         <SheetContent className="overflow-y-auto sm:max-w-md">
           <SheetHeader className="mb-6">
             <SheetTitle className="flex items-center gap-2">
-              {activeFilter?.type === "3days" && (
-                <Clock className="h-5 w-5 text-amber-500" />
-              )}
-              {activeFilter?.type === "7days" && (
-                <Calendar className="h-5 w-5 text-blue-500" />
-              )}
-              {activeFilter?.type === "overdue" && (
+              {activeFilter?.type === "urgent" && (
                 <AlertCircle className="h-5 w-5 text-red-500" />
+              )}
+              {activeFilter?.type === "upcoming" && (
+                <Calendar className="h-5 w-5 text-blue-500" />
               )}
               {activeFilter?.type === "active" && (
                 <CheckCircle className="h-5 w-5 text-emerald-500" />
@@ -1320,6 +1328,7 @@ export default function DashboardPage() {
           </div>
         </SheetContent>
       </Sheet>
+      <OnboardingGuide />
     </>
   );
 }

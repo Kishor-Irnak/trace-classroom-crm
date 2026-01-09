@@ -335,10 +335,10 @@ export default function LeaderboardPage() {
         </div>
       )}
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between p-4 sm:p-6 gap-4 sm:gap-0 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
-        <div className="space-y-1">
-          <h1 className="text-xl sm:text-2xl font-medium tracking-tight text-foreground">
-            Class Ranking
+      <div className="flex flex-col sm:flex-row items-center justify-between p-4 gap-4 sm:gap-0 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10">
+        <div className="space-y-0.5">
+          <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-foreground">
+            Ranking
           </h1>
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest truncate max-w-[200px] sm:max-w-none">
             {selectedTitle} Leaderboard
