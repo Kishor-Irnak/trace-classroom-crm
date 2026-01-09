@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
   DndContext,
   closestCenter,
   KeyboardSensor,
@@ -493,11 +500,13 @@ function MetricCard({
   value,
   icon: Icon,
   variant = "default",
+  onClick,
 }: {
   title: string;
   value: number;
   icon: typeof Clock;
   variant?: "default" | "warning" | "danger";
+  onClick?: () => void;
 }) {
   const variantStyles = {
     default: {
@@ -535,9 +544,11 @@ function MetricCard({
         "group overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-0.5",
         styles.bg,
         styles.border,
+        onClick && "cursor-pointer active:scale-95 transition-transform",
         "hover:ring-1",
         styles.ring
       )}
+      onClick={onClick}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 p-3">
         <CardTitle className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
@@ -990,6 +1001,11 @@ export default function DashboardPage() {
     return saved ? JSON.parse(saved) : ["metrics", "features", "charts"];
   });
 
+  const [activeFilter, setActiveFilter] = useState<{
+    type: "3days" | "7days" | "overdue" | "active";
+    label: string;
+  } | null>(null);
+
   // Drag and drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1026,6 +1042,44 @@ export default function DashboardPage() {
   const activeAssignments = assignments.filter(
     (a) => a.systemStatus !== "graded" && a.systemStatus !== "submitted"
   );
+
+  const filteredAssignments = activeFilter
+    ? assignments
+        .filter((a) => {
+          // Base filter for all: exclude graded/submitted unless specifically requested?
+          // The metrics like "Total Active" exclude graded/submitted.
+          // "Overdue" is overdue.
+          const isFinished =
+            a.systemStatus === "graded" || a.systemStatus === "submitted";
+
+          if (activeFilter.type === "active") return !isFinished;
+          if (activeFilter.type === "overdue")
+            return a.systemStatus === "overdue";
+
+          if (isFinished) return false;
+
+          const now = new Date();
+          const due = a.dueDate ? new Date(a.dueDate) : null;
+          if (!due) return false;
+
+          if (activeFilter.type === "3days") {
+            const limit = new Date(now);
+            limit.setDate(limit.getDate() + 3);
+            return due >= now && due <= limit;
+          }
+          if (activeFilter.type === "7days") {
+            const limit = new Date(now);
+            limit.setDate(limit.getDate() + 7);
+            return due >= now && due <= limit;
+          }
+          return false;
+        })
+        .sort((a, b) => {
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
+          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+        })
+    : [];
 
   // Check if there's a token-related error
   // If we have no data at all, we must block.
@@ -1131,22 +1185,46 @@ export default function DashboardPage() {
                         variant={
                           metrics.upcoming3Days > 3 ? "warning" : "default"
                         }
+                        onClick={() =>
+                          setActiveFilter({
+                            type: "3days",
+                            label: "Due in 3 Days",
+                          })
+                        }
                       />
                       <MetricCard
                         title="Due in 7 Days"
                         value={metrics.upcoming7Days}
                         icon={Calendar}
+                        onClick={() =>
+                          setActiveFilter({
+                            type: "7days",
+                            label: "Due in 7 Days",
+                          })
+                        }
                       />
                       <MetricCard
                         title="Overdue"
                         value={metrics.overdue}
                         icon={AlertCircle}
                         variant={metrics.overdue > 0 ? "danger" : "default"}
+                        onClick={() =>
+                          setActiveFilter({
+                            type: "overdue",
+                            label: "Overdue Assignments",
+                          })
+                        }
                       />
                       <MetricCard
                         title="Total Active"
                         value={metrics.totalActive}
                         icon={CheckCircle}
+                        onClick={() =>
+                          setActiveFilter({
+                            type: "active",
+                            label: "Active Assignments",
+                          })
+                        }
                       />
                     </div>
                   ),
@@ -1192,6 +1270,56 @@ export default function DashboardPage() {
         isOpen={!!selectedAssignment}
         onClose={() => setSelectedAssignment(null)}
       />
+
+      <Sheet
+        open={!!activeFilter}
+        onOpenChange={(open) => !open && setActiveFilter(null)}
+      >
+        <SheetContent className="overflow-y-auto sm:max-w-md">
+          <SheetHeader className="mb-6">
+            <SheetTitle className="flex items-center gap-2">
+              {activeFilter?.type === "3days" && (
+                <Clock className="h-5 w-5 text-amber-500" />
+              )}
+              {activeFilter?.type === "7days" && (
+                <Calendar className="h-5 w-5 text-blue-500" />
+              )}
+              {activeFilter?.type === "overdue" && (
+                <AlertCircle className="h-5 w-5 text-red-500" />
+              )}
+              {activeFilter?.type === "active" && (
+                <CheckCircle className="h-5 w-5 text-emerald-500" />
+              )}
+              {activeFilter?.label}
+            </SheetTitle>
+            <SheetDescription>
+              You have {filteredAssignments.length} assignments in this
+              category.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-3">
+            {filteredAssignments.length > 0 ? (
+              filteredAssignments.map((assignment) => (
+                <AssignmentCardCompact
+                  key={assignment.id}
+                  assignment={assignment}
+                  onClick={() => {
+                    setActiveFilter(null);
+                    setSelectedAssignment(assignment);
+                  }}
+                />
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+                  <CheckCircle className="h-6 w-6" />
+                </div>
+                <p>No assignments found.</p>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
