@@ -27,10 +27,8 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # If you are using a custom domain, set VITE_BASE_URL to /
-          # If you are using default github pages, it might need to receive the repo name
-          # But package.json scripts seem to handle some of this.
-          # We will trust the existing build script logic which uses vite.config.ts
+          # Dynamic base URL for GitHub Pages (repo subfolder)
+          VITE_BASE_URL: /${{ github.event.repository.name }}/
           CI: true
 
       - name: Deploy
