@@ -134,20 +134,6 @@ function EnhancedLoadingScreen() {
             </div>
           </div>
 
-          {/* Scroll Down Indicator - Shows when there are tasks below */}
-          {hasVerticalScroll && !isAtBottom && (
-            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 animate-bounce">
-              <div className="bg-white border border-zinc-200 rounded-full shadow-lg px-3 py-2 flex items-center gap-2">
-                <ArrowDown
-                  className="h-4 w-4 text-zinc-950"
-                  strokeWidth={1.5}
-                />
-                <span className="text-xs font-medium text-zinc-900">
-                  More tasks below
-                </span>
-              </div>
-            </div>
-          )}
           {/* Tips Section */}
           <div className="flex gap-3 items-start bg-white border border-zinc-200 p-4 rounded-md shadow-sm max-w-sm mx-auto animate-in fade-in slide-in-from-bottom-2 duration-700">
             <Lightbulb className="h-4 w-4 text-zinc-900 shrink-0 mt-0.5" />
@@ -458,8 +444,16 @@ export default function TimelinePage() {
       <div className="flex-1 overflow-hidden relative flex flex-col h-full bg-background">
         <div
           ref={(el) => {
-            scrollContainerRef.current = el;
-            verticalScrollRef.current = el;
+            if (scrollContainerRef.current !== el) {
+              (
+                scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>
+              ).current = el;
+            }
+            if (verticalScrollRef.current !== el) {
+              (
+                verticalScrollRef as React.MutableRefObject<HTMLDivElement | null>
+              ).current = el;
+            }
           }}
           className={cn(
             "flex-1 overflow-auto relative select-none",

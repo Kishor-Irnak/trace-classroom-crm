@@ -38,12 +38,28 @@ import PrivacyPolicyPage from "@/pages/privacy-policy";
 import TermsOfServicePage from "@/pages/terms-of-service";
 import DocsPage from "@/pages/docs";
 
+// Component to handle strict redirection to dashboard on authentication entry
+function AuthEntryRedirect() {
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    // If user lands on any page other than dashboard, redirect them to dashboard
+    // This runs only once when the authenticated app mounts (on login or refresh)
+    if (location !== "/dashboard") {
+      setLocation("/dashboard");
+    }
+  }, []); // Empty dependency array ensures this runs only once on mount
+
+  return null;
+}
+
 function AuthenticatedApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const basePath = getBasePath();
 
   return (
     <Router base={basePath}>
+      <AuthEntryRedirect />
       <div className="flex h-screen bg-background overflow-hidden">
         <AppSidebar
           mobileOpen={mobileMenuOpen}

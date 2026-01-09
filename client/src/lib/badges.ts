@@ -17,6 +17,7 @@ export interface Badge {
   category: "consistency" | "productivity" | "reliability";
   icon: any;
   color: string; // Tailwind class for text/bg
+  imageSrc?: string; // Optional custom image for badge
 }
 
 export const BADGES: Record<string, Badge> = {

@@ -349,85 +349,102 @@ export async function fetchAllPages<T>(
   return allItems;
 }
 
-// Ultra-subtle but distinct color palettes with perfectly matching text colors
+// Bold, highly distinct colors spanning the entire spectrum for maximum differentiation
 // Each palette: [background, textColor]
 const COLOR_PALETTES: [string, string][] = [
-  // Sky Blue - Cool and professional
-  ["#E0F2FE", "#0369A1"],
+  // Bright Red - Bold and energetic
+  ["#FEE2E2", "#991B1B"],
 
-  // Lavender - Creative and calm
-  ["#EDE9FE", "#7C3AED"],
+  // Vibrant Orange - Warm and attention-grabbing
+  ["#FFEDD5", "#9A3412"],
 
-  // Rose Pink - Warm and friendly
-  ["#FCE7F3", "#BE185D"],
+  // Sunny Yellow - Bright and cheerful
+  ["#FEF3C7", "#92400E"],
 
-  // Mint Green - Fresh and balanced
-  ["#D1FAE5", "#047857"],
+  // Lime Green - Fresh and vibrant
+  ["#D9F99D", "#3F6212"],
 
-  // Peach - Warm and inviting
-  ["#FED7AA", "#C2410C"],
+  // Emerald Green - Natural and balanced
+  ["#D1FAE5", "#065F46"],
 
-  // Aqua Teal - Calm and sophisticated
-  ["#CCFBF1", "#0F766E"],
+  // Teal - Cool and modern
+  ["#CCFBF1", "#115E59"],
 
-  // Coral - Energetic and bold
-  ["#FECACA", "#B91C1C"],
-
-  // Periwinkle - Professional and deep
+  // Sky Blue - Light and professional
   ["#DBEAFE", "#1E40AF"],
 
-  // Turquoise - Modern and tech
+  // Ocean Blue - Deep and strong
+  ["#BAE6FD", "#075985"],
+
+  // Indigo - Rich and sophisticated
+  ["#E0E7FF", "#3730A3"],
+
+  // Purple - Creative and unique
+  ["#EDE9FE", "#6B21A8"],
+
+  // Magenta - Bold and striking
+  ["#F5D0FE", "#A21CAF"],
+
+  // Hot Pink - Energetic and fun
+  ["#FCE7F3", "#9F1239"],
+
+  // Rose - Soft and warm
+  ["#FFE4E6", "#BE123C"],
+
+  // Amber - Rich and golden
+  ["#FDE68A", "#78350F"],
+
+  // Cyan - Bright and modern
+  ["#CFFAFE", "#155E75"],
+
+  // Violet - Deep and elegant
+  ["#DDD6FE", "#5B21B6"],
+
+  // Coral - Warm and inviting
+  ["#FECACA", "#991B1B"],
+
+  // Mint - Cool and refreshing
+  ["#D1FAE5", "#047857"],
+
+  // Lavender - Calm and creative
+  ["#E9D5FF", "#7E22CE"],
+
+  // Peach - Warm and friendly
+  ["#FED7AA", "#C2410C"],
+
+  // Aqua - Fresh and clean
   ["#A5F3FC", "#0E7490"],
 
-  // Amber Gold - Rich and warm
-  ["#FDE68A", "#92400E"],
+  // Fuchsia - Vibrant and unique
+  ["#FAE8FF", "#A21CAF"],
 
-  // Lime - Vibrant and fresh
-  ["#D9F99D", "#4D7C0F"],
+  // Chartreuse - Bright and distinctive
+  ["#ECFCCB", "#4D7C0F"],
 
-  // Orchid - Unique and elegant
-  ["#F3E8FF", "#6B21A8"],
+  // Turquoise - Balanced and modern
+  ["#99F6E4", "#0F766E"],
 ];
 
 function generateCourseColor(content: string): string {
-  // 1. Clean up and normalize to find the "Base Subject"
-  let normalized = content.toLowerCase().trim();
+  // Use the FULL course name for maximum differentiation
+  // This ensures even similar courses get different colors
+  const fullName = content.trim();
 
-  // Remove common academic suffixes/types regardless of position
-  const stopWords = [
-    /\blab(oratory)?\b/g,
-    /\bpractical\b/g,
-    /\btheory\b/g,
-    /\btutorial\b/g,
-    /\blecture\b/g,
-    /\bcourse\b/g,
-    /\bsection\b/g,
-    /\bmini project\b/g,
-    /\sproject\b/g,
-    /\s\d+[a-z]?\b/g,
-  ];
-
-  for (const pattern of stopWords) {
-    normalized = normalized.replace(pattern, "");
-  }
-
-  // Remove non-alphanumeric chars (except spaces) to ignore parenthesis, dashes, etc
-  normalized = normalized.replace(/[^a-z0-9\s]/g, "").trim();
-  // Collapse multiple spaces to single
-  normalized = normalized.replace(/\s+/g, " ");
-
-  // If we stripped everything (e.g. course named just "Lab"), revert to original
-  if (!normalized) normalized = content.toLowerCase().trim();
-
-  // 2. Generate Hash from the Normalized Base Name
+  // Generate Hash from the FULL course name (not normalized)
   let hash = 0;
-  for (let i = 0; i < normalized.length; i++) {
-    hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < fullName.length; i++) {
+    hash = fullName.charCodeAt(i) + ((hash << 5) - hash);
   }
 
-  // 3. Select palette based on hash
-  const paletteIndex = Math.abs(hash) % COLOR_PALETTES.length;
-  const [bgColor, textColor] = COLOR_PALETTES[paletteIndex];
+  // Use a better distribution algorithm to spread colors more evenly
+  // This ensures consecutive courses don't get similar colors
+  const seed = Math.abs(hash);
+
+  // Use golden ratio for better distribution across the color spectrum
+  const goldenRatio = 0.618033988749895;
+  const index = Math.floor(((seed * goldenRatio) % 1) * COLOR_PALETTES.length);
+
+  const [bgColor, textColor] = COLOR_PALETTES[index];
 
   // Return just the background color (text color will be retrieved separately)
   return bgColor;
