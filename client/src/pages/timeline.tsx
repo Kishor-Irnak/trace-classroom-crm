@@ -164,8 +164,8 @@ const STATUS_CONFIG: Record<
     timelineStyle: string;
   }
 > = {
-  backlog: {
-    label: "Backlog",
+  Remaining: {
+    label: "Remaining",
     color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
     border: "border-slate-200 dark:border-slate-700",
     timelineStyle: "bg-slate-100 border-slate-300 text-slate-700",
@@ -186,8 +186,8 @@ const STATUS_CONFIG: Record<
   graded: {
     label: "Graded",
     color:
-      "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200",
-    border: "border-emerald-100 dark:border-emerald-800",
+      "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 font-bold",
+    border: "border-emerald-100 dark:border-emerald-500/20",
     timelineStyle: "bg-emerald-100 border-emerald-300 text-emerald-800",
   },
   overdue: {
@@ -258,6 +258,12 @@ export default function TimelinePage() {
   );
   const [zoomLevel, setZoomLevel] = useState(1); // 0.5 to 2
   const [compactView, setCompactView] = useState(false);
+  const [showHint, setShowHint] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowHint(false), 8000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const [emailEvents] = useState<Assignment[]>([]);
 
@@ -531,13 +537,13 @@ export default function TimelinePage() {
                       key={i}
                       className={cn(
                         "flex-shrink-0 h-full border-r border-border relative",
-                        isCurrentDay ? "bg-accent/50" : ""
+                        isCurrentDay ? "bg-primary/5" : ""
                       )}
                       style={{ width: dayWidth }}
                     >
                       {/* --- THE TODAY LINE --- */}
                       {isCurrentDay && (
-                        <div className="absolute top-0 bottom-0 left-1/2 w-[2px] bg-foreground -translate-x-1/2 z-20 shadow-[0_0_10px_rgba(255,255,255,0.2)]"></div>
+                        <div className="absolute top-0 bottom-0 left-1/2 w-[2px] bg-primary -translate-x-1/2 z-20 shadow-[0_0_10px_rgba(var(--primary),0.3)]"></div>
                       )}
                     </div>
                   );
@@ -602,60 +608,82 @@ export default function TimelinePage() {
 
                     const statusConfig =
                       STATUS_CONFIG[assignment.systemStatus] ||
-                      STATUS_CONFIG.backlog;
-
-                    const completedStyle =
-                      "bg-green-100/80 border-green-300 text-green-800";
+                      STATUS_CONFIG.Remaining;
 
                     const defaultStyle = "bg-card border shadow-sm";
 
-                    const taskHeight = compactView ? "h-8" : "h-12";
-                    const containerHeight = compactView ? "h-9" : "h-14";
+                    const taskHeight = compactView ? "h-8" : "h-10";
+                    const containerHeight = compactView ? "h-9" : "h-12";
+
+                    const useCustomColor = !isCompleted && courseColor;
 
                     return (
                       <div
                         key={assignment.id}
-                        className={cn("relative group", containerHeight)}
+                        className={cn("relative group px-1", containerHeight)}
                       >
                         <div
                           onClick={() => setSelectedAssignment(assignment)}
                           className={cn(
-                            "absolute top-0 rounded-lg border transition-all cursor-pointer flex flex-col justify-center overflow-hidden group hover:scale-[1.01] z-10 hover:z-30 hover:shadow-md",
-                            taskHeight,
-                            compactView ? "px-2" : "px-3",
-                            isCompleted ? completedStyle : defaultStyle
+                            "absolute top-1 bottom-1 rounded-md border transition-all cursor-pointer flex flex-col justify-center overflow-hidden group hover:-translate-y-0.5 z-10 hover:z-30 hover:shadow-md",
+                            compactView ? "px-3" : "px-4",
+                            useCustomColor
+                              ? "border-transparent/10"
+                              : statusConfig.color,
+                            !useCustomColor && statusConfig.border,
+                            !useCustomColor && !isCompleted && defaultStyle
                           )}
                           style={style}
                         >
-                          <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <span
-                              className={cn(
-                                "truncate font-bold leading-none flex items-center gap-1",
-                                compactView ? "text-[10px]" : "text-xs"
-                              )}
-                            >
-                              {assignment.courseId === "system" && (
-                                <Mail
-                                  className={cn(
-                                    "inline-block",
-                                    compactView ? "h-2.5 w-2.5" : "h-3 w-3"
-                                  )}
-                                />
-                              )}
-                              {isCompleted && (
+                          <div className="flex items-center gap-1.5 w-full">
+                            {assignment.courseId === "system" && (
+                              <Mail
+                                className={cn(
+                                  "shrink-0 text-muted-foreground",
+                                  compactView ? "h-3 w-3" : "h-3.5 w-3.5"
+                                )}
+                              />
+                            )}
+                            {isCompleted && (
+                              <div className="bg-green-500/10 p-0.5 rounded-full shrink-0">
                                 <Check
                                   className={cn(
-                                    "inline-block mr-0.5",
+                                    "text-green-600",
                                     compactView ? "h-2.5 w-2.5" : "h-3 w-3"
                                   )}
                                 />
+                              </div>
+                            )}
+                            <span
+                              className={cn(
+                                "truncate font-bold leading-none",
+                                useCustomColor
+                                  ? ""
+                                  : "text-foreground group-hover:text-primary transition-colors",
+                                compactView ? "text-[11px]" : "text-xs"
                               )}
+                              style={
+                                useCustomColor
+                                  ? { color: getTextColor(courseColor) }
+                                  : undefined
+                              }
+                            >
                               {assignment.title}
                             </span>
                           </div>
                           {!compactView && (
-                            <div className="flex items-center justify-between opacity-80">
-                              <span className="text-[10px] font-semibold truncate max-w-[80px]">
+                            <div className="flex items-center justify-between mt-0.5">
+                              <span
+                                className="text-[10px] font-medium uppercase tracking-wider truncate max-w-[90%]"
+                                style={
+                                  useCustomColor
+                                    ? {
+                                        color: getTextColor(courseColor),
+                                        opacity: 0.6,
+                                      }
+                                    : { opacity: 0.6 }
+                                }
+                              >
                                 {assignment.courseName}
                               </span>
                             </div>
@@ -769,14 +797,16 @@ export default function TimelinePage() {
           </div>
         </div>
 
-        <div className="flex-none p-2 border-t bg-background/70 backdrop-blur-sm flex items-center justify-center text-xs text-muted-foreground font-medium z-30 relative">
-          <MousePointer size={14} className="mr-2" />
-          Tip: Hold{" "}
-          <kbd className="mx-1 px-1 py-0.5 rounded-md bg-muted border text-foreground font-bold text-[10px]">
-            Right Click
-          </kbd>{" "}
-          to drag timeline
-        </div>
+        {showHint && (
+          <div className="flex-none py-1.5 border-t bg-background/50 backdrop-blur-sm flex items-center justify-center text-[10px] text-muted-foreground/80 font-medium z-30 relative animate-out fade-out duration-1000 fill-mode-forwards">
+            <MousePointer size={12} className="mr-1.5 opacity-60" />
+            Tip: Hold{" "}
+            <kbd className="mx-1 px-1 py-0 rounded-md bg-muted border text-foreground font-bold text-[9px]">
+              Right Click
+            </kbd>{" "}
+            to pan or use trackpad
+          </div>
+        )}
       </div>
     );
   };
@@ -991,64 +1021,85 @@ export default function TimelinePage() {
                         <div
                           key={idx}
                           className={cn(
-                            "min-h-[100px] border-b border-r p-1.5 flex flex-col gap-1 transition-colors",
+                            "min-h-[100px] border-b border-r p-1.5 flex flex-col gap-1 transition-colors relative group",
                             !day.isCurrentMonth
                               ? "bg-muted/30 text-muted-foreground"
-                              : "bg-card"
+                              : "bg-card",
+                            isToday && day.isCurrentMonth
+                              ? "ring-2 ring-primary/30 ring-inset bg-primary/[0.08] shadow-inner"
+                              : ""
                           )}
                         >
                           <span
                             className={cn(
-                              "text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full mb-1",
+                              "text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full mb-1 transition-all",
                               isToday && day.isCurrentMonth
-                                ? "bg-primary text-primary-foreground shadow-sm"
-                                : "text-foreground"
+                                ? "bg-primary text-primary-foreground shadow-sm scale-110"
+                                : "text-foreground group-hover:scale-110"
                             )}
                           >
                             {day.date.getDate()}
                           </span>
-                          <div className="flex-1 flex flex-col gap-1.5">
-                            {dayTasks.map((task) => {
-                              const course = courses.find(
-                                (c) => c.id === task.courseId
-                              );
-                              const courseColor = course?.color;
-                              const isCompleted = [
-                                "submitted",
-                                "graded",
-                              ].includes(task.systemStatus);
-                              const useCustomColor =
-                                !isCompleted && courseColor;
+                          <div className="flex-1 flex flex-col gap-1.5 min-h-[60px]">
+                            {dayTasks.length === 0 ? (
+                              <div className="flex-1 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="text-[10px] text-muted-foreground/40 italic">
+                                  No tasks
+                                </span>
+                              </div>
+                            ) : (
+                              <>
+                                {dayTasks.slice(0, 2).map((task) => {
+                                  const course = courses.find(
+                                    (c) => c.id === task.courseId
+                                  );
+                                  const courseColor = course?.color;
+                                  const isCompleted = [
+                                    "submitted",
+                                    "graded",
+                                  ].includes(task.systemStatus);
+                                  const useCustomColor =
+                                    !isCompleted && courseColor;
 
-                              const statusConfig =
-                                STATUS_CONFIG[task.systemStatus] ||
-                                STATUS_CONFIG.backlog;
+                                  const statusConfig =
+                                    STATUS_CONFIG[task.systemStatus] ||
+                                    STATUS_CONFIG.Remaining;
 
-                              return (
-                                <div
-                                  key={task.id}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedAssignment(task);
-                                  }}
-                                  className={cn(
-                                    "text-[10px] px-2 py-1 rounded-md border cursor-pointer truncate shadow-sm hover:scale-[1.02] transition-transform font-medium",
-                                    !useCustomColor && statusConfig.color,
-                                    !useCustomColor && statusConfig.border,
-                                    useCustomColor &&
-                                      "text-slate-900 border-transparent/20"
-                                  )}
-                                  style={
-                                    useCustomColor
-                                      ? { backgroundColor: courseColor }
-                                      : undefined
-                                  }
-                                  title={task.title}
-                                >
-                                  {task.title}
-                                </div>
-                              );
-                            })}
+                                  return (
+                                    <div
+                                      key={task.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedAssignment(task);
+                                      }}
+                                      className={cn(
+                                        "text-[10px] px-1.5 py-0.5 rounded-[4px] border cursor-pointer truncate shadow-sm hover:scale-[1.02] transition-transform font-bold select-none",
+                                        !useCustomColor && statusConfig.color,
+                                        !useCustomColor && statusConfig.border,
+                                        useCustomColor &&
+                                          "border-transparent/10"
+                                      )}
+                                      style={
+                                        useCustomColor
+                                          ? {
+                                              backgroundColor: courseColor,
+                                              color: getTextColor(courseColor),
+                                            }
+                                          : undefined
+                                      }
+                                      title={task.title}
+                                    >
+                                      {task.title}
+                                    </div>
+                                  );
+                                })}
+                                {dayTasks.length > 2 && (
+                                  <div className="text-[9px] font-bold text-primary/80 px-1 hover:text-primary cursor-pointer transition-colors bg-primary/5 rounded py-0.5 mt-1 text-center">
+                                    +{dayTasks.length - 2} more
+                                  </div>
+                                )}
+                              </>
+                            )}
                           </div>
                         </div>
                       );
@@ -1111,16 +1162,16 @@ export default function TimelinePage() {
         </div>
       )}
       <div className="flex flex-col h-full w-full bg-background overflow-hidden relative">
-        <div className="border-b px-4 py-3 md:px-6 md:py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-background/95 backdrop-blur z-20 shrink-0 transition-all">
+        <div className="border-b px-4 py-2 md:px-6 md:py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-background/95 backdrop-blur z-20 shrink-0 transition-all">
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <h1 className="text-2xl font-bold tracking-tight hidden md:block">
+            <h1 className="text-xl font-bold tracking-tight hidden md:block">
               Timeline
             </h1>
             <div className="flex bg-muted p-1 rounded-lg shrink-0 w-full md:w-auto grid grid-cols-2 md:flex">
               <button
                 onClick={() => setCurrentView("timeline")}
                 className={cn(
-                  "px-3 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-2",
+                  "px-3 py-1 md:py-1 rounded-md text-[11px] font-medium transition-all flex items-center justify-center gap-1.5",
                   currentView === "timeline"
                     ? "bg-background shadow-sm text-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -1135,7 +1186,7 @@ export default function TimelinePage() {
                     <button
                       onClick={() => setCurrentView("calendar")}
                       className={cn(
-                        "px-3 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-2",
+                        "px-3 py-1 md:py-1 rounded-md text-[11px] font-medium transition-all flex items-center justify-center gap-1.5",
                         currentView === "calendar"
                           ? "bg-background shadow-sm text-foreground"
                           : "text-muted-foreground hover:text-foreground"
@@ -1154,7 +1205,7 @@ export default function TimelinePage() {
           </div>
         </div>
 
-        <div className="px-4 md:px-6 py-2 border-b flex items-center gap-3 bg-muted/30 shrink-0 overflow-x-auto no-scrollbar">
+        <div className="px-4 md:px-6 py-1.5 border-b flex items-center gap-3 bg-muted/30 shrink-0 overflow-x-auto no-scrollbar">
           <Filter className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
           <Select
             value={selectedCourse || "all"}
@@ -1192,7 +1243,7 @@ export default function TimelinePage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="backlog">Backlog</SelectItem>
+              <SelectItem value="Remaining">Remaining</SelectItem>
               <SelectItem value="in_progress">In Progress</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
               <SelectItem value="graded">Graded</SelectItem>

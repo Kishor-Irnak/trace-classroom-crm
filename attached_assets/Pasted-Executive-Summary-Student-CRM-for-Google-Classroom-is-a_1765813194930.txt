@@ -53,7 +53,7 @@ Fetch student submissions per coursework (e.g., state: CREATED, TURNED_IN, RETUR
 
 Map Classroom states to internal statuses:
 
-Upcoming/Backlog: not submitted, due date in future or none.​
+Upcoming/Remaining: not submitted, due date in future or none.​
 
 In Progress: user manually marks as in progress.
 
@@ -66,7 +66,7 @@ Overdue: not submitted and due date in past.​
 Background sync (optional via Cloud Functions) to refresh assignment and submission data periodically (e.g., every few hours) or on-demand when user opens the app.​
 
 5.3 Pipeline View (Primary Feature)
-Kanban-style board with fixed columns: Backlog/Upcoming, In Progress, Submitted, Graded, Overdue.
+Kanban-style board with fixed columns: Remaining/Upcoming, In Progress, Submitted, Graded, Overdue.
 
 Each assignment represented as a card with:
 
@@ -248,7 +248,7 @@ dueDate, dueTime, maxPoints
 
 systemStatus (upcoming, submitted, graded, overdue) derived from Classroom.​
 
-userStatus (backlog, in progress, focus, etc.) purely local.
+userStatus (Remaining, in progress, focus, etc.) purely local.
 
 submissionId, submittedAt, gradedAt, grade.​
 

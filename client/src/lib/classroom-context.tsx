@@ -579,7 +579,7 @@ async function fetchCoursework(
 
     // Determine system status
     const now = new Date();
-    let systemStatus: Assignment["systemStatus"] = "backlog";
+    let systemStatus: Assignment["systemStatus"] = "Remaining";
 
     if (submission) {
       if (
@@ -591,13 +591,13 @@ async function fetchCoursework(
         systemStatus = "submitted";
       } else if (submission.state === "CREATED") {
         systemStatus =
-          dueDate && new Date(dueDate) < now ? "overdue" : "backlog";
+          dueDate && new Date(dueDate) < now ? "overdue" : "Remaining";
       }
     } else {
       if (dueDate && new Date(dueDate) < now) {
         systemStatus = "overdue";
       } else {
-        systemStatus = "backlog";
+        systemStatus = "Remaining";
       }
     }
 
@@ -815,7 +815,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       dueDate: addDays(now, 2).toISOString(),
       dueTime: "23:59",
       maxPoints: 100,
-      systemStatus: "backlog",
+      systemStatus: "Remaining",
       userStatus: null,
       submissionId: null,
       submittedAt: null,
@@ -838,7 +838,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       dueDate: addDays(now, 5).toISOString(),
       dueTime: "23:59",
       maxPoints: 50,
-      systemStatus: "backlog",
+      systemStatus: "Remaining",
       userStatus: "in_progress",
       submissionId: null,
       submittedAt: null,
@@ -861,7 +861,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       dueDate: addDays(now, 1).toISOString(),
       dueTime: "23:59",
       maxPoints: 100,
-      systemStatus: "backlog",
+      systemStatus: "Remaining",
       userStatus: "in_progress",
       submissionId: null,
       submittedAt: null,
@@ -884,7 +884,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       dueDate: addDays(now, 7).toISOString(),
       dueTime: "23:59",
       maxPoints: 150,
-      systemStatus: "backlog",
+      systemStatus: "Remaining",
       userStatus: null,
       submissionId: null,
       submittedAt: null,
@@ -928,7 +928,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       dueDate: addDays(now, 3).toISOString(),
       dueTime: "23:59",
       maxPoints: 75,
-      systemStatus: "backlog",
+      systemStatus: "Remaining",
       userStatus: null,
       submissionId: null,
       submittedAt: null,
@@ -996,7 +996,7 @@ function getDemoData(): { courses: Course[]; assignments: Assignment[] } {
       dueDate: addDays(now, 4).toISOString(),
       dueTime: "23:59",
       maxPoints: 75,
-      systemStatus: "backlog",
+      systemStatus: "Remaining",
       userStatus: null,
       submissionId: null,
       submittedAt: null,
@@ -1347,7 +1347,7 @@ export function ClassroomProvider({ children }: { children: ReactNode }) {
 
   const getPipelineColumns = useCallback((): PipelineColumn[] => {
     const columns: PipelineColumn[] = [
-      { id: "backlog", title: "Backlog", assignments: [] },
+      { id: "Remaining", title: "Remaining", assignments: [] },
       { id: "in_progress", title: "In Progress", assignments: [] },
       { id: "submitted", title: "Submitted", assignments: [] },
       { id: "graded", title: "Graded", assignments: [] },

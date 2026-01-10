@@ -707,7 +707,7 @@ function WeeklyWorkload({ assignments }: { assignments: Assignment[] }) {
               size="sm"
               className="h-6 text-xs text-muted-foreground hover:text-foreground"
             >
-              View Full Timeline <ArrowUpRight className="ml-1 h-3 w-3" />
+              View Full Calendar <ArrowUpRight className="ml-1 h-3 w-3" />
             </Button>
           </Link>
         </div>

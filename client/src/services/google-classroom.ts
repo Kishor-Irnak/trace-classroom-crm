@@ -270,8 +270,8 @@ function mapToAssignment(
   const now = new Date();
 
   // Status Logic
-  let userStatus = "backlog";
-  let systemStatus = "backlog";
+  let userStatus = "Remaining";
+  let systemStatus = "Remaining";
   let grade = null;
   let submittedAt = null;
   let gradedAt = null;
@@ -296,17 +296,17 @@ function mapToAssignment(
     }
     // Handle reclaimed (student took back their submission)
     else if (submission.state === "reclaimed_by_student") {
-      userStatus = "backlog";
-      systemStatus = "backlog";
+      userStatus = "Remaining";
+      systemStatus = "Remaining";
     }
     // NEW or CREATED means work in progress
     else if (submission.state === "NEW" || submission.state === "CREATED") {
-      userStatus = "backlog";
-      systemStatus = "backlog";
+      userStatus = "Remaining";
+      systemStatus = "Remaining";
     }
   }
 
-  if (dueDate && new Date(dueDate) < now && systemStatus === "backlog") {
+  if (dueDate && new Date(dueDate) < now && systemStatus === "Remaining") {
     systemStatus = "overdue";
     userStatus = "overdue";
   }

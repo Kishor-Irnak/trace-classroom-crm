@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const assignmentStatusValues = [
-  "backlog",
+  "Remaining",
   "in_progress",
   "submitted",
   "graded",
@@ -10,7 +10,7 @@ export const assignmentStatusValues = [
 export type AssignmentStatus = (typeof assignmentStatusValues)[number];
 
 export const userStatusValues = [
-  "backlog",
+  "Remaining",
   "in_progress",
   "focus",
   "review",

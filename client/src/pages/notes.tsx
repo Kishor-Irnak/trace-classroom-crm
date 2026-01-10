@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useClassroom, getTextColor } from "@/lib/classroom-context";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardHeader } from "@/components/ui/card";
 import {
   FileText,
   ExternalLink,
@@ -12,7 +12,19 @@ import {
   List,
   AlertCircle,
   Eye,
+  Search,
+  Star,
+  Download,
+  MoreHorizontal,
+  DownloadCloud,
+  MousePointerClick,
+  Filter,
+  Settings2,
+  Info,
+  X,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -25,7 +37,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { TokenRefreshPrompt } from "@/components/token-refresh-prompt";
-
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function NotesPage() {
@@ -39,17 +50,49 @@ export default function NotesPage() {
   } = useClassroom();
   const { signOut } = useAuth();
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    const saved = localStorage.getItem("notes_view_mode");
+    return (saved as "grid" | "list") || "grid";
+  });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeGroup, setActiveGroup] = useState<
+    "all" | "lectures" | "assignments" | "lab" | "starred"
+  >("all");
+
+  const [starredDocs, setStarredDocs] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem("starred_notes");
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
   const isMobile = useIsMobile();
 
-  const selectedCourse = courses.find((c) => c.id === selectedCourseId);
+  const toggleStar = (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const newStarred = new Set(starredDocs);
+    if (newStarred.has(id)) newStarred.delete(id);
+    else newStarred.add(id);
+    setStarredDocs(newStarred);
+    localStorage.setItem(
+      "starred_notes",
+      JSON.stringify(Array.from(newStarred))
+    );
+  };
+
+  const getDocCount = (courseId: string) => {
+    return materials
+      .filter((m: any) => m.courseId === courseId)
+      .flatMap((m: any) => m.materials || [])
+      .filter((m: any) => m.driveFile).length;
+  };
+
+  const selectedCourse = courses.find((c: any) => c.id === selectedCourseId);
   const courseMaterials = materials.filter(
-    (m) => m.courseId === selectedCourseId
+    (m: any) => m.courseId === selectedCourseId
   );
 
   // Filter for PDF and PPT materials
   const courseDocuments = courseMaterials
-    .flatMap((cm) => {
+    .flatMap((cm: any) => {
       if (!cm.materials) return [];
 
       return cm.materials.flatMap((m: any) => {
@@ -78,26 +121,41 @@ export default function NotesPage() {
         return files;
       });
     })
-    .filter((file) => {
+    .filter((file: any) => {
       // Allow all files that have a title
       return !!file.title;
     });
 
-  if (isLoading && courses.length === 0) {
-    return <NotesSkeleton />;
-  }
+  // Filter and Search logic
+  const filteredCourseDocuments = courseDocuments.filter((doc: any) => {
+    const title = doc.title.toLowerCase();
+    const matchesSearch = title.includes(searchQuery.toLowerCase());
 
-  // Check if there's a token-related error (reauthRequired)
-  // But strictly block ONLY if we have no data to show.
-  if (reauthRequired) {
-    if (courses.length === 0) {
+    if (!matchesSearch) return false;
+
+    if (activeGroup === "all") return true;
+    if (activeGroup === "starred") return starredDocs.has(doc.id);
+    if (activeGroup === "lectures")
       return (
-        <div className="h-full flex items-center justify-center p-4">
-          <TokenRefreshPrompt />
-        </div>
+        title.includes("lecture") ||
+        title.includes("module") ||
+        title.includes("unit")
       );
-    }
-  }
+    if (activeGroup === "assignments")
+      return (
+        title.includes("assignment") ||
+        title.includes("task") ||
+        title.includes("hw")
+      );
+    if (activeGroup === "lab")
+      return (
+        title.includes("lab") ||
+        title.includes("manual") ||
+        title.includes("exp")
+      );
+
+    return true;
+  });
 
   return (
     <div className="flex h-full overflow-hidden bg-background flex-col">
@@ -143,66 +201,50 @@ export default function NotesPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             <TooltipProvider>
-              {courses.map((course) => (
+              {courses.map((course: any) => (
                 <Tooltip key={course.id} delayDuration={0}>
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => setSelectedCourseId(course.id)}
                       className={cn(
-                        "w-full text-left px-3 py-3.5 rounded-md transition-all group flex items-center gap-3 outline-none focus:ring-2 focus:ring-primary/20",
+                        "w-full text-left px-3 py-2 rounded-md transition-all group flex items-center gap-3 outline-none focus:ring-2 focus:ring-primary/10",
                         selectedCourseId === course.id
-                          ? "bg-primary text-primary-foreground shadow-md"
-                          : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                          ? "bg-primary/5 text-primary"
+                          : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
                       )}
                     >
                       <div
                         className={cn(
-                          "h-8 w-8 rounded-full flex items-center justify-center shrink-0 border border-transparent",
-                          // Ensure shadow/border when selected for better visibility
+                          "h-2 w-2 rounded-full shrink-0 transition-colors",
                           selectedCourseId === course.id
-                            ? "ring-2 ring-primary-foreground/20"
-                            : ""
-                        )}
-                        style={{
-                          backgroundColor: course.color || "#e4e4e7", // fallback to muted
-                        }}
-                      >
-                        <Folder
-                          className="h-4 w-4"
-                          style={{
-                            color: course.color
-                              ? getTextColor(course.color)
-                              : undefined,
-                          }}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <p className="text-sm font-semibold leading-tight mb-0.5 truncate">
-                          {course.name}
-                        </p>
-                        <p
-                          className={cn(
-                            "text-[10px] uppercase tracking-wider font-medium leading-tight",
-                            selectedCourseId === course.id
-                              ? "text-primary-foreground/80"
-                              : "text-muted-foreground/70"
-                          )}
-                        >
-                          {course.section || "No Section"}
-                        </p>
-                      </div>
-                      <ChevronRight
-                        className={cn(
-                          "h-4 w-4 transition-transform shrink-0",
-                          selectedCourseId === course.id
-                            ? "translate-x-0"
-                            : "-translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0"
+                            ? "bg-primary"
+                            : "bg-muted-foreground/30"
                         )}
                       />
+                      <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                        <span
+                          className={cn(
+                            "text-sm font-medium truncate",
+                            selectedCourseId === course.id
+                              ? "font-semibold"
+                              : ""
+                          )}
+                        >
+                          {course.name}
+                        </span>
+                        {getDocCount(course.id) > 0 && (
+                          <span className="text-[10px] bg-muted/50 text-muted-foreground px-1.5 py-0.5 rounded-full font-mono">
+                            {getDocCount(course.id)}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="right">
+                  <TooltipContent side="right" className="font-sans text-xs">
                     <p>{course.name}</p>
+                    <p className="text-[10px] text-muted-foreground opacity-80">
+                      {course.section}
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               ))}
@@ -241,285 +283,401 @@ export default function NotesPage() {
                   Select a curriculum
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed font-medium mt-2">
-                  Choose a course from the listing to accessibility your
-                  synchronized PDF lecture records and study guides.
+                  Choose a course from the listing to access your synchronized
+                  PDF lecture records and study guides.
                 </p>
               </div>
             </div>
           ) : (
-            <div className="p-4 md:p-8 space-y-6 md:space-y-8 animate-in fade-in duration-500">
-              <div className="flex flex-col md:flex-row md:items-end justify-between border-b pb-6 border-border gap-4">
-                <div className="space-y-1 max-w-full">
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] font-mono tracking-[0.2em] font-bold uppercase py-0 px-2 rounded-sm border-border"
-                  >
-                    Course Resources
-                  </Badge>
-                  <h1 className="text-lg md:text-xl font-black tracking-tighter uppercase italic break-words leading-tight text-foreground">
-                    {selectedCourse?.name}
-                  </h1>
-                  <p className="text-xs md:text-sm font-medium text-muted-foreground line-clamp-2">
-                    {selectedCourse?.descriptionHeading ||
-                      "Curated academic materials and notes."}
-                  </p>
+            <div className="flex flex-col h-full animate-in fade-in duration-500">
+              {/* Sticky Course Header */}
+              <div className="sticky top-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border px-4 py-4 md:px-8 space-y-4 shadow-sm">
+                {/* Top Row: Title & Controls */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 md:px-8 md:py-5">
+                  <div className="space-y-1 min-w-0">
+                    <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground truncate">
+                      {selectedCourse?.name}
+                    </h1>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="font-mono bg-muted/40 px-1.5 py-0.5 rounded text-[10px]">
+                        {selectedCourse?.section || "CSL605"}
+                      </span>
+                      <span>·</span>
+                      <span>{courseDocuments.length} Documents</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 w-full md:w-auto">
+                    {/* Search & View Toggle Group */}
+                    <div className="flex items-center bg-muted/40 rounded-lg p-1 border border-border/40 shadow-sm w-full md:w-auto">
+                      <div className="relative flex-1 md:w-48">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <input
+                          placeholder="Search..."
+                          className="w-full pl-8 pr-8 h-8 text-xs bg-transparent border-none rounded-md focus:outline-none placeholder:text-muted-foreground/50"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                        {searchQuery && (
+                          <button
+                            onClick={() => setSearchQuery("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="w-[1px] h-4 bg-border/60 mx-1" />
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            "h-7 w-7 rounded-sm hover:bg-background/50",
+                            viewMode === "grid"
+                              ? "text-primary bg-background shadow-sm"
+                              : "text-muted-foreground"
+                          )}
+                          onClick={() => {
+                            setViewMode("grid");
+                            localStorage.setItem("notes_view_mode", "grid");
+                          }}
+                        >
+                          <LayoutGrid className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            "h-7 w-7 rounded-sm hover:bg-background/50",
+                            viewMode === "list"
+                              ? "text-primary bg-background shadow-sm"
+                              : "text-muted-foreground"
+                          )}
+                          onClick={() => {
+                            setViewMode("list");
+                            localStorage.setItem("notes_view_mode", "list");
+                          }}
+                        >
+                          <List className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <div className="bg-muted/30 px-3 py-1.5 rounded-md border border-border flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap text-muted-foreground">
-                      {courseDocuments.length} Documents
-                    </span>
-                  </div>
-                  <div className="flex bg-muted rounded-md p-1 border border-border">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        "h-6 w-6 rounded-sm",
-                        viewMode === "grid" && "bg-background shadow-sm"
-                      )}
-                      onClick={() => setViewMode("grid")}
-                    >
-                      <LayoutGrid className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        "h-6 w-6 rounded-sm",
-                        viewMode === "list" && "bg-background shadow-sm"
-                      )}
-                      onClick={() => setViewMode("list")}
-                    >
-                      <List className="h-4 w-4" />
-                    </Button>
-                  </div>
+
+                {/* Tabs Row */}
+                <div className="px-4 md:px-8 pb-0">
+                  <Tabs
+                    value={activeGroup}
+                    onValueChange={(v: any) => setActiveGroup(v)}
+                    className="w-full"
+                  >
+                    {/* Undergraduate style tabs: text with active indicator */}
+                    <TabsList className="bg-transparent h-auto p-0 gap-6 w-full justify-start overflow-x-auto no-scrollbar border-b border-transparent">
+                      <TabsTrigger
+                        value="all"
+                        className="rounded-none border-b-2 border-transparent px-0 pb-3 pt-2 font-medium text-xs text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground bg-transparent transition-none data-[state=active]:shadow-none hover:text-foreground"
+                      >
+                        All
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="lectures"
+                        className="rounded-none border-b-2 border-transparent px-0 pb-3 pt-2 font-medium text-xs text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground bg-transparent transition-none data-[state=active]:shadow-none hover:text-foreground"
+                      >
+                        Lectures
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="assignments"
+                        className="rounded-none border-b-2 border-transparent px-0 pb-3 pt-2 font-medium text-xs text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground bg-transparent transition-none data-[state=active]:shadow-none hover:text-foreground"
+                      >
+                        Assignments
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="lab"
+                        className="rounded-none border-b-2 border-transparent px-0 pb-3 pt-2 font-medium text-xs text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground bg-transparent transition-none data-[state=active]:shadow-none hover:text-foreground"
+                      >
+                        Labs
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="starred"
+                        className="rounded-none border-b-2 border-transparent px-0 pb-3 pt-2 font-medium text-xs text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-foreground bg-transparent transition-none data-[state=active]:shadow-none hover:text-foreground flex items-center gap-1.5"
+                      >
+                        <Star className="h-3 w-3 mb-0.5" />
+                        Starred
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </div>
               </div>
 
-              {courseDocuments.length > 0 ? (
-                viewMode === "grid" ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 pb-20">
-                    {courseDocuments.map((doc, idx) => {
-                      const lower = doc.title?.toLowerCase() || "";
-                      const isPdf = lower.endsWith(".pdf");
-                      const isPpt =
-                        lower.endsWith(".ppt") || lower.endsWith(".pptx");
+              <div className="p-4 md:p-8 flex-1 overflow-y-auto">
+                <div className="max-w-[1600px] mx-auto">
+                  {filteredCourseDocuments.length > 0 ? (
+                    <div className="pb-20">
+                      <div
+                        className={cn(
+                          viewMode === "grid"
+                            ? "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
+                            : "flex flex-col gap-2"
+                        )}
+                      >
+                        {filteredCourseDocuments.map(
+                          (doc: any, idx: number) => {
+                            const lower = doc.title?.toLowerCase() || "";
+                            const isPdf = lower.endsWith(".pdf");
+                            const isPpt =
+                              lower.endsWith(".ppt") || lower.endsWith(".pptx");
+                            const isStarred = starredDocs.has(doc.id);
 
-                      let typeColor = "bg-zinc-100 text-zinc-600";
-                      let lightBg = "bg-zinc-50";
-                      let typeLabel = "FILE";
+                            let typeColor =
+                              "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400";
+                            let typeLabel = "FILE";
 
-                      if (isPdf) {
-                        typeColor = "bg-red-100 text-red-600";
-                        lightBg = "bg-red-50";
-                        typeLabel = "PDF DOCUMENT";
-                      } else if (isPpt) {
-                        typeColor = "bg-orange-100 text-orange-600";
-                        lightBg = "bg-orange-50";
-                        typeLabel = "PRESENTATION";
-                      } else {
-                        typeColor = "bg-blue-100 text-blue-600";
-                        lightBg = "bg-blue-50";
-                        typeLabel = "DOCUMENT";
-                      }
+                            if (isPdf) {
+                              typeColor =
+                                "bg-red-100 text-red-600 dark:bg-red-950/30 dark:text-red-400";
+                              typeLabel = "PDF";
+                            } else if (isPpt) {
+                              typeColor =
+                                "bg-orange-100 text-orange-600 dark:bg-orange-950/30 dark:text-orange-400";
+                              typeLabel = "SLIDES";
+                            } else {
+                              typeColor =
+                                "bg-blue-100 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400";
+                              typeLabel = "DOC";
+                            }
 
-                      return (
-                        <Card
-                          key={`${doc.id}-${idx}`}
-                          className="group relative overflow-hidden transition-all hover:shadow-2xl hover:-translate-y-1 border-border bg-card shadow-sm flex flex-col"
-                        >
-                          <CardHeader className="p-3 border-b border-border space-y-0 pb-2">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={cn(
-                                  "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
-                                  typeColor
-                                )}
-                              >
-                                <FileText className="h-4 w-4" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h4 className="font-semibold text-sm truncate leading-none text-card-foreground">
-                                  {doc.title}
-                                </h4>
-                                <p className="text-[10px] text-muted-foreground truncate mt-1 font-mono">
-                                  {typeLabel}
-                                </p>
-                              </div>
-                            </div>
-                          </CardHeader>
-
-                          <div className="relative aspect-[3/4] bg-muted/30 w-full overflow-hidden group">
-                            {doc.thumbnail && (
-                              <img
-                                src={
-                                  doc.thumbnail.includes("s220")
-                                    ? doc.thumbnail.replace("s220", "s800")
-                                    : doc.thumbnail
-                                }
-                                alt={doc.title}
-                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                referrerPolicy="no-referrer"
-                                onError={(e) => {
-                                  console.log(
-                                    "Thumbnail failed to load:",
-                                    doc.thumbnail
-                                  );
-                                  e.currentTarget.style.display = "none";
-                                  const fallback =
-                                    e.currentTarget.parentElement?.querySelector(
-                                      ".fallback-viewer"
-                                    ) as HTMLElement;
-                                  if (fallback) {
-                                    fallback.classList.remove("hidden");
-                                    fallback.classList.add("block");
-                                  }
-                                }}
-                              />
-                            )}
-
-                            {/* Fallback or Overlay */}
-                            <div
-                              className={cn(
-                                "fallback-viewer absolute inset-0 w-full h-full",
-                                doc.thumbnail ? "hidden" : "block"
-                              )}
-                            >
-                              <MockDocViewer
-                                type={isPdf ? "pdf" : isPpt ? "ppt" : "doc"}
-                              />
-                            </div>
-
-                            {/* Hover Overlay with Actions */}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2 p-4">
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                className="font-semibold shadow-xl h-9"
-                                asChild
-                              >
+                            if (viewMode === "grid") {
+                              return (
                                 <a
+                                  key={`${doc.id}-${idx}`}
                                   href={doc.link}
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  className="block group outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl h-full"
                                 >
-                                  <ExternalLink className="h-4 w-4 mr-2" />
-                                  Open Material
+                                  <Card className="relative overflow-hidden transition-all duration-200 border-border/40 bg-card hover:bg-card hover:shadow-md hover:border-primary/20 flex flex-col h-full rounded-xl">
+                                    {/* Preview */}
+                                    <div className="aspect-[4/3] w-full bg-muted/30 relative overflow-hidden border-b border-border/30">
+                                      {doc.thumbnail ? (
+                                        <img
+                                          src={
+                                            doc.thumbnail.includes("s220")
+                                              ? doc.thumbnail.replace(
+                                                  "s220",
+                                                  "s400"
+                                                )
+                                              : doc.thumbnail
+                                          }
+                                          alt={doc.title}
+                                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                          referrerPolicy="no-referrer"
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                          <MockDocViewer
+                                            type={
+                                              isPdf
+                                                ? "pdf"
+                                                : isPpt
+                                                ? "ppt"
+                                                : "doc"
+                                            }
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Info */}
+                                    <div className="p-3 flex flex-col flex-1 gap-1.5">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div
+                                          className={cn(
+                                            "flex items-center justify-center h-5 w-5 rounded text-[10px] font-bold uppercase tracking-wider",
+                                            typeColor
+                                              .split(" ")
+                                              .filter((c) =>
+                                                c.startsWith("bg-")
+                                              )
+                                              .join(" ")
+                                          )}
+                                        >
+                                          <FileText
+                                            className={cn(
+                                              "h-3 w-3",
+                                              typeColor
+                                                .split(" ")
+                                                .filter((c) =>
+                                                  c.startsWith("text-")
+                                                )
+                                                .join(" ")
+                                            )}
+                                          />
+                                        </div>
+                                        {/* Simple Star Action */}
+                                        <button
+                                          onClick={(e) => toggleStar(doc.id, e)}
+                                          className={cn(
+                                            "opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 p-0.5 rounded hover:bg-muted",
+                                            isStarred
+                                              ? "opacity-100 text-amber-500"
+                                              : "text-muted-foreground/40"
+                                          )}
+                                        >
+                                          <Star
+                                            className={cn(
+                                              "h-3.5 w-3.5",
+                                              isStarred && "fill-current"
+                                            )}
+                                          />
+                                        </button>
+                                      </div>
+                                      <h4 className="text-xs md:text-sm font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                                        {doc.title}
+                                      </h4>
+                                      <div className="mt-auto pt-1 flex items-center gap-1.5 text-[9px] text-muted-foreground/60 font-mono uppercase tracking-wider">
+                                        <span>{typeLabel}</span>
+                                      </div>
+                                    </div>
+                                  </Card>
                                 </a>
-                              </Button>
-                            </div>
-                          </div>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="space-y-2 pb-20">
-                    {courseDocuments.map((doc, idx) => {
-                      const lower = doc.title?.toLowerCase() || "";
-                      const isPdf = lower.endsWith(".pdf");
-                      const isPpt =
-                        lower.endsWith(".ppt") || lower.endsWith(".pptx");
+                              );
+                            }
 
-                      let typeColor = "bg-zinc-100 text-zinc-600";
-                      let typeLabel = "File";
+                            // List View Item
+                            return (
+                              <a
+                                key={`${doc.id}-${idx}`}
+                                href={doc.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group block outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg"
+                              >
+                                <div className="flex items-center gap-3 p-2 rounded-lg border border-transparent hover:bg-card hover:border-border/40 hover:shadow-sm transition-all">
+                                  {/* Thumbnail */}
+                                  <div className="h-10 w-10 shrink-0 rounded bg-muted/30 border border-border/30 overflow-hidden flex items-center justify-center">
+                                    {doc.thumbnail ? (
+                                      <img
+                                        src={doc.thumbnail}
+                                        alt=""
+                                        className="w-full h-full object-cover"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                    ) : (
+                                      <FileText
+                                        className={cn(
+                                          "h-4 w-4",
+                                          typeColor
+                                            .split(" ")
+                                            .filter((c) =>
+                                              c.startsWith("text-")
+                                            )
+                                            .join(" ")
+                                        )}
+                                      />
+                                    )}
+                                  </div>
 
-                      if (isPdf) {
-                        typeColor = "bg-red-100 text-red-600";
-                        typeLabel = "PDF Document";
-                      } else if (isPpt) {
-                        typeColor = "bg-orange-100 text-orange-600";
-                        typeLabel = "Presentation";
-                      } else {
-                        typeColor = "bg-blue-100 text-blue-600";
-                        typeLabel = "Document";
-                      }
+                                  {/* Info */}
+                                  <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+                                    <h4 className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                                      {doc.title}
+                                    </h4>
+                                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60">
+                                      <span className="font-bold uppercase tracking-wider">
+                                        {typeLabel}
+                                      </span>
+                                      <span>·</span>
+                                      <span>Academic Resource</span>
+                                    </div>
+                                  </div>
 
-                      return (
-                        <div
-                          key={`${doc.id}-${idx}`}
-                          className="group flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors"
-                        >
-                          {/* Thumbnail or Icon */}
-                          <div className="relative h-16 w-16 rounded-md overflow-hidden shrink-0 bg-muted/30 border border-border">
-                            {doc.thumbnail ? (
-                              <img
-                                src={
-                                  doc.thumbnail.includes("s220")
-                                    ? doc.thumbnail.replace("s220", "s400")
-                                    : doc.thumbnail
-                                }
-                                alt={doc.title}
-                                className="w-full h-full object-cover"
-                                referrerPolicy="no-referrer"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                  const fallback = e.currentTarget
-                                    .nextElementSibling as HTMLElement;
-                                  if (fallback)
-                                    fallback.classList.remove("hidden");
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className={cn(
-                                "absolute inset-0 flex items-center justify-center",
-                                doc.thumbnail ? "hidden" : "flex",
-                                typeColor
-                              )}
-                            >
-                              <FileText className="h-6 w-6" />
-                            </div>
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-sm truncate text-card-foreground group-hover:text-primary transition-colors">
-                              {doc.title}
-                            </h4>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {typeLabel} • Read Only
+                                  {/* Actions */}
+                                  <div className="flex items-center gap-2 pr-2">
+                                    <button
+                                      onClick={(e) => toggleStar(doc.id, e)}
+                                      className={cn(
+                                        "p-1.5 rounded-md hover:bg-muted transition-colors",
+                                        isStarred
+                                          ? "text-amber-500"
+                                          : "text-muted-foreground/40 opacity-0 group-hover:opacity-100"
+                                      )}
+                                    >
+                                      <Star
+                                        className={cn(
+                                          "h-4 w-4",
+                                          isStarred && "fill-current"
+                                        )}
+                                      />
+                                    </button>
+                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
+                                  </div>
+                                </div>
+                              </a>
+                            );
+                          }
+                        )}
+                      </div>
+                      {filteredCourseDocuments.length < 5 &&
+                        !searchQuery &&
+                        activeGroup === "all" && (
+                          <div className="mt-12 flex flex-col items-center justify-center py-10 border-t border-border/10 bg-gradient-to-b from-transparent to-muted/5 rounded-3xl">
+                            <p className="text-xs font-bold text-muted-foreground/40 italic uppercase tracking-widest">
+                              More resources will appear here as your teacher
+                              uploads them
                             </p>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            asChild
-                            className="shrink-0"
-                          >
-                            <a
-                              href={doc.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2"
-                            >
-                              <span className="hidden sm:inline text-xs font-medium">
-                                Open
-                              </span>
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </Button>
+                        )}
+                    </div>
+                  ) : (
+                    <div className="h-[60vh] flex flex-col items-center justify-center text-center p-8 max-w-2xl mx-auto space-y-6">
+                      <div className="relative">
+                        <div className="h-24 w-24 bg-muted/20 border-2 border-dashed border-border rounded-full flex items-center justify-center">
+                          <Folder className="h-10 w-10 text-muted-foreground/30" />
                         </div>
-                      );
-                    })}
-                  </div>
-                )
-              ) : (
-                <div className="h-96 flex flex-col items-center justify-center text-center border-4 border-dotted rounded-3xl bg-muted/20 border-border max-w-2xl mx-auto space-y-4">
-                  <div className="h-20 w-20 bg-background rounded-full flex items-center justify-center shadow-inner border border-border">
-                    <Folder className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-bold text-foreground">
-                      No Documents Found
-                    </h4>
-                    <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto font-medium">
-                      This course has no documents uploaded to Classroom yet.
-                    </p>
-                  </div>
+                        <div className="absolute -bottom-1 -right-1 bg-background p-1.5 rounded-full border border-border shadow-sm">
+                          <Search className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <h4 className="text-xl font-black tracking-tight text-foreground uppercase italic underline decoration-primary/30 underline-offset-8">
+                          {searchQuery
+                            ? "No results matching"
+                            : activeGroup === "starred"
+                            ? "No starred items"
+                            : activeGroup === "lectures"
+                            ? "No lectures uploaded yet"
+                            : activeGroup === "assignments"
+                            ? "No assignments uploaded yet"
+                            : activeGroup === "lab"
+                            ? "No lab manuals uploaded yet"
+                            : "No resources yet"}
+                        </h4>
+                        <p className="text-sm text-muted-foreground max-w-xs mx-auto font-medium">
+                          {searchQuery || activeGroup !== "all"
+                            ? "Try adjusting your search or filters to find what you're looking for."
+                            : "Your teacher will add materials here. Check back soon!"}
+                        </p>
+                        {(searchQuery || activeGroup !== "all") && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-4 gap-2 border-primary/20 text-primary hover:bg-primary/5"
+                            onClick={() => {
+                              setSearchQuery("");
+                              setActiveGroup("all");
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                            Clear all filters
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
@@ -547,7 +705,7 @@ function NotesSkeleton() {
           <Skeleton className="h-10 w-32 rounded-lg" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
+          {[1, 2, 3, 4, 5, 6].map((i: number) => (
             <Skeleton key={i} className="h-64 w-full rounded-2xl" />
           ))}
         </div>
@@ -561,10 +719,10 @@ function MockDocViewer({ type }: { type: "pdf" | "ppt" | "doc" }) {
   const isPpt = type === "ppt";
 
   const bgClass = isPdf
-    ? "bg-[#FFEEEE]"
+    ? "bg-[#FFEEEE] dark:bg-red-950/20"
     : isPpt
-    ? "bg-[#FFF4E5]"
-    : "bg-[#E8F0FE]"; // Google Blue light
+    ? "bg-[#FFF4E5] dark:bg-orange-950/20"
+    : "bg-[#E8F0FE] dark:bg-blue-950/20";
 
   return (
     <div
@@ -573,44 +731,36 @@ function MockDocViewer({ type }: { type: "pdf" | "ppt" | "doc" }) {
         bgClass
       )}
     >
-      {/* Paper Mockup */}
-      <div className="w-full h-full bg-white shadow-[0_2px_8px_-2px_rgba(0,0,0,0.1)] rounded-md border border-black/5 p-4 flex flex-col gap-3 relative z-10 transform transition-transform group-hover:-translate-y-1 duration-500">
-        {/* Header Block */}
+      <div className="w-full h-full bg-background shadow-lg rounded-md border border-border p-4 flex flex-col gap-3 relative z-10">
         <div className="flex gap-2 mb-1">
           <div
             className={cn(
-              "h-12 w-12 rounded-lg shrink-0 flex items-center justify-center mb-1",
+              "h-10 w-10 rounded-lg shrink-0 flex items-center justify-center mb-1 shadow-sm",
               isPdf
-                ? "bg-red-100 text-red-500"
+                ? "bg-red-100 text-red-500 dark:bg-red-900/40"
                 : isPpt
-                ? "bg-orange-100 text-orange-500"
-                : "bg-blue-100 text-blue-500"
+                ? "bg-orange-100 text-orange-500 dark:bg-orange-900/40"
+                : "bg-blue-100 text-blue-500 dark:bg-blue-900/40"
             )}
           >
-            <FileText className="h-6 w-6" />
+            <FileText className="h-5 w-5" />
           </div>
-          <div className="space-y-1.5 flex-1 pt-1">
-            <div className="h-3 w-3/4 bg-zinc-100 rounded-full" />
-            <div className="h-2 w-1/2 bg-zinc-100 rounded-full" />
+          <div className="space-y-1.5 flex-1 pt-1 opacity-20">
+            <div className="h-2.5 w-3/4 bg-foreground rounded-full" />
+            <div className="h-1.5 w-1/2 bg-foreground rounded-full" />
           </div>
         </div>
-
-        {/* Text Lines */}
-        <div className="space-y-2 flex-1">
-          <div className="h-2 w-full bg-zinc-50 rounded-full" />
-          <div className="h-2 w-full bg-zinc-50 rounded-full" />
-          <div className="h-2 w-5/6 bg-zinc-50 rounded-full" />
-          <div className="h-2 w-full bg-zinc-50 rounded-full" />
-          <div className="h-2 w-4/5 bg-zinc-50 rounded-full" />
-
+        <div className="space-y-2 flex-1 opacity-[0.05]">
+          <div className="h-1.5 w-full bg-foreground rounded-full" />
+          <div className="h-1.5 w-full bg-foreground rounded-full" />
+          <div className="h-1.5 w-5/6 bg-foreground rounded-full" />
+          <div className="h-1.5 w-full bg-foreground rounded-full" />
           {isPpt && (
-            <div className="mt-2 h-16 w-full bg-orange-50 rounded border border-orange-100" />
+            <div className="mt-2 h-16 w-full bg-muted rounded border border-border" />
           )}
         </div>
       </div>
-
-      {/* Decorative Background Icon */}
-      <div className="absolute -bottom-4 -right-4 opacity-[0.05] z-0">
+      <div className="absolute -bottom-4 -right-4 opacity-[0.03] z-0">
         <FileText className="h-40 w-40" />
       </div>
     </div>

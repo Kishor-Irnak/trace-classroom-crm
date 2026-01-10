@@ -32,7 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/pipeline", label: "Pipeline", icon: LayoutGrid },
-  { path: "/timeline", label: "Timeline", icon: Calendar },
+  { path: "/timeline", label: "Calendar", icon: Calendar },
   { path: "/attendance", label: "Attendance", icon: UserCheck },
   { path: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { path: "/notes", label: "Notes", icon: FileText },
@@ -105,7 +105,7 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
           {[
             { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
             { path: "/pipeline", label: "Pipeline", icon: LayoutGrid },
-            { path: "/timeline", label: "Timeline", icon: Calendar },
+            { path: "/timeline", label: "Calendar", icon: Calendar },
             { path: "/notes", label: "Notes", icon: FileText },
           ].map((item) => (
             <Link
@@ -113,14 +113,24 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
               href={item.path}
               onClick={onMobileClose}
               className={cn(
-                "w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                "w-full flex items-center px-3 py-2 text-sm transition-all duration-200 group relative",
                 location === item.path
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  ? "bg-primary/10 text-primary font-bold"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground font-medium"
               )}
               data-testid={`nav-${item.label.toLowerCase()}`}
             >
-              <item.icon className="w-4 h-4 mr-3" />
+              {location === item.path && (
+                <div className="absolute left-0 top-1 bottom-1 w-1 bg-primary rounded-r-full" />
+              )}
+              <item.icon
+                className={cn(
+                  "w-4 h-4 mr-3 transition-colors",
+                  location === item.path
+                    ? "text-primary fill-primary/20"
+                    : "text-muted-foreground"
+                )}
+              />
               {item.label}
             </Link>
           ))}
@@ -139,14 +149,24 @@ export function AppSidebar({ mobileOpen, onMobileClose }: AppSidebarProps) {
               href={item.path}
               onClick={onMobileClose}
               className={cn(
-                "w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                "w-full flex items-center px-3 py-2 text-sm transition-all duration-200 group relative",
                 location === item.path
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  ? "bg-primary/10 text-primary font-bold"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground font-medium"
               )}
               data-testid={`nav-${item.label.toLowerCase()}`}
             >
-              <item.icon className="w-4 h-4 mr-3" />
+              {location === item.path && (
+                <div className="absolute left-0 top-1 bottom-1 w-1 bg-primary rounded-r-full" />
+              )}
+              <item.icon
+                className={cn(
+                  "w-4 h-4 mr-3 transition-colors",
+                  location === item.path
+                    ? "text-primary fill-primary/20"
+                    : "text-muted-foreground"
+                )}
+              />
               {item.label}
             </Link>
           ))}
