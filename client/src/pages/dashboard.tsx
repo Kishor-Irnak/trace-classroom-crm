@@ -1004,8 +1004,8 @@ export default function DashboardPage() {
 
   // Dashboard section order state
   const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
-    const saved = localStorage.getItem("dashboard_section_order");
-    return saved ? JSON.parse(saved) : ["metrics", "features", "charts"];
+    const saved = localStorage.getItem("dashboard_section_order_v2");
+    return saved ? JSON.parse(saved) : ["metrics", "charts", "features"];
   });
 
   const [activeFilter, setActiveFilter] = useState<{
@@ -1031,7 +1031,7 @@ export default function DashboardPage() {
         const newIndex = items.indexOf(over.id as string);
         const newOrder = arrayMove(items, oldIndex, newIndex);
         localStorage.setItem(
-          "dashboard_section_order",
+          "dashboard_section_order_v2",
           JSON.stringify(newOrder)
         );
         return newOrder;
@@ -1182,8 +1182,8 @@ export default function DashboardPage() {
                 // Define each section
                 const sections: Record<string, React.ReactNode> = {
                   metrics: (
-                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mt-6">
-                      <div className="lg:col-span-3 h-full">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                      <div className="md:col-span-1 lg:col-span-3 h-full">
                         {/* Urgent: Overdue + 3 Days */}
                         <MetricCard
                           title="Urgent"
@@ -1212,7 +1212,7 @@ export default function DashboardPage() {
                           }
                         />
                       </div>
-                      <div className="lg:col-span-2 h-full">
+                      <div className="md:col-span-1 lg:col-span-2 h-full">
                         {/* Upcoming: Next 7 Days */}
                         <MetricCard
                           title="Upcoming"

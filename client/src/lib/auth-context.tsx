@@ -117,8 +117,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return; // Let the next render trigger this effect with token
           }
         }
-        if (!user) setLoading(false);
-        return;
+        if (!user) {
+          setLoading(false);
+          setAuthenticating(false);
+          return;
+        }
       }
 
       try {
@@ -197,6 +200,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
+      if (!navigator.onLine) {
+        throw new Error("No internet connection. Please check your network.");
+      }
+
       setError(null);
       setAuthenticating(true); // Show loading immediately
 
@@ -208,9 +215,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         prompt: "consent",
         access_type: "offline", // optional, for refresh tokens
       });
-      const result = await signInWithPopup(auth, googleProvider);
+
+      // Add a timeout to prevent hanging indefinitely
+      const result = await Promise.race([
+        signInWithPopup(auth, googleProvider),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Request timed out. Please try again.")),
+            30000
+          )
+        ),
+      ]);
+
       const credential = GoogleAuthProvider.credentialFromResult(
-        result
+        result as any
       ) as OAuthCredential;
       if (credential?.accessToken) {
         setAccessToken(credential.accessToken);
