@@ -47,6 +47,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useClassroom } from "@/lib/classroom-context";
 import { useAuth } from "@/lib/auth-context";
 import {
