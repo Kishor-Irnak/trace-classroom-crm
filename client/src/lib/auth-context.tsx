@@ -125,6 +125,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Role detection effect
+  /**
+   * Background role re-validation.
+   * Called after the fast path renders the cached role. Silently re-checks the
+   * actual role from the Classroom API and corrects it if it has changed.
+   * Never blocks the UI — all side-effects happen asynchronously.
+   */
+  const revalidateRoleInBackground = async (
+    token: string,
+    uid: string,
+    cachedRole: string
+  ) => {
+    try {
+      const TEACHER_STATES = ["ACTIVE", "ARCHIVED", "PROVISIONED", "DECLINED", "SUSPENDED"];
+
+      const teacherChecks = await Promise.all(
+        TEACHER_STATES.map((state) =>
+          fetch(
+            `https://classroom.googleapis.com/v1/courses?teacherId=me&courseStates=${state}&pageSize=1`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          ).catch(() => ({ ok: false, status: 0, json: async () => ({}) } as any))
+        )
+      );
+
+      // Token expired mid-session — let the next API call in the app handle it
+      if (teacherChecks.some((r) => r.status === 401)) return;
+
+      const teacherResults = await Promise.all(
+        teacherChecks.map((r) => (r.ok ? r.json() : Promise.resolve({})))
+      );
+      const isTeacher = teacherResults.some((d) => d.courses && d.courses.length > 0);
+
+      if (isTeacher && cachedRole !== "teacher") {
+        console.log("[Auth] Role corrected in background: student → teacher ✅");
+        setRole("teacher");
+        localStorage.setItem("user_role", "teacher");
+        return;
+      }
+
+      if (!isTeacher) {
+        const studentRes = await fetch(
+          "https://classroom.googleapis.com/v1/courses?studentId=me&courseStates=ACTIVE&pageSize=1",
+          { headers: { Authorization: `Bearer ${token}` } }
+        ).catch(() => ({ ok: false, json: async () => ({}) } as any));
+
+        if (studentRes.ok) {
+          const d = await studentRes.json();
+          const isStudent = !!(d.courses && d.courses.length > 0);
+          const correctRole = isStudent ? "student" : "no_access";
+
+          if (correctRole !== cachedRole) {
+            console.log(`[Auth] Role corrected in background: ${cachedRole} → ${correctRole} ✅`);
+            setRole(correctRole);
+            localStorage.setItem("user_role", correctRole);
+          }
+        }
+      }
+    } catch {
+      // Background re-validation is best-effort — ignore any errors silently
+    }
+  };
+
+  // Role detection effect
   useEffect(() => {
     async function detectRole() {
       // No user at all — show login page
@@ -154,9 +216,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
         setAuthenticating(false);
 
-        // Only do a background refresh when we have a stored expiry timestamp
-        // that has actually passed. This avoids hammering the backend on every
-        // page load for users who logged in before expiry tracking was added.
+        // Background: silently re-validate the cached role so that a user
+        // whose role changed (e.g. a teacher wrongly cached as "student") gets
+        // corrected on the next render without any visible disruption.
+        // We deliberately do NOT await — this must never block the UI.
+        revalidateRoleInBackground(token, user.uid, cachedRole);
+
+        // Also background-refresh the token if we know it has expired.
         if (isTokenExpired()) {
           refreshTokenSilent(user.uid).catch(() => {
             console.warn("[Auth] Background token refresh failed — will retry on next 401.");
@@ -179,16 +245,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // FULL ROLE DETECTION — runs on first login (no cached role)
+      // Pure API-based: no email domain logic used anywhere here.
+      // Works for any teacher or student worldwide.
       try {
         setLoading(true);
 
-        const teacherRes = await fetch(
-          "https://classroom.googleapis.com/v1/courses?teacherId=me&pageSize=1",
-          { headers: { Authorization: `Bearer ${token}` } }
+        // ── Step 1: Teacher check ──────────────────────────────────────────
+        // A teacher may have courses in ANY state (active, archived, provisioned,
+        // declined, or suspended). We query all 5 states in parallel so a teacher
+        // is never misclassified just because their courses are not ACTIVE yet.
+        const TEACHER_STATES = [
+          "ACTIVE",
+          "ARCHIVED",
+          "PROVISIONED",
+          "DECLINED",
+          "SUSPENDED",
+        ];
+
+        const teacherChecks = await Promise.all(
+          TEACHER_STATES.map((state) =>
+            fetch(
+              `https://classroom.googleapis.com/v1/courses?teacherId=me&courseStates=${state}&pageSize=1`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            )
+          )
         );
 
-        if (teacherRes.status === 401) {
-          console.log("[Auth] 401 during role detection — refreshing token...");
+        // Handle 401 on any teacher check — token is invalid
+        if (teacherChecks.some((r) => r.status === 401)) {
+          console.log("[Auth] 401 during teacher check — refreshing token...");
           const refreshed = await refreshTokenSilent(user.uid);
           if (!refreshed) {
             setError("Session expired. Please sign in again.");
@@ -201,21 +286,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        let isTeacher = false;
-        if (teacherRes.ok) {
-          const d = await teacherRes.json();
-          isTeacher = !!(d.courses && d.courses.length > 0);
-        }
+        // Parse all responses — teacher if ANY state has at least one course
+        const teacherResults = await Promise.all(
+          teacherChecks.map((r) => (r.ok ? r.json() : Promise.resolve({})))
+        );
+        const isTeacher = teacherResults.some(
+          (d) => d.courses && d.courses.length > 0
+        );
 
         if (isTeacher) {
+          console.log("[Auth] Role detected: teacher ✅");
           setRole("teacher");
           localStorage.setItem("user_role", "teacher");
           setLoading(false);
           return;
         }
 
+        // ── Step 2: Student check ──────────────────────────────────────────
+        // Only reaches here if definitively NOT a teacher in any course state.
         const studentRes = await fetch(
-          "https://classroom.googleapis.com/v1/courses?studentId=me&pageSize=1",
+          "https://classroom.googleapis.com/v1/courses?studentId=me&courseStates=ACTIVE&pageSize=1",
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
@@ -226,6 +316,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const detectedRole = isStudent ? "student" : "no_access";
+        console.log(`[Auth] Role detected: ${detectedRole} ✅`);
         setRole(detectedRole);
         localStorage.setItem("user_role", detectedRole);
       } catch (error) {
