@@ -61,10 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  // Helper: check if stored token is still valid (with 5-min buffer)
+  // Helper: check if stored token is known to be expired (with 5-min buffer).
+  // Returns false when no expiry is stored — we give the benefit of the doubt
+  // and let a 401 response trigger a reactive refresh instead.
   const isTokenExpired = (): boolean => {
     const expiry = localStorage.getItem("google_access_token_expiry");
-    if (!expiry) return true; // no expiry stored → treat as expired
+    if (!expiry) return false; // no expiry recorded → assume still valid
     return Date.now() > Number(expiry) - 5 * 60 * 1000; // 5-min early refresh
   };
   const [error, setError] = useState<string | null>(null);
@@ -125,71 +127,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Role detection effect
   useEffect(() => {
     async function detectRole() {
-      // ── No user at all → show login page ──────────────────────────────────
+      // No user at all — show login page
       if (!user) {
         setLoading(false);
         setAuthenticating(false);
         return;
       }
 
-      // ── Resolve the access token (stored or refresh silently) ─────────────
+      // Resolve the access token from state or localStorage
       let token = accessToken || localStorage.getItem("google_access_token");
-
-      // Sync state if we just read it from storage
       if (token && !accessToken) {
         setAccessToken(token);
       }
 
-      // Proactively refresh if the token is missing or about to expire
-      if (!token || isTokenExpired()) {
-        console.log(
-          "[Auth] Token missing or expiring soon — attempting silent refresh..."
-        );
-        const refreshed = await refreshTokenSilent(user.uid);
-        if (refreshed) {
-          // refreshTokenSilent updates state & localStorage; let effect re-run
-          return;
-        }
-        // Silent refresh failed and we have no usable token → sign-out state
-        console.warn(
-          "[Auth] Silent refresh failed. User must sign in again."
-        );
-        setRole(null);
-        setLoading(false);
-        setAuthenticating(false);
-        localStorage.removeItem("google_access_token");
-        localStorage.removeItem("google_access_token_expiry");
-        localStorage.removeItem("user_role");
-        return;
-      }
-
-      // ── Fast path: reuse cached role when session is still fresh ──────────
       const cachedRole = localStorage.getItem("user_role") as
         | "student"
         | "teacher"
         | "no_access"
         | null;
-      if (cachedRole && !authenticating) {
-        // We already know the role and we have a valid token — no API call needed
+
+      // FAST PATH: We have a token and a cached role — render the app NOW.
+      // Do NOT block on a backend refresh call. Expired tokens are handled
+      // reactively (on the next 401) so the user never sees a white screen.
+      if (token && cachedRole && !authenticating) {
         setRole(cachedRole);
+        setLoading(false);
+        setAuthenticating(false);
+
+        // Only do a background refresh when we have a stored expiry timestamp
+        // that has actually passed. This avoids hammering the backend on every
+        // page load for users who logged in before expiry tracking was added.
+        if (isTokenExpired()) {
+          refreshTokenSilent(user.uid).catch(() => {
+            console.warn("[Auth] Background token refresh failed — will retry on next 401.");
+          });
+        }
+        return;
+      }
+
+      // NO TOKEN: must get one silently before we can proceed
+      if (!token) {
+        console.log("[Auth] No token — attempting silent refresh...");
+        const refreshed = await refreshTokenSilent(user.uid);
+        if (refreshed) return; // effect re-runs with new token in state
+        // Could not get a token — must sign in again
+        console.warn("[Auth] Silent refresh failed. Showing login.");
+        setRole(null);
         setLoading(false);
         setAuthenticating(false);
         return;
       }
 
-      // ── Full role detection (first login or after token refresh) ──────────
+      // FULL ROLE DETECTION — runs on first login (no cached role)
       try {
         setLoading(true);
 
-        // 1. Check Teacher Role
         const teacherRes = await fetch(
           "https://classroom.googleapis.com/v1/courses?teacherId=me&pageSize=1",
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
         if (teacherRes.status === 401) {
-          // Token rejected despite our expiry check — force a refresh
-          console.log("[Auth] 401 received — forcing token refresh...");
+          console.log("[Auth] 401 during role detection — refreshing token...");
           const refreshed = await refreshTokenSilent(user.uid);
           if (!refreshed) {
             setError("Session expired. Please sign in again.");
@@ -204,10 +203,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         let isTeacher = false;
         if (teacherRes.ok) {
-          const teacherData = await teacherRes.json();
-          if (teacherData.courses && teacherData.courses.length > 0) {
-            isTeacher = true;
-          }
+          const d = await teacherRes.json();
+          isTeacher = !!(d.courses && d.courses.length > 0);
         }
 
         if (isTeacher) {
@@ -217,7 +214,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // 2. Check Student Role
         const studentRes = await fetch(
           "https://classroom.googleapis.com/v1/courses?studentId=me&pageSize=1",
           { headers: { Authorization: `Bearer ${token}` } }
@@ -225,28 +221,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         let isStudent = false;
         if (studentRes.ok) {
-          const studentData = await studentRes.json();
-          if (studentData.courses && studentData.courses.length > 0) {
-            isStudent = true;
-          }
+          const d = await studentRes.json();
+          isStudent = !!(d.courses && d.courses.length > 0);
         }
 
-        if (isStudent) {
-          setRole("student");
-          localStorage.setItem("user_role", "student");
-        } else {
-          setRole("no_access");
-          localStorage.setItem("user_role", "no_access");
-        }
+        const detectedRole = isStudent ? "student" : "no_access";
+        setRole(detectedRole);
+        localStorage.setItem("user_role", detectedRole);
       } catch (error) {
         console.error("[Auth] Role detection failed:", error);
-        // If we have a cached role, keep it as fallback instead of kicking user out
-        const fallback = localStorage.getItem("user_role") as
-          | "student"
-          | "teacher"
-          | "no_access"
-          | null;
-        setRole(fallback ?? "no_access");
+        const fallback = (localStorage.getItem("user_role") as
+          | "student" | "teacher" | "no_access" | null) ?? "no_access";
+        setRole(fallback);
       } finally {
         setLoading(false);
         setAuthenticating(false);
