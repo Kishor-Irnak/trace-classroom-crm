@@ -1001,7 +1001,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-medium">Sign Out</p>
+                  <p className="text-sm font-medium">Log out</p>
                   <p className="text-xs text-muted-foreground">
                     Sign out of your account on this device
                   </p>

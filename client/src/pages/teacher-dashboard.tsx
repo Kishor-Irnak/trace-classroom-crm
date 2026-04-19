@@ -170,7 +170,7 @@ function TeacherSidebar({
           onClick={() => signOut()}
         >
           <LogOut className="h-4 w-4 mr-3" />
-          Sign Out
+          Log out
         </Button>
       </div>
     </div>

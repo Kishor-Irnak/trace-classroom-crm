@@ -50,6 +50,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(() => {
     return localStorage.getItem("google_access_token");
   });
+
+  // Helper: persist token + expiry together
+  const persistToken = (token: string, expiresInMs = 3600 * 1000) => {
+    setAccessToken(token);
+    localStorage.setItem("google_access_token", token);
+    localStorage.setItem(
+      "google_access_token_expiry",
+      String(Date.now() + expiresInMs)
+    );
+  };
+
+  // Helper: check if stored token is still valid (with 5-min buffer)
+  const isTokenExpired = (): boolean => {
+    const expiry = localStorage.getItem("google_access_token_expiry");
+    if (!expiry) return true; // no expiry stored → treat as expired
+    return Date.now() > Number(expiry) - 5 * 60 * 1000; // 5-min early refresh
+  };
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<"student" | "teacher" | "no_access" | null>(
     () => {
@@ -108,43 +125,80 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Role detection effect
   useEffect(() => {
     async function detectRole() {
-      if (!user || !accessToken) {
-        // If we have user but no access token (e.g. reload), try to get it
-        if (user && !accessToken) {
-          const storedToken = localStorage.getItem("google_access_token");
-          if (storedToken) {
-            setAccessToken(storedToken);
-            return; // Let the next render trigger this effect with token
-          }
-        }
-        if (!user) {
-          setLoading(false);
-          setAuthenticating(false);
-          return;
-        }
+      // ── No user at all → show login page ──────────────────────────────────
+      if (!user) {
+        setLoading(false);
+        setAuthenticating(false);
+        return;
       }
 
+      // ── Resolve the access token (stored or refresh silently) ─────────────
+      let token = accessToken || localStorage.getItem("google_access_token");
+
+      // Sync state if we just read it from storage
+      if (token && !accessToken) {
+        setAccessToken(token);
+      }
+
+      // Proactively refresh if the token is missing or about to expire
+      if (!token || isTokenExpired()) {
+        console.log(
+          "[Auth] Token missing or expiring soon — attempting silent refresh..."
+        );
+        const refreshed = await refreshTokenSilent(user.uid);
+        if (refreshed) {
+          // refreshTokenSilent updates state & localStorage; let effect re-run
+          return;
+        }
+        // Silent refresh failed and we have no usable token → sign-out state
+        console.warn(
+          "[Auth] Silent refresh failed. User must sign in again."
+        );
+        setRole(null);
+        setLoading(false);
+        setAuthenticating(false);
+        localStorage.removeItem("google_access_token");
+        localStorage.removeItem("google_access_token_expiry");
+        localStorage.removeItem("user_role");
+        return;
+      }
+
+      // ── Fast path: reuse cached role when session is still fresh ──────────
+      const cachedRole = localStorage.getItem("user_role") as
+        | "student"
+        | "teacher"
+        | "no_access"
+        | null;
+      if (cachedRole && !authenticating) {
+        // We already know the role and we have a valid token — no API call needed
+        setRole(cachedRole);
+        setLoading(false);
+        setAuthenticating(false);
+        return;
+      }
+
+      // ── Full role detection (first login or after token refresh) ──────────
       try {
         setLoading(true);
+
         // 1. Check Teacher Role
         const teacherRes = await fetch(
           "https://classroom.googleapis.com/v1/courses?teacherId=me&pageSize=1",
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
 
         if (teacherRes.status === 401) {
-          console.log("Token expired (401). Attempting to refresh session...");
-          // Don't immediately logout. Attempt to refresh.
-          const refreshed = await refreshTokenInternal();
+          // Token rejected despite our expiry check — force a refresh
+          console.log("[Auth] 401 received — forcing token refresh...");
+          const refreshed = await refreshTokenSilent(user.uid);
           if (!refreshed) {
             setError("Session expired. Please sign in again.");
             setRole(null);
             setLoading(false);
             localStorage.removeItem("google_access_token");
+            localStorage.removeItem("google_access_token_expiry");
+            localStorage.removeItem("user_role");
           }
-          // If refreshed, refreshTokenInternal updates state, which triggers this effect again
           return;
         }
 
@@ -166,9 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 2. Check Student Role
         const studentRes = await fetch(
           "https://classroom.googleapis.com/v1/courses?studentId=me&pageSize=1",
-          {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
 
         let isStudent = false;
@@ -187,11 +239,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.setItem("user_role", "no_access");
         }
       } catch (error) {
-        console.error("Role detection failed:", error);
-        setRole("no_access"); // Fallback safety
+        console.error("[Auth] Role detection failed:", error);
+        // If we have a cached role, keep it as fallback instead of kicking user out
+        const fallback = localStorage.getItem("user_role") as
+          | "student"
+          | "teacher"
+          | "no_access"
+          | null;
+        setRole(fallback ?? "no_access");
       } finally {
         setLoading(false);
-        setAuthenticating(false); // Clear authenticating state
+        setAuthenticating(false);
       }
     }
 
@@ -205,16 +263,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       setError(null);
-      setAuthenticating(true); // Show loading immediately
+      setAuthenticating(true);
 
-      // Persist Firebase session
+      // Ensure Firebase persists the session in IndexedDB across tabs/restarts
       await setPersistence(auth, browserLocalPersistence);
 
-      // Force consent prompt to ensure all scopes are granted
-      googleProvider.setCustomParameters({
-        prompt: "consent",
-        access_type: "offline", // optional, for refresh tokens
-      });
+      // For returning users who already have a stored token, let Firebase
+      // silently restore the session — do NOT force consent/account-picker.
+      // Only prompt for account selection on the very first login (no stored uid).
+      const isReturningUser = !!localStorage.getItem("trace_current_user_id");
+      googleProvider.setCustomParameters(
+        isReturningUser
+          ? {
+              // Silently pick the already-used account without showing the picker
+              prompt: "none",
+            }
+          : {
+              // First-time: let the user pick their account & grant consent
+              prompt: "select_account",
+              access_type: "offline",
+            }
+      );
 
       // Add a timeout to prevent hanging indefinitely
       const result = await Promise.race([
@@ -231,16 +300,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         result as any
       ) as OAuthCredential;
       if (credential?.accessToken) {
-        setAccessToken(credential.accessToken);
-        localStorage.setItem("google_access_token", credential.accessToken);
+        // Store token with expiry (Google access tokens last 1 hour)
+        persistToken(credential.accessToken);
       }
-      // Keep authenticating true - it will be cleared when role detection completes
+      // Keep authenticating true — cleared when role detection completes
     } catch (err: unknown) {
+      // If silent sign-in fails (prompt:none) because no prior session,
+      // fall back to the full interactive flow
+      if (
+        err instanceof Error &&
+        (err.message.includes("popup_closed") ||
+          err.message.includes("cancelled") ||
+          (err as any)?.code === "auth/popup-closed-by-user" ||
+          (err as any)?.code === "auth/cancelled-popup-request")
+      ) {
+        // User closed the popup — just stop the spinner, don't show an error
+        setAuthenticating(false);
+        return;
+      }
+
+      // Silent sign-in not possible → retry with full interactive prompt
+      if (
+        (err as any)?.code === "auth/popup-blocked" ||
+        (err as any)?.code === "auth/internal-error"
+      ) {
+        try {
+          googleProvider.setCustomParameters({
+            prompt: "select_account",
+            access_type: "offline",
+          });
+          const result2 = await signInWithPopup(auth, googleProvider);
+          const credential2 = GoogleAuthProvider.credentialFromResult(
+            result2 as any
+          ) as OAuthCredential;
+          if (credential2?.accessToken) {
+            persistToken(credential2.accessToken);
+          }
+          return;
+        } catch (err2: unknown) {
+          const msg2 =
+            err2 instanceof Error ? err2.message : "Failed to sign in";
+          setError(msg2);
+          setAuthenticating(false);
+          return;
+        }
+      }
+
       const errorMessage =
         err instanceof Error ? err.message : "Failed to sign in";
       setError(errorMessage);
-      setAuthenticating(false); // Clear on error
-      console.error("Sign in error:", err);
+      setAuthenticating(false);
+      console.error("[Auth] Sign in error:", err);
     }
   };
 
@@ -395,41 +505,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const refreshTokenInternal = async (): Promise<boolean> => {
-    if (!user) return false;
-
-    // 1. Try Silent Refresh via Backend
+  /**
+   * Silent backend refresh — exchanges a stored refresh token for a new
+   * access token without any user interaction.
+   */
+  const refreshTokenSilent = async (uid: string): Promise<boolean> => {
     try {
-      console.log("Attempting silent token refresh via backend...");
+      console.log("[Auth] Attempting silent token refresh via backend...");
       const response = await fetch("/api/auth/google/refresh", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ uid: user.uid }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid }),
       });
 
       if (response.ok) {
         const data = await response.json();
         if (data.accessToken) {
-          setAccessToken(data.accessToken);
-          localStorage.setItem("google_access_token", data.accessToken);
-          console.log("Silent refresh successful! ✅");
+          // Store with expiry from server if provided, else assume 1 hour
+          const expiresInMs = data.expiryDate
+            ? data.expiryDate - Date.now()
+            : 3600 * 1000;
+          persistToken(data.accessToken, expiresInMs);
+          console.log("[Auth] Silent refresh successful ✅");
           return true;
         }
       } else {
         console.warn(
-          "Silent refresh failed, falling back to popup...",
-          response.status
+          "[Auth] Backend refresh failed:",
+          response.status,
+          await response.text().catch(() => "")
         );
       }
     } catch (e) {
-      console.warn("Silent refresh error:", e);
+      console.warn("[Auth] Silent refresh network error:", e);
     }
+    return false;
+  };
 
-    // 2. Fallback to Interactive Popup if silent refresh fails
+  /**
+   * refreshTokenInternal — tries silent backend refresh first,
+   * ONLY falls back to an interactive popup if there is no refresh token
+   * at all (i.e. the user never granted offline access).
+   */
+  const refreshTokenInternal = async (): Promise<boolean> => {
+    if (!user) return false;
+
+    // 1. Try silent backend refresh
+    const silentOk = await refreshTokenSilent(user.uid);
+    if (silentOk) return true;
+
+    // 2. Backend has no refresh token → we need interactive re-auth.
+    //    Use login_hint so Google auto-selects the account; user just
+    //    clicks through without being asked to choose an account.
     try {
-      // Force a re-authentication with the same provider to get a fresh token
+      console.warn(
+        "[Auth] No refresh token on server — prompting re-auth (login_hint only)"
+      );
       const provider = new GoogleAuthProvider();
       provider.addScope(
         "https://www.googleapis.com/auth/classroom.courses.readonly"
@@ -447,24 +578,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly"
       );
 
-      // Use select_account to allow quick re-auth without full consent
+      // login_hint pre-fills the email — no account-picker shown
       provider.setCustomParameters({
-        prompt: "select_account",
         login_hint: user.email || "",
+        access_type: "offline",
+        prompt: "consent", // need consent to get a new refresh token
       });
 
       const result = await signInWithPopup(auth, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
 
       if (credential?.accessToken) {
-        setAccessToken(credential.accessToken);
-        localStorage.setItem("google_access_token", credential.accessToken);
-        console.log("Access token refreshed successfully (Interactive)");
+        persistToken(credential.accessToken);
+        console.log("[Auth] Re-auth successful (Interactive)");
         return true;
       }
       return false;
     } catch (err) {
-      console.error("Failed to refresh access token:", err);
+      console.error("[Auth] Failed to refresh access token:", err);
       return false;
     }
   };
@@ -478,7 +609,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await firebaseSignOut(auth);
       setAccessToken(null);
       setRole(null);
+      // Clear all auth-related keys so the next visit starts fresh
       localStorage.removeItem("google_access_token");
+      localStorage.removeItem("google_access_token_expiry");
       localStorage.removeItem("user_role");
       clearCurrentUser();
     } catch (err: unknown) {

@@ -111,7 +111,7 @@ export const GoogleClassroomService = {
                 `⚠️ This usually means missing OAuth scope: classroom.student-submissions.me.readonly`
               );
               console.error(
-                `⚠️ Please sign out and sign in again to grant permissions`
+                `⚠️ Please Log out and sign in again to grant permissions`
               );
               const errorText = await r.text();
               console.error(`⚠️ Error response:`, errorText);
