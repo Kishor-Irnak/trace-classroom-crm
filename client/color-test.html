@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Course Color Test</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        padding: 40px;
+        background: #1a1a1a;
+        color: #fff;
+      }
+      .course-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        margin-bottom: 8px;
+        background: #2a2a2a;
+        border-radius: 8px;
+      }
+      .icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+      }
+      .name {
+        flex: 1;
+        font-weight: 500;
+      }
+      .normalized {
+        font-size: 12px;
+        color: #888;
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Course Color Matching Test</h1>
+    <p>Similar courses (like "AI" and "AI Lab") should have the same color:</p>
+    <div id="courses"></div>
+
+    <script>
+      function generateCourseColor(content) {
+        // Curated color palettes
+        const COLOR_PALETTES = [
+          ["#7C0A02", "#DC143C", "#FFE5CC", "#1B4965", "#5FA8D3"],
+          ["#1A0B2E", "#3D1E6D", "#7B2CBF", "#9D4EDD", "#C77DFF", "#E0AAFF"],
+          ["#CAF0F8", "#90E0EF", "#00B4D8", "#0077B6", "#03045E"],
+          ["#590D22", "#C9184A", "#FF4D6D", "#FF758F", "#FFB3C1", "#FFCCD5"],
+          ["#1A1A1A", "#800020", "#C41E3A", "#FF4444", "#B8B8B8"],
+          ["#0D3B2E", "#1B5E20", "#2E7D32", "#66BB6A", "#A5D6A7", "#C8E6C9"],
+          ["#7C2D12", "#C2410C", "#EA580C", "#FB923C", "#FED7AA"],
+          ["#134E4A", "#0F766E", "#14B8A6", "#5EEAD4", "#CCFBF1"],
+          ["#4C1D95", "#6D28D9", "#8B5CF6", "#A78BFA", "#DDD6FE"],
+          ["#78350F", "#B45309", "#F59E0B", "#FCD34D", "#FEF3C7"],
+          ["#0C4A6E", "#0369A1", "#0EA5E9", "#7DD3FC", "#E0F2FE"],
+          ["#881337", "#BE123C", "#FB7185", "#FDA4AF", "#FECDD3"],
+        ];
+
+        let normalized = content.toLowerCase().trim();
+
+        const stopWords = [
+          /\blab(oratory)?\b/g,
+          /\bpractical\b/g,
+          /\btheory\b/g,
+          /\btutorial\b/g,
+          /\blecture\b/g,
+          /\bcourse\b/g,
+          /\bsection\b/g,
+          /\bmini project\b/g,
+          /\sproject\b/g,
+          /\s\d+[a-z]?\b/g,
+        ];
+
+        for (const pattern of stopWords) {
+          normalized = normalized.replace(pattern, "");
+        }
+
+        normalized = normalized.replace(/[^a-z0-9\s]/g, "").trim();
+        normalized = normalized.replace(/\s+/g, " ");
+
+        if (!normalized) normalized = content.toLowerCase().trim();
+
+        let hash = 0;
+        for (let i = 0; i < normalized.length; i++) {
+          hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
+        }
+
+        const paletteIndex = Math.abs(hash) % COLOR_PALETTES.length;
+        const palette = COLOR_PALETTES[paletteIndex];
+
+        const shadeIndex = Math.abs(hash >> 3) % palette.length;
+
+        return {
+          color: palette[shadeIndex],
+          normalized: normalized,
+        };
+      }
+
+      function getRelativeLuminance(hex) {
+        const color = hex.replace("#", "");
+
+        const r = parseInt(color.substring(0, 2), 16) / 255;
+        const g = parseInt(color.substring(2, 4), 16) / 255;
+        const b = parseInt(color.substring(4, 6), 16) / 255;
+
+        const rsRGB =
+          r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+        const gsRGB =
+          g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+        const bsRGB =
+          b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+
+        return 0.2126 * rsRGB + 0.7152 * gsRGB + 0.0722 * bsRGB;
+      }
+
+      function getTextColor(backgroundColor) {
+        const luminance = getRelativeLuminance(backgroundColor);
+        return luminance < 0.5 ? "#FFFFFF" : "#27272a";
+      }
+
+      const courses = [
+        "Artificial Intelligence Lab",
+        "Artificial Intelligence",
+        "Mobile Computing",
+        "System Programming & Co...",
+        "Mini Project 2B",
+        "Cryptography & System Security",
+        "Skill base Lab Course: Cloud...",
+      ];
+
+      const container = document.getElementById("courses");
+      courses.forEach((courseName) => {
+        const { color, normalized } = generateCourseColor(courseName);
+        const textColor = getTextColor(color);
+        const div = document.createElement("div");
+        div.className = "course-item";
+        div.innerHTML = `
+                <div class="icon" style="background-color: ${color}; color: ${textColor}">📁</div>
+                <div>
+                    <div class="name">${courseName}</div>
+                    <div class="normalized">normalized: "${normalized}"</div>
+                </div>
+            `;
+        container.appendChild(div);
+      });
+    </script>
+  </body>
+</html>
