@@ -1,6 +1,6 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { MoreVertical, Plus, UtensilsCrossed } from "lucide-react";
+import { AlertTriangle, MoreVertical, Plus, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,6 +23,13 @@ import {
   type TimeBlock,
 } from "@/services/timetable-service";
 
+/** How a cell reacts while something is being dragged. */
+export interface CellStatus {
+  level: "ok" | "warn" | "blocked";
+  /** Short reason, e.g. "Teacher busy". */
+  reason?: string;
+}
+
 interface GridProps {
   settings: TimetableSettings;
   lectures: Lecture[];
@@ -32,6 +39,10 @@ interface GridProps {
   onMove: (l: Lecture) => void;
   onDelete: (l: Lecture) => void;
   onQuickAdd: (day: number, start: string) => void;
+  /** Lecture ids that currently have a scheduling conflict. */
+  conflictIds?: Set<string>;
+  /** Keyed `${day}:${start}`; only set while dragging. */
+  cellStatus?: Record<string, CellStatus> | null;
 }
 
 const PIXELS_PER_MINUTE = 1.5;
@@ -45,6 +56,8 @@ export function WeeklyGrid({
   onMove,
   onDelete,
   onQuickAdd,
+  conflictIds,
+  cellStatus,
 }: GridProps) {
   const days = [...settings.workingDays].sort((a, b) => a - b);
   const startMins = toMinutes(settings.startTime);
@@ -80,29 +93,29 @@ export function WeeklyGrid({
   const gridTemplate = `64px repeat(${days.length}, minmax(120px, 1fr))`;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
+    <div className="overflow-auto rounded-xl border border-border bg-card shadow-sm" style={{ maxHeight: "calc(100vh - 200px)" }}>
       <div
-        className="grid min-w-[720px]"
+        className="grid min-w-[600px]"
         style={{
           gridTemplateColumns: gridTemplate,
           gridTemplateRows: `44px 1fr`,
         }}
       >
         {/* Header row */}
-        <div className="sticky left-0 z-30 flex items-center justify-center border-b border-r border-border bg-card text-xs font-semibold text-muted-foreground">
+        <div className="sticky left-0 top-0 z-40 flex items-center justify-center border-b border-r border-border bg-card text-xs font-semibold text-muted-foreground">
           Time
         </div>
         {days.map((d) => (
           <div
             key={`h-${d}`}
-            className="flex items-center justify-center border-b border-border bg-card text-sm font-semibold"
+            className="sticky top-0 z-30 flex items-center justify-center border-b border-border bg-card text-sm font-semibold"
           >
             {DAY_NAMES[d]}
           </div>
         ))}
 
         {/* Body Container */}
-        <div className="relative border-r border-border bg-muted/20" style={{ height: gridHeight }}>
+        <div className="relative border-r border-border bg-muted/20 overflow-hidden" style={{ height: gridHeight }}>
           {/* Time axis labels */}
           {timeLabels.map((time) => {
             const top = (toMinutes(time) - startMins) * PIXELS_PER_MINUTE;
@@ -120,7 +133,7 @@ export function WeeklyGrid({
 
         {/* Day Columns */}
         {days.map((d) => (
-          <div key={`col-${d}`} className="relative border-r border-border bg-card" style={{ height: gridHeight }}>
+          <div key={`col-${d}`} className="relative border-r border-border bg-card overflow-hidden" style={{ height: gridHeight }}>
             {/* Horizontal grid lines for structure blocks */}
             {(settings.timeStructure || []).map((b) => {
               const top = (toMinutes(b.startTime) - startMins) * PIXELS_PER_MINUTE;
@@ -163,6 +176,7 @@ export function WeeklyGrid({
                     top={top}
                     height={height}
                     invisible={occupied}
+                    status={cellStatus?.[`${d}:${b.startTime}`]}
                     onQuickAdd={onQuickAdd}
                   />
                 );
@@ -180,6 +194,7 @@ export function WeeklyGrid({
                   color={subjectColor(l.subjectId)}
                   top={top}
                   height={height}
+                  conflict={conflictIds?.has(l.id)}
                   onEdit={onEdit}
                   onDuplicate={onDuplicate}
                   onMove={onMove}
@@ -201,6 +216,7 @@ function SlotCell({
   top,
   height,
   invisible,
+  status,
   onQuickAdd,
 }: {
   day: number;
@@ -209,23 +225,43 @@ function SlotCell({
   top: number;
   height: number;
   invisible?: boolean;
+  status?: CellStatus;
   onQuickAdd: (day: number, start: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `cell:${day}:${start}`,
-    data: { kind: "cell", day, start },
+    data: { kind: "cell", day, start, end },
   });
+
+  const blocked = status?.level === "blocked";
+  const warn = status?.level === "warn";
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
         "absolute w-full p-1 transition-colors z-[5]",
-        isOver && "bg-primary/10 ring-2 ring-inset ring-primary/40 z-20"
+        warn && "bg-amber-500/10 ring-1 ring-inset ring-amber-500/40",
+        blocked && "bg-destructive/10 ring-1 ring-inset ring-destructive/30",
+        status?.level === "ok" && "bg-emerald-500/5",
+        isOver && !blocked && !warn && "bg-primary/10 ring-2 ring-inset ring-primary/40 z-20",
+        isOver && warn && "bg-amber-500/20 ring-2 ring-inset ring-amber-500 z-20",
+        isOver && blocked && "bg-destructive/20 ring-2 ring-inset ring-destructive z-20"
       )}
       style={{ top, height }}
     >
-      {!invisible && (
+      {status && !invisible && status.level !== "ok" && (
+        <div
+          className={cn(
+            "pointer-events-none flex h-full w-full items-center justify-center gap-1 text-center text-[10px] font-medium leading-tight",
+            blocked ? "text-destructive" : "text-amber-600 dark:text-amber-400"
+          )}
+        >
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          <span className="truncate">{status.reason}</span>
+        </div>
+      )}
+      {!invisible && !status && (
         <button
           type="button"
           onClick={() => onQuickAdd(day, start)}
@@ -244,6 +280,7 @@ function LectureCard({
   color,
   top,
   height,
+  conflict,
   onEdit,
   onDuplicate,
   onMove,
@@ -253,6 +290,7 @@ function LectureCard({
   color: string;
   top: number;
   height: number;
+  conflict?: boolean;
   onEdit: (l: Lecture) => void;
   onDuplicate: (l: Lecture) => void;
   onMove: (l: Lecture) => void;
@@ -276,7 +314,11 @@ function LectureCard({
         opacity: isDragging ? 0.4 : 1,
         zIndex: isDragging ? 40 : 20,
       }}
-      className="absolute left-0.5 right-0.5 overflow-hidden rounded-md border border-transparent border-l-[3px] p-1.5 text-left shadow-sm transition-shadow hover:shadow-md"
+      className={cn(
+        "absolute left-0.5 right-0.5 overflow-hidden rounded-md border border-transparent border-l-[3px] p-1.5 text-left shadow-sm transition-shadow hover:shadow-md",
+        conflict && "border-destructive ring-2 ring-destructive/60"
+      )}
+      title={conflict ? "This lecture has a scheduling conflict" : undefined}
     >
       <div
         {...listeners}
@@ -293,8 +335,9 @@ function LectureCard({
         className="h-full w-full cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
         aria-label={`${lecture.subjectName}, edit`}
       >
-        <p className="truncate text-xs font-semibold leading-tight text-foreground">
-          {lecture.subjectName}
+        <p className="flex items-center gap-1 truncate text-xs font-semibold leading-tight text-foreground">
+          {conflict && <AlertTriangle className="h-3 w-3 shrink-0 text-destructive" />}
+          <span className="truncate">{lecture.subjectName || "Untitled Subject"}</span>
         </p>
         <p className="truncate text-[11px] leading-tight text-muted-foreground">
           {lecture.teacherName}

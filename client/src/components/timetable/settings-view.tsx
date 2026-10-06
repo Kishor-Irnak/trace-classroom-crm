@@ -34,6 +34,7 @@ import {
   fromMinutes,
   type TimeBlock,
 } from "@/services/timetable-service";
+import { validateTimeBlock } from "@/services/timetable-validation";
 import { useTimetableStore } from "./timetable-store";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +48,8 @@ export function SettingsView() {
 
   const [breakForm, setBreakForm] = useState({ name: "Short Break", start: "11:15", end: "11:30" });
   const [customSlotForm, setCustomSlotForm] = useState<{ type: "lecture" | "break"; name: string; start: string; end: string }>({ type: "lecture", name: "", start: "11:30", end: "12:30" });
+  const [breakError, setBreakError] = useState<string | null>(null);
+  const [slotError, setSlotError] = useState<string | null>(null);
 
   const toggleDay = (day: number, checked: boolean) => {
     const set = new Set(settings.workingDays);
@@ -60,29 +63,52 @@ export function SettingsView() {
   };
 
   const handleAddBreak = () => {
+    const problem = validateTimeBlock(settings, breakForm.start, breakForm.end);
+    if (problem) {
+      setBreakError(problem);
+      return;
+    }
+    if (!breakForm.name.trim()) {
+      setBreakError("Give the break a name.");
+      return;
+    }
     const b: TimeBlock = {
       id: genId(),
       type: "break",
-      name: breakForm.name,
+      name: breakForm.name.trim(),
       startTime: breakForm.start,
       endTime: breakForm.end,
     };
     const newStructure = [...(settings.timeStructure || []), b].sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
-    updateSettings({ timeStructure: newStructure });
-    setAddBreakOpen(false);
+    // updateSettings also refuses breaks that overlap already scheduled lectures.
+    if (updateSettings({ timeStructure: newStructure })) {
+      setAddBreakOpen(false);
+      setBreakError(null);
+    }
   };
 
   const handleAddCustomSlot = () => {
+    const problem = validateTimeBlock(settings, customSlotForm.start, customSlotForm.end);
+    if (problem) {
+      setSlotError(problem);
+      return;
+    }
+    if (customSlotForm.type === "break" && !customSlotForm.name.trim()) {
+      setSlotError("Give the break a name.");
+      return;
+    }
     const b: TimeBlock = {
       id: genId(),
       type: customSlotForm.type,
-      name: customSlotForm.type === "break" ? customSlotForm.name : undefined,
+      name: customSlotForm.type === "break" ? customSlotForm.name.trim() : undefined,
       startTime: customSlotForm.start,
       endTime: customSlotForm.end,
     };
     const newStructure = [...(settings.timeStructure || []), b].sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
-    updateSettings({ timeStructure: newStructure });
-    setAddCustomSlotOpen(false);
+    if (updateSettings({ timeStructure: newStructure })) {
+      setAddCustomSlotOpen(false);
+      setSlotError(null);
+    }
   };
 
   const generateSlots = () => {
@@ -272,8 +298,14 @@ export function SettingsView() {
       </Card>
 
       {/* Add Break Dialog */}
-      <Dialog open={addBreakOpen} onOpenChange={setAddBreakOpen}>
-        <DialogContent>
+      <Dialog
+        open={addBreakOpen}
+        onOpenChange={(o) => {
+          setAddBreakOpen(o);
+          if (!o) setBreakError(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Break</DialogTitle>
           </DialogHeader>
@@ -304,17 +336,26 @@ export function SettingsView() {
                 />
               </div>
             </div>
+            {breakError && (
+              <p role="alert" className="text-sm text-destructive">{breakError}</p>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddBreakOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setAddBreakOpen(false); setBreakError(null); }}>Cancel</Button>
             <Button onClick={handleAddBreak}>Add Break</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Add Custom Slot Dialog */}
-      <Dialog open={addCustomSlotOpen} onOpenChange={setAddCustomSlotOpen}>
-        <DialogContent>
+      <Dialog
+        open={addCustomSlotOpen}
+        onOpenChange={(o) => {
+          setAddCustomSlotOpen(o);
+          if (!o) setSlotError(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Custom Slot</DialogTitle>
           </DialogHeader>
@@ -362,9 +403,12 @@ export function SettingsView() {
                 />
               </div>
             </div>
+            {slotError && (
+              <p role="alert" className="text-sm text-destructive">{slotError}</p>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddCustomSlotOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setAddCustomSlotOpen(false); setSlotError(null); }}>Cancel</Button>
             <Button onClick={handleAddCustomSlot}>Add</Button>
           </DialogFooter>
         </DialogContent>

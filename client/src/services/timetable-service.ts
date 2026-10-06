@@ -12,7 +12,7 @@
  * future student-calendar sync (phase 2) can consume it without a migration.
  */
 import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
 import { CacheService } from "./cache-service";
 
 /* ============================================================
@@ -43,6 +43,11 @@ export interface Subject {
   defaultRoom?: string;
   color: string; // key into SUBJECT_COLORS
   shortCode?: string;
+  /**
+   * Weightage = number of lectures this subject gets per week.
+   * 0 / undefined means "no limit" (legacy timetables keep working).
+   */
+  weightage?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -388,17 +393,18 @@ interface DemoSubjectSeed {
   teacher: string;
   room: string;
   color: string;
+  weightage: number;
 }
 
 const DEMO_SUBJECTS: DemoSubjectSeed[] = [
-  { key: "math", name: "Mathematics", teacher: "Shubhanshree Mam", room: "FF110", color: "blue" },
-  { key: "ds", name: "Data Structures", teacher: "Amit Sir", room: "FF102", color: "green" },
-  { key: "dbms", name: "DBMS", teacher: "Rahul Sir", room: "FF205", color: "orange" },
-  { key: "cg", name: "Computer Graphics", teacher: "Neha Mam", room: "Lab 2", color: "purple" },
-  { key: "os", name: "Operating System", teacher: "Priya Mam", room: "FF204", color: "red" },
-  { key: "wt", name: "Web Technologies", teacher: "Karan Sir", room: "Lab 1", color: "teal" },
-  { key: "mp", name: "Mini Project", teacher: "Project Guide", room: "Lab 3", color: "pink" },
-  { key: "sem", name: "Seminar", teacher: "Department", room: "Auditorium", color: "amber" },
+  { key: "math", name: "Mathematics", teacher: "Shubhanshree Mam", room: "FF110", color: "blue", weightage: 4 },
+  { key: "ds", name: "Data Structures", teacher: "Amit Sir", room: "FF102", color: "green", weightage: 4 },
+  { key: "dbms", name: "DBMS", teacher: "Rahul Sir", room: "FF205", color: "orange", weightage: 4 },
+  { key: "cg", name: "Computer Graphics", teacher: "Neha Mam", room: "Lab 2", color: "purple", weightage: 4 },
+  { key: "os", name: "Operating System", teacher: "Priya Mam", room: "FF204", color: "red", weightage: 3 },
+  { key: "wt", name: "Web Technologies", teacher: "Karan Sir", room: "Lab 1", color: "teal", weightage: 3 },
+  { key: "mp", name: "Mini Project", teacher: "Project Guide", room: "Lab 3", color: "pink", weightage: 2 },
+  { key: "sem", name: "Seminar", teacher: "Department", room: "Auditorium", color: "amber", weightage: 1 },
 ];
 
 /** A realistic starting timetable matching the reference design (section 41). */
@@ -413,6 +419,7 @@ export function createDemoTimetable(
     teacherName: s.teacher,
     defaultRoom: s.room,
     color: s.color,
+    weightage: s.weightage,
     createdAt: now,
     updatedAt: now,
   }));
@@ -517,7 +524,31 @@ function localKey(userId: string, contextKey: string): string {
   return `${LOCAL_PREFIX}_${userId}_${contextKey}`;
 }
 
+/** Firestore rejects `undefined` values — drop them before writing. */
+function stripUndefined<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 export const TimetableService = {
+  /**
+   * Load every timetable this teacher owns (all years / divisions / semesters).
+   * Used for cross-class conflict checks (a teacher can't be in two places).
+   * Throws when offline so callers can show an honest "can't verify" state.
+   */
+  async loadAll(userId: string): Promise<Timetable[]> {
+    const snap = await getDocs(collection(db, "users", userId, "timetables"));
+    return snap.docs.map((d) => {
+      const raw = d.data() as Timetable;
+      return {
+        ...raw,
+        id: raw.id || d.id,
+        settings: normalizeSettings(raw.settings),
+        subjects: Array.isArray(raw.subjects) ? raw.subjects : [],
+        lectures: Array.isArray(raw.lectures) ? raw.lectures : [],
+      };
+    });
+  },
+
   /**
    * Load a timetable for a teacher + context.
    * Order: Firestore -> localStorage mirror -> null.
@@ -555,11 +586,11 @@ export const TimetableService = {
    */
   async save(userId: string, timetable: Timetable): Promise<void> {
     const contextKey = timetable.id || buildContextKey(timetable);
-    const payload: Timetable = {
+    const payload: Timetable = stripUndefined({
       ...timetable,
       id: contextKey,
       updatedAt: Date.now(),
-    };
+    });
     // Mirror first (synchronous, never fails on quota in practice for small docs).
     CacheService.set(localKey(userId, contextKey), payload, 60 * 60 * 24 * 30);
     try {

@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
 import {
+  AlertTriangle,
+  BookOpen,
   ChevronDown,
   Eye,
   MoreVertical,
   Pencil,
+  Plus,
   Save,
   Send,
+  SlidersHorizontal,
+  Undo2,
   UtensilsCrossed,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,11 +40,17 @@ import {
   type TimetableSettings,
 } from "@/services/timetable-service";
 import { useTimetableStore } from "./timetable-store";
+import { QuotaMeter } from "./subject-panel";
+import { ConflictBanner, OthersStatusBanner } from "./validation-ui";
 
 interface MobileProps {
   onEditLecture: (l: Lecture) => void;
   onMoveLecture: (l: Lecture) => void;
   onDeleteLecture: (l: Lecture) => void;
+  onAddLecture: (day: number, subjectId?: string) => void;
+  onAddSubject: () => void;
+  onEditSubject: (s: Subject) => void;
+  onBulkWeightage: () => void;
   onPreview: () => void;
   onSaveDraft: () => void;
   onPublish: () => void;
@@ -62,12 +73,27 @@ export function MobileTimetable({
   onEditLecture,
   onMoveLecture,
   onDeleteLecture,
+  onAddLecture,
+  onAddSubject,
+  onEditSubject,
+  onBulkWeightage,
   onPreview,
   onSaveDraft,
   onPublish,
   onChangeContext,
 }: MobileProps) {
-  const { context, lectures, subjects, settings } = useTimetableStore();
+  const {
+    context,
+    lectures,
+    subjects,
+    settings,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    pendingIssues,
+    othersStatus,
+  } = useTimetableStore();
 
   const week = useMemo(currentWeekDays, []);
   const todayDow = new Date().getDay() === 0 ? 7 : new Date().getDay();
@@ -120,15 +146,35 @@ export function MobileTimetable({
               {context.year} • Div {context.division} • Sem {context.semester}
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onChangeContext}
-            className="gap-1.5"
-          >
-            Change
-            <ChevronDown className="h-3.5 w-3.5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={undo}
+              disabled={!canUndo}
+            >
+              <Undo2 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={redo}
+              disabled={!canRedo}
+            >
+              <Undo2 className="h-4 w-4 scale-x-[-1]" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onChangeContext}
+              className="h-8 gap-1.5 px-2"
+            >
+              Change
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
 
         <div className="mt-3 flex items-center gap-2">
@@ -153,6 +199,17 @@ export function MobileTimetable({
           </Button>
         </div>
       </div>
+
+      {pendingIssues.length > 0 && (
+        <div className="px-4 pt-3">
+          <ConflictBanner />
+        </div>
+      )}
+      {othersStatus === "loading" && (
+        <div className="px-4 pt-3">
+          <OthersStatusBanner />
+        </div>
+      )}
 
       {/* Day pills */}
       <div className="flex gap-2 overflow-x-auto px-4 py-3 no-scrollbar">
@@ -200,6 +257,8 @@ export function MobileTimetable({
               lecture={item.lecture}
               color={colorFor(item.lecture.subjectId)}
               settings={settings}
+              hasError={pendingIssues.some((iss) => iss.lectureId === item.lecture.id && iss.severity === "error")}
+              hasWarning={pendingIssues.some((iss) => iss.lectureId === item.lecture.id && iss.severity === "warning")}
               onEdit={() => onEditLecture(item.lecture)}
               onMove={() => onMoveLecture(item.lecture)}
               onDelete={() => onDeleteLecture(item.lecture)}
@@ -209,10 +268,28 @@ export function MobileTimetable({
       </div>
 
       {/* Quick edit */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background p-4">
-        <Button className="w-full gap-2" onClick={() => setQuickEditOpen(true)}>
-          <Pencil className="h-4 w-4" />
-          Quick Edit (Today)
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background p-4 flex gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon" className="shrink-0">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={() => setQuickEditOpen(true)}>
+              <Pencil className="mr-2 h-4 w-4" /> Quick Edit (Today)
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onAddSubject}>
+              <BookOpen className="mr-2 h-4 w-4" /> Manage Subjects
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onBulkWeightage}>
+              <SlidersHorizontal className="mr-2 h-4 w-4" /> Edit Weightages
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button className="flex-1 gap-2" onClick={() => onAddLecture(selectedDay)}>
+          <Plus className="h-4 w-4" />
+          Add Lecture
         </Button>
       </div>
 
@@ -271,6 +348,8 @@ function MobileLectureCard({
   lecture,
   color,
   settings,
+  hasError,
+  hasWarning,
   onEdit,
   onMove,
   onDelete,
@@ -278,6 +357,8 @@ function MobileLectureCard({
   lecture: Lecture;
   color: string;
   settings: TimetableSettings;
+  hasError?: boolean;
+  hasWarning?: boolean;
   onEdit: () => void;
   onMove: () => void;
   onDelete: () => void;
@@ -292,8 +373,11 @@ function MobileLectureCard({
 
   return (
     <div
-      className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-sm"
-      style={{ borderLeftColor: color, borderLeftWidth: 4 }}
+      className={cn(
+        "flex items-center gap-3 rounded-xl border bg-card p-3 shadow-sm",
+        hasError ? "border-destructive bg-destructive/5" : hasWarning ? "border-amber-500 bg-amber-500/5" : "border-border"
+      )}
+      style={(!hasError && !hasWarning) ? { borderLeftColor: color, borderLeftWidth: 4 } : { borderLeftWidth: 4 }}
     >
       <span
         className="h-3 w-3 shrink-0 rounded-full"
@@ -303,7 +387,14 @@ function MobileLectureCard({
         }}
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">{lecture.subjectName}</p>
+        <div className="flex items-center gap-1.5">
+          <p className={cn("truncate text-sm font-semibold", hasError ? "text-destructive" : hasWarning ? "text-amber-600" : "")}>
+            {lecture.subjectName}
+          </p>
+          {(hasError || hasWarning) && (
+            <AlertTriangle className={cn("h-3.5 w-3.5 shrink-0", hasError ? "text-destructive" : "text-amber-500")} />
+          )}
+        </div>
         <p className="truncate text-xs text-muted-foreground">
           {formatTimeLabel(lecture.startTime)} –{" "}
           {formatTimeLabel(lecture.endTime)}

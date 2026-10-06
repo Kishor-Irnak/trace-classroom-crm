@@ -29,6 +29,13 @@ import {
   AlertDialogHeader as AlertDialogHeader2,
   AlertDialogTitle as AlertDialogTitle2,
 } from "@/components/ui/alert-dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   colorHex,
@@ -63,6 +70,7 @@ import {
   RemoveSubjectConfirmDialog,
   UnsavedChangesDialog,
 } from "@/components/timetable/confirm-dialogs";
+import { IssueDialog } from "@/components/timetable/validation-ui";
 
 interface ActiveDrag {
   kind: "subject" | "lecture";
@@ -110,6 +118,7 @@ function TimetableInner() {
   const [publishOpen, setPublishOpen] = useState(false);
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [changeCtxOpen, setChangeCtxOpen] = useState(false);
+  const [subjectsMobileOpen, setSubjectsMobileOpen] = useState(false);
 
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
 
@@ -193,6 +202,15 @@ function TimetableInner() {
           onEditLecture={openEditLecture}
           onMoveLecture={(l) => setMoveTarget(l)}
           onDeleteLecture={(l) => setDeleteTarget(l)}
+          onAddLecture={(day) =>
+            openQuickAdd(
+              day,
+              settings.timeStructure?.find((t) => t.type === "slot")?.startTime || "09:00",
+            )
+          }
+          onAddSubject={openAddSubject}
+          onEditSubject={openEditSubject}
+          onBulkWeightage={() => setSubjectsMobileOpen(true)}
           onPreview={() => setPreviewOpen(true)}
           onSaveDraft={() => store.saveDraft()}
           onPublish={() => setPublishOpen(true)}
@@ -208,6 +226,22 @@ function TimetableInner() {
             <ContextSelector />
           </DialogContent>
         </Dialog>
+
+        <Drawer open={subjectsMobileOpen} onOpenChange={setSubjectsMobileOpen}>
+          <DrawerContent>
+            <DrawerHeader>
+              <DrawerTitle>Subjects & Weightages</DrawerTitle>
+              <DrawerDescription>Manage subjects and weekly limits.</DrawerDescription>
+            </DrawerHeader>
+            <div className="px-4 pb-6 overflow-y-auto max-h-[70vh]">
+              <SubjectPanel
+                onAddSubject={openAddSubject}
+                onEditSubject={openEditSubject}
+                onRemoveSubject={(s) => setRemoveSubject(s)}
+              />
+            </div>
+          </DrawerContent>
+        </Drawer>
 
         {renderModals()}
       </>
@@ -246,7 +280,7 @@ function TimetableInner() {
           onDragEnd={onDragEnd}
           onDragCancel={() => setActiveDrag(null)}
         >
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
             <div className="min-w-0 flex-1">
               <WeeklyGrid
                 settings={settings}
@@ -264,6 +298,10 @@ function TimetableInner() {
                 onAddSubject={openAddSubject}
                 onEditSubject={openEditSubject}
                 onRemoveSubject={(s) => setRemoveSubject(s)}
+                onBulkWeightage={() => {
+                  const val = window.prompt("Enter weekly lecture limit for all subjects (0 for unlimited):", "4");
+                  if (val !== null) store.setWeightageForAll(Number(val));
+                }}
               />
             </div>
           </div>
@@ -373,6 +411,7 @@ function TimetableInner() {
         </AlertDialog>
 
         {store.pendingContext && <UnsavedChangesDialog />}
+        <IssueDialog />
       </>
     );
   }
